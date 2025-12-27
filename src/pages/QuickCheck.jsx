@@ -15,13 +15,20 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { handleOpenFile, handleCopyShareLink, handleDownloadFile } from '../components/files/FileMenuActions';
 
 export default function QuickCheck() {
   const [user, setUser] = useState(null);
   const [uploadedFile, setUploadedFile] = useState(null);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const queryClient = useQueryClient();
+
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3000);
+  };
 
   useEffect(() => {
     base44.auth.me().then(setUser).catch(() => {});
@@ -38,7 +45,7 @@ export default function QuickCheck() {
       // コメント数を取得
       const filesWithComments = await Promise.all(
         files.map(async (file) => {
-          const comments = await base44.entities.ReviewComment.filter({ file_id: file.id });
+          const comments = await base44.entities.ReviewComment.filter({ file_id: file._id || file.id });
           return { ...file, comment_count: comments.length };
         })
       );
@@ -214,12 +221,31 @@ export default function QuickCheck() {
                             <MoreVertical className="w-4 h-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem>
-                            <a href={`#/app/files/view?fileId=${file.id}`}>開く</a>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>リンクをコピー</DropdownMenuItem>
-                          <DropdownMenuItem>ダウンロード</DropdownMenuItem>
+                        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                         <DropdownMenuItem 
+                           onClick={(e) => {
+                             e.stopPropagation();
+                             handleOpenFile(file, showToast, (err) => showToast(err, 'error'));
+                           }}
+                         >
+                           開く
+                         </DropdownMenuItem>
+                         <DropdownMenuItem
+                           onClick={(e) => {
+                             e.stopPropagation();
+                             handleCopyShareLink(file, showToast, (err) => showToast(err, 'error'));
+                           }}
+                         >
+                           リンクをコピー
+                         </DropdownMenuItem>
+                         <DropdownMenuItem
+                           onClick={(e) => {
+                             e.stopPropagation();
+                             handleDownloadFile(file, showToast, (err) => showToast(err, 'error'));
+                           }}
+                         >
+                           ダウンロード
+                         </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
@@ -266,6 +292,17 @@ export default function QuickCheck() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* トースト通知 */}
+      {toast.show && (
+        <div className="fixed bottom-4 right-4 z-50">
+          <div className={`px-6 py-3 rounded-lg shadow-lg ${
+            toast.type === 'error' ? 'bg-red-600 text-white' : 'bg-green-600 text-white'
+          }`}>
+            {toast.message}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

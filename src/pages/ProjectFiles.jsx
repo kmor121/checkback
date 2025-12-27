@@ -31,6 +31,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { handleOpenFile, handleCopyShareLink, handleDownloadFile } from '../components/files/FileMenuActions';
 
 export default function ProjectFiles() {
   const [user, setUser] = useState(null);
@@ -39,9 +40,15 @@ export default function ProjectFiles() {
   const [sortBy, setSortBy] = useState('updated');
   const [selectedFile, setSelectedFile] = useState(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const queryClient = useQueryClient();
   const params = new URLSearchParams(window.location.search);
   const projectId = params.get('projectId');
+
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3000);
+  };
 
   useEffect(() => {
     base44.auth.me().then(setUser).catch(() => {});
@@ -217,12 +224,31 @@ export default function ProjectFiles() {
                         <MoreVertical className="w-4 h-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem>
-                        <Link to={createPageUrl('FileView') + '?fileId=' + file.id}>開く</Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem>共有</DropdownMenuItem>
-                      <DropdownMenuItem>ダウンロード</DropdownMenuItem>
+                    <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                     <DropdownMenuItem
+                       onClick={(e) => {
+                         e.stopPropagation();
+                         handleOpenFile(file, showToast, (err) => showToast(err, 'error'));
+                       }}
+                     >
+                       開く
+                     </DropdownMenuItem>
+                     <DropdownMenuItem
+                       onClick={(e) => {
+                         e.stopPropagation();
+                         handleCopyShareLink(file, showToast, (err) => showToast(err, 'error'));
+                       }}
+                     >
+                       リンクをコピー
+                     </DropdownMenuItem>
+                     <DropdownMenuItem
+                       onClick={(e) => {
+                         e.stopPropagation();
+                         handleDownloadFile(file, showToast, (err) => showToast(err, 'error'));
+                       }}
+                     >
+                       ダウンロード
+                     </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
@@ -331,25 +357,42 @@ export default function ProjectFiles() {
                     <Edit2 className="w-4 h-4 mr-2" />
                     名前を変更
                   </Button>
-                  <Button variant="outline" className="w-full justify-start">
+                  <Button 
+                    variant="outline" 
+                    className="w-full justify-start"
+                    onClick={() => handleCopyShareLink(selectedFile, showToast, (err) => showToast(err, 'error'))}
+                  >
                     <Share2 className="w-4 h-4 mr-2" />
-                    共有
+                    共有リンクをコピー
                   </Button>
-                  <Link to={createPageUrl('FileView') + '?fileId=' + selectedFile.id} className="block">
-                    <Button variant="outline" className="w-full justify-start">
-                      <ExternalLink className="w-4 h-4 mr-2" />
-                      別タブで開く
-                    </Button>
-                  </Link>
-                  <Button variant="outline" className="w-full justify-start">
+                  <Button 
+                    variant="outline" 
+                    className="w-full justify-start"
+                    onClick={() => handleOpenFile(selectedFile, showToast, (err) => showToast(err, 'error'))}
+                  >
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    別タブで開く
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    className="w-full justify-start"
+                    onClick={() => handleCopyShareLink(selectedFile, showToast, (err) => showToast(err, 'error'))}
+                  >
                     <Copy className="w-4 h-4 mr-2" />
                     リンクをコピー
                   </Button>
-                  <Button variant="outline" className="w-full justify-start">
+                  <Button 
+                    variant="outline" 
+                    className="w-full justify-start"
+                    onClick={() => handleDownloadFile(selectedFile, showToast, (err) => showToast(err, 'error'))}
+                  >
                     <Download className="w-4 h-4 mr-2" />
                     ダウンロード
                   </Button>
-                  <Link to={createPageUrl('FileView') + '?fileId=' + selectedFile.id} className="block">
+                  <Button 
+                    className="w-full bg-blue-600 hover:bg-blue-700"
+                    onClick={() => handleOpenFile(selectedFile, showToast, (err) => showToast(err, 'error'))}
+                  >
                     <Button className="w-full bg-blue-600 hover:bg-blue-700">
                       プレビュー
                     </Button>
@@ -360,6 +403,17 @@ export default function ProjectFiles() {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* トースト通知 */}
+      {toast.show && (
+        <div className="fixed bottom-4 right-4 z-50">
+          <div className={`px-6 py-3 rounded-lg shadow-lg ${
+            toast.type === 'error' ? 'bg-red-600 text-white' : 'bg-green-600 text-white'
+          }`}>
+            {toast.message}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
