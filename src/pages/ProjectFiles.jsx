@@ -237,7 +237,8 @@ export default function ProjectFiles() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
                      <DropdownMenuItem
-                       onClick={(e) => {
+                       onSelect={(e) => {
+                         e.preventDefault();
                          e.stopPropagation();
                          handleOpenFile(file, showToast, (err) => showToast(err, 'error'));
                        }}
