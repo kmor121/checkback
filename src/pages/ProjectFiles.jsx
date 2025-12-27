@@ -393,10 +393,8 @@ export default function ProjectFiles() {
                     className="w-full bg-blue-600 hover:bg-blue-700"
                     onClick={() => handleOpenFile(selectedFile, showToast, (err) => showToast(err, 'error'))}
                   >
-                    <Button className="w-full bg-blue-600 hover:bg-blue-700">
-                      プレビュー
-                    </Button>
-                  </Link>
+                    プレビュー
+                  </Button>
                 </div>
               </div>
             </div>
