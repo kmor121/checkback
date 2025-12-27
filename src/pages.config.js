@@ -4,6 +4,8 @@ import Projects from './pages/Projects';
 import ProjectTalk from './pages/ProjectTalk';
 import ProjectFiles from './pages/ProjectFiles';
 import FileView from './pages/FileView';
+import ShareView from './pages/ShareView';
+import AccountSettings from './pages/AccountSettings';
 import __Layout from './Layout.jsx';
 
 
@@ -14,6 +16,8 @@ export const PAGES = {
     "ProjectTalk": ProjectTalk,
     "ProjectFiles": ProjectFiles,
     "FileView": FileView,
+    "ShareView": ShareView,
+    "AccountSettings": AccountSettings,
 }
 
 export const pagesConfig = {
