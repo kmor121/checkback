@@ -214,7 +214,12 @@ export default function ProjectFiles() {
         </Card>
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {sortedFiles.map((file) => (
+          {sortedFiles.map((file) => {
+            const fileId = file.file_id || file.ref_id || file._id || file.id;
+            const prefix = window.location.pathname.split('/app/')[0];
+            const appBase = `${prefix}/app`;
+            const href = fileId ? `${appBase}/files/view?fileId=${fileId}` : '#';
+            return (
             <Card
               key={file.id}
               className="hover:shadow-lg transition-shadow cursor-pointer"
@@ -235,43 +240,46 @@ export default function ProjectFiles() {
                         <MoreVertical className="w-4 h-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                     <DropdownMenuItem
-                       asChild
-                       disabled={!(file.file_id || file.ref_id || file._id || file.id)}
-                     >
-                       <a href={`#/app/files/view?fileId=${file.file_id || file.ref_id || file._id || file.id}`}>
-                         開く
-                       </a>
-                     </DropdownMenuItem>
-                     <DropdownMenuItem
-                       onClick={(e) => {
-                         e.stopPropagation();
-                         const fileId = file.file_id || file.ref_id || file._id || file.id;
-                         if (fileId) {
-                           navigator.clipboard.writeText(fileId);
-                           showToast('IDをコピーしました');
-                         }
-                       }}
-                     >
-                       IDをコピー
-                     </DropdownMenuItem>
-                     <DropdownMenuItem
-                       onClick={(e) => {
-                         e.stopPropagation();
-                         handleCopyShareLink(file, showToast, (err) => showToast(err, 'error'));
-                       }}
-                     >
-                       リンクをコピー
-                     </DropdownMenuItem>
-                     <DropdownMenuItem
-                       onClick={(e) => {
-                         e.stopPropagation();
-                         handleDownloadFile(file, showToast, (err) => showToast(err, 'error'));
-                       }}
-                     >
-                       ダウンロード
-                     </DropdownMenuItem>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem asChild disabled={!fileId}>
+                        <a href={href}>開く</a>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild disabled={!fileId}>
+                        <a href={href} target="_blank" rel="noreferrer">新規タブで開く</a>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem disabled>
+                        <div className="text-xs text-gray-500">
+                          ID: {fileId || 'なし'}<br />
+                          href: {href}
+                        </div>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (fileId) {
+                            navigator.clipboard.writeText(fileId);
+                            showToast('IDをコピーしました');
+                          }
+                        }}
+                      >
+                        IDをコピー
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCopyShareLink(file, showToast, (err) => showToast(err, 'error'));
+                        }}
+                      >
+                        リンクをコピー
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDownloadFile(file, showToast, (err) => showToast(err, 'error'));
+                        }}
+                      >
+                        ダウンロード
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
