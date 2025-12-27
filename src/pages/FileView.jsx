@@ -54,7 +54,11 @@ export default function FileView() {
   const { data: file } = useQuery({
     queryKey: ['file', fileId],
     queryFn: async () => {
-      const files = await base44.entities.FileAsset.filter({ id: fileId });
+      // idとidの両方を試す
+      let files = await base44.entities.FileAsset.filter({ id: fileId });
+      if (!files || files.length === 0) {
+        files = await base44.entities.FileAsset.filter({ _id: fileId });
+      }
       return files[0];
     },
     enabled: !!fileId,
