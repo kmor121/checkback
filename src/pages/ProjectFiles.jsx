@@ -294,7 +294,8 @@ export default function ProjectFiles() {
                 </div>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <Card>
