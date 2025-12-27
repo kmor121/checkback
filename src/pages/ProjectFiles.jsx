@@ -65,7 +65,18 @@ export default function ProjectFiles() {
 
   const { data: files = [] } = useQuery({
     queryKey: ['files', projectId],
-    queryFn: () => base44.entities.FileAsset.filter({ project_id: projectId }),
+    queryFn: async () => {
+      const rawFiles = await base44.entities.FileAsset.filter({ project_id: projectId });
+      // IDを正規化
+      return rawFiles.map(file => {
+        const fileId = file._id || file.id;
+        return {
+          ...file,
+          id: fileId,
+          _id: fileId
+        };
+      });
+    },
     enabled: !!projectId,
   });
 

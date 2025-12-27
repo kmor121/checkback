@@ -3,17 +3,19 @@ import { base44 } from '@/api/base44Client';
 
 export async function handleOpenFile(file, onSuccess, onError) {
   try {
-    console.log('Opening file with _id:', file._id);
+    const fileId = file.file_id || file.ref_id || file._id || file.id;
+    console.log('Opening file - raw item:', file);
+    console.log('Resolved fileId:', fileId);
     
-    if (!file._id) {
-      const errorMsg = 'ファイルIDが見つかりません';
+    if (!fileId) {
+      const errorMsg = 'ファイルIDが見つかりません（itemのID項目を確認）';
       console.error(errorMsg, file);
       if (onError) onError(errorMsg);
       return;
     }
     
     if (onSuccess) onSuccess('ファイルを開きます...');
-    window.location.href = `#/app/files/view?fileId=${file._id}`;
+    window.location.href = `#/app/files/view?fileId=${fileId}`;
   } catch (error) {
     console.error('Failed to open file:', error);
     if (onError) onError('ファイルを開けませんでした');
@@ -22,10 +24,12 @@ export async function handleOpenFile(file, onSuccess, onError) {
 
 export async function handleCopyShareLink(file, onSuccess, onError) {
   try {
-    console.log('Copying share link for file._id:', file._id);
+    const fileId = file.file_id || file.ref_id || file._id || file.id;
+    console.log('Copying share link - raw item:', file);
+    console.log('Resolved fileId:', fileId);
     
-    if (!file._id) {
-      const errorMsg = 'ファイルIDが見つかりません';
+    if (!fileId) {
+      const errorMsg = 'ファイルIDが見つかりません（itemのID項目を確認）';
       console.error(errorMsg, file);
       if (onError) onError(errorMsg);
       return;
@@ -33,7 +37,7 @@ export async function handleCopyShareLink(file, onSuccess, onError) {
 
     // ShareLinkを検索
     const existingLinks = await base44.entities.ShareLink.filter({ 
-      file_id: file._id,
+      file_id: fileId,
       is_active: true 
     });
     
@@ -54,7 +58,7 @@ export async function handleCopyShareLink(file, onSuccess, onError) {
       }
       
       await base44.entities.ShareLink.create({
-        file_id: file._id,
+        file_id: fileId,
         token: newToken,
         is_active: true,
         expires_at: expiresAt.toISOString(),
@@ -100,10 +104,12 @@ export async function handleCopyShareLink(file, onSuccess, onError) {
 
 export async function handleDownloadFile(file, onSuccess, onError) {
   try {
-    console.log('Downloading file with _id:', file._id);
+    const fileId = file.file_id || file.ref_id || file._id || file.id;
+    console.log('Downloading file - raw item:', file);
+    console.log('Resolved fileId:', fileId);
     
-    if (!file._id || !file.file_url) {
-      const errorMsg = 'ファイル情報が見つかりません';
+    if (!fileId || !file.file_url) {
+      const errorMsg = 'ファイル情報が見つかりません（itemのID項目を確認）';
       console.error(errorMsg, file);
       if (onError) onError(errorMsg);
       return;

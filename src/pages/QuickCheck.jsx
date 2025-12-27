@@ -42,11 +42,17 @@ export default function QuickCheck() {
         uploaded_by_user_id: user?.id
       });
       
-      // コメント数を取得
+      // コメント数を取得し、IDを正規化
       const filesWithComments = await Promise.all(
         files.map(async (file) => {
-          const comments = await base44.entities.ReviewComment.filter({ file_id: file._id || file.id });
-          return { ...file, comment_count: comments.length };
+          const fileId = file._id || file.id;
+          const comments = await base44.entities.ReviewComment.filter({ file_id: fileId });
+          return { 
+            ...file, 
+            id: fileId,
+            _id: fileId,
+            comment_count: comments.length 
+          };
         })
       );
       
