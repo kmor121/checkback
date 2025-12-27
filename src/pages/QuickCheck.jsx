@@ -34,7 +34,16 @@ export default function QuickCheck() {
         project_id: null,
         uploaded_by_user_id: user?.id
       });
-      return files.sort((a, b) => new Date(b.uploaded_at) - new Date(a.uploaded_at));
+      
+      // コメント数を取得
+      const filesWithComments = await Promise.all(
+        files.map(async (file) => {
+          const comments = await base44.entities.ReviewComment.filter({ file_id: file.id });
+          return { ...file, comment_count: comments.length };
+        })
+      );
+      
+      return filesWithComments.sort((a, b) => new Date(b.uploaded_at) - new Date(a.uploaded_at));
     },
     enabled: !!user,
   });
@@ -56,6 +65,7 @@ export default function QuickCheck() {
         uploaded_by_name: user?.full_name,
         uploaded_at: new Date().toISOString(),
         expires_at: expiresAt.toISOString(),
+        comment_count: 0,
       });
     },
     onSuccess: async (fileAsset) => {
@@ -205,7 +215,9 @@ export default function QuickCheck() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem>開く</DropdownMenuItem>
+                          <DropdownMenuItem>
+                            <a href={`#/app/files/view?fileId=${file.id}`}>開く</a>
+                          </DropdownMenuItem>
                           <DropdownMenuItem>リンクをコピー</DropdownMenuItem>
                           <DropdownMenuItem>ダウンロード</DropdownMenuItem>
                         </DropdownMenuContent>
