@@ -216,9 +216,7 @@ export default function ProjectFiles() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {sortedFiles.map((file) => {
             const fileId = file.file_id || file.ref_id || file._id || file.id;
-            const prefix = window.location.pathname.split('/app/')[0];
-            const appBase = `${prefix}/app`;
-            const href = fileId ? `${appBase}/files/view?fileId=${fileId}` : '#';
+            const href = fileId ? `/app/files/view?fileId=${encodeURIComponent(fileId)}` : '#';
             return (
             <Card
               key={file.id}

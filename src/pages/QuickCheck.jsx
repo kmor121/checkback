@@ -201,9 +201,7 @@ export default function QuickCheck() {
             {recentQuickFiles.map((file) => {
               const remainingDays = getRemainingDays(file.expires_at);
               const fileId = file.file_id || file.ref_id || file._id || file.id;
-              const prefix = window.location.pathname.split('/app/')[0];
-              const appBase = `${prefix}/app`;
-              const href = fileId ? `${appBase}/files/view?fileId=${fileId}` : '#';
+              const href = fileId ? `/app/files/view?fileId=${encodeURIComponent(fileId)}` : '#';
               return (
                 <Card key={file.id} className="hover:shadow-lg transition-shadow">
                   <CardContent className="p-4">
