@@ -229,13 +229,24 @@ export default function QuickCheck() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
                          <DropdownMenuItem 
-                           onSelect={(e) => {
-                             e.preventDefault();
+                           asChild
+                           disabled={!(file.file_id || file.ref_id || file._id || file.id)}
+                         >
+                           <a href={`#/app/files/view?fileId=${file.file_id || file.ref_id || file._id || file.id}`}>
+                             開く
+                           </a>
+                         </DropdownMenuItem>
+                         <DropdownMenuItem
+                           onClick={(e) => {
                              e.stopPropagation();
-                             handleOpenFile(file, showToast, (err) => showToast(err, 'error'));
+                             const fileId = file.file_id || file.ref_id || file._id || file.id;
+                             if (fileId) {
+                               navigator.clipboard.writeText(fileId);
+                               showToast('IDをコピーしました');
+                             }
                            }}
                          >
-                           開く
+                           IDをコピー
                          </DropdownMenuItem>
                          <DropdownMenuItem
                            onClick={(e) => {
