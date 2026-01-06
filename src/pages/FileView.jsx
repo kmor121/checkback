@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
@@ -44,7 +44,22 @@ function FileViewContent() {
   const queryClient = useQueryClient();
   
   const [searchParams] = useSearchParams();
-  const fileId = searchParams.get('fileId');
+  const location = useLocation();
+  
+  // fileIdを複数の方法で取得を試みる
+  let fileId = searchParams.get('fileId');
+  
+  // useSearchParamsで取得できない場合、locationのsearchから直接取得
+  if (!fileId && location.search) {
+    const params = new URLSearchParams(location.search);
+    fileId = params.get('fileId');
+  }
+  
+  // それでも取得できない場合、ハッシュ部分から取得
+  if (!fileId && location.hash) {
+    const hashParams = new URLSearchParams(location.hash.split('?')[1]);
+    fileId = hashParams.get('fileId');
+  }
 
   // デバッグ情報を収集
   useEffect(() => {
@@ -52,10 +67,14 @@ function FileViewContent() {
       currentUrl: window.location.href,
       searchParamsRaw: window.location.search,
       hashRaw: window.location.hash,
-      fileId: fileId,
+      locationSearch: location.search,
+      locationHash: location.hash,
+      locationPathname: location.pathname,
+      fileIdFromSearchParams: searchParams.get('fileId'),
+      fileIdFinal: fileId,
       timestamp: new Date().toISOString(),
     });
-  }, [fileId]);
+  }, [fileId, location, searchParams]);
 
   useEffect(() => {
     base44.auth.me().then(setUser).catch(() => {});
