@@ -47,26 +47,37 @@ function FileViewContent() {
   const location = useLocation();
   
   // fileIdを複数の方法で取得を試みる
-  // 1. location.stateから取得（navigate経由）
-  let fileId = location.state?.fileId;
-  const fileFromState = location.state?.file;
+  // 1. sessionStorageから取得（最優先）
+  let fileId = sessionStorage.getItem('fileView_fileId');
+  let fileFromStorage = null;
   
-  // 2. URLパラメータから取得
+  try {
+    const fileJson = sessionStorage.getItem('fileView_file');
+    if (fileJson) {
+      fileFromStorage = JSON.parse(fileJson);
+    }
+  } catch (e) {
+    console.error('Failed to parse file from sessionStorage:', e);
+  }
+  
+  // 2. location.stateから取得
+  if (!fileId) {
+    fileId = location.state?.fileId;
+  }
+  const fileFromState = location.state?.file || fileFromStorage;
+  
+  // 3. URLパラメータから取得
   if (!fileId) {
     fileId = searchParams.get('fileId');
   }
   
-  // 3. locationのsearchから直接取得
-  if (!fileId && location.search) {
-    const params = new URLSearchParams(location.search);
-    fileId = params.get('fileId');
-  }
-  
-  // 4. ハッシュ部分から取得
-  if (!fileId && location.hash) {
-    const hashParams = new URLSearchParams(location.hash.split('?')[1]);
-    fileId = hashParams.get('fileId');
-  }
+  // sessionStorageをクリア（取得後）
+  useEffect(() => {
+    if (fileId) {
+      sessionStorage.removeItem('fileView_fileId');
+      sessionStorage.removeItem('fileView_file');
+    }
+  }, [fileId]);
 
   // デバッグ情報を収集
   useEffect(() => {
@@ -79,6 +90,7 @@ function FileViewContent() {
       locationPathname: location.pathname,
       fileIdFromSearchParams: searchParams.get('fileId'),
       fileIdFromState: location.state?.fileId,
+      fileIdFromSessionStorage: sessionStorage.getItem('fileView_fileId'),
       hasFileFromState: !!fileFromState,
       fileIdFinal: fileId,
       timestamp: new Date().toISOString(),

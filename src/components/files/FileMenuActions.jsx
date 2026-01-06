@@ -15,17 +15,15 @@ export async function handleOpenFile(file, navigate, onSuccess, onError) {
     
     if (onSuccess) onSuccess('ファイルを開きます...');
     
-    // navigateを使用してstateでfileIdとfile全体を渡す
+    // sessionStorageに一時保存
+    sessionStorage.setItem('fileView_fileId', fileId);
+    sessionStorage.setItem('fileView_file', JSON.stringify(file));
+    
+    // navigateで遷移
     if (navigate) {
-      navigate(createPageUrl('FileView'), { 
-        state: { 
-          fileId: fileId,
-          file: file 
-        } 
-      });
+      navigate(createPageUrl('FileView'));
     } else {
-      // フォールバック
-      window.location.href = `${createPageUrl('FileView')}?fileId=${encodeURIComponent(fileId)}`;
+      window.location.href = createPageUrl('FileView');
     }
   } catch (error) {
     console.error('Failed to open file:', error);
