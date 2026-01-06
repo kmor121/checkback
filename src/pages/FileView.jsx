@@ -41,43 +41,53 @@ function FileViewContent() {
   const [commentBody, setCommentBody] = useState('');
   const [shareLinkOpen, setShareLinkOpen] = useState(false);
   const [debugInfo, setDebugInfo] = useState({});
+  const [fileId, setFileId] = useState(null);
+  const [fileFromState, setFileFromState] = useState(null);
   const queryClient = useQueryClient();
   
   const [searchParams] = useSearchParams();
   const location = useLocation();
   
-  // fileIdを複数の方法で取得を試みる
-  // 1. sessionStorageから取得（最優先）
-  let fileId = sessionStorage.getItem('fileView_fileId');
-  let fileFromStorage = null;
-  
-  try {
-    const fileJson = sessionStorage.getItem('fileView_file');
-    if (fileJson) {
-      fileFromStorage = JSON.parse(fileJson);
-    }
-  } catch (e) {
-    console.error('Failed to parse file from sessionStorage:', e);
-  }
-  
-  // 2. location.stateから取得
-  if (!fileId) {
-    fileId = location.state?.fileId;
-  }
-  const fileFromState = location.state?.file || fileFromStorage;
-  
-  // 3. URLパラメータから取得
-  if (!fileId) {
-    fileId = searchParams.get('fileId');
-  }
-  
-  // sessionStorageをクリア（取得後）
+  // 初回マウント時にfileIdとfileを取得
   useEffect(() => {
-    if (fileId) {
+    let foundFileId = null;
+    let foundFile = null;
+    
+    // 1. sessionStorageから取得（最優先）
+    const storedFileId = sessionStorage.getItem('fileView_fileId');
+    if (storedFileId) {
+      foundFileId = storedFileId;
+      try {
+        const fileJson = sessionStorage.getItem('fileView_file');
+        if (fileJson) {
+          foundFile = JSON.parse(fileJson);
+        }
+      } catch (e) {
+        console.error('Failed to parse file from sessionStorage:', e);
+      }
+      // sessionStorageをクリア
       sessionStorage.removeItem('fileView_fileId');
       sessionStorage.removeItem('fileView_file');
     }
-  }, [fileId]);
+    
+    // 2. location.stateから取得
+    if (!foundFileId && location.state?.fileId) {
+      foundFileId = location.state.fileId;
+      foundFile = location.state.file;
+    }
+    
+    // 3. URLパラメータから取得
+    if (!foundFileId) {
+      foundFileId = searchParams.get('fileId');
+    }
+    
+    if (foundFileId) {
+      setFileId(foundFileId);
+    }
+    if (foundFile) {
+      setFileFromState(foundFile);
+    }
+  }, [location.state, searchParams]);
 
   // デバッグ情報を収集
   useEffect(() => {
