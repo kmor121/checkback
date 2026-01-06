@@ -75,6 +75,28 @@ export default function Layout({ children, currentPageName }) {
                        currentPath.startsWith('/signup') || 
                        currentPath.startsWith('/share/');
 
+  // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
+  const { data: notifications = [] } = useQuery({
+    queryKey: ['notifications', user?.id],
+    queryFn: () => base44.entities.UserNotification.filter({ user_id: user?.id }),
+    enabled: !!user && !isPublicRoute,
+  });
+
+  const { data: projects = [] } = useQuery({
+    queryKey: ['projects', user?.id],
+    queryFn: () => base44.entities.Project.filter({ owner_user_id: user?.id }),
+    enabled: !!user && !isPublicRoute,
+  });
+
+  const { data: workspace } = useQuery({
+    queryKey: ['workspace'],
+    queryFn: async () => {
+      const workspaces = await base44.entities.Workspace.list();
+      return workspaces[0] || { plan_tier: 'free', project_limit: 5 };
+    },
+    enabled: !isPublicRoute,
+  });
+
   useEffect(() => {
     setAuthDebug(`Path: ${currentPath}, Public: ${isPublicRoute}`);
     
@@ -117,26 +139,6 @@ export default function Layout({ children, currentPageName }) {
   if (!user) {
     return <RedirectToLogin currentPath={currentPath} />;
   }
-
-  const { data: notifications = [] } = useQuery({
-    queryKey: ['notifications', user?.id],
-    queryFn: () => base44.entities.UserNotification.filter({ user_id: user?.id }),
-    enabled: !!user,
-  });
-
-  const { data: projects = [] } = useQuery({
-    queryKey: ['projects', user?.id],
-    queryFn: () => base44.entities.Project.filter({ owner_user_id: user?.id }),
-    enabled: !!user,
-  });
-
-  const { data: workspace } = useQuery({
-    queryKey: ['workspace'],
-    queryFn: async () => {
-      const workspaces = await base44.entities.Workspace.list();
-      return workspaces[0] || { plan_tier: 'free', project_limit: 5 };
-    },
-  });
 
   const handleLogout = async () => {
     await base44.auth.logout();
