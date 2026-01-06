@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
@@ -19,6 +20,7 @@ import { handleOpenFile, handleCopyShareLink, handleDownloadFile } from '../comp
 import { createPageUrl } from '@/utils';
 
 export default function QuickCheck() {
+  const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [uploadedFile, setUploadedFile] = useState(null);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
@@ -231,28 +233,19 @@ export default function QuickCheck() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem asChild disabled={!fileId}>
-                            <a href={href}>開く</a>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem asChild disabled={!fileId}>
-                            <a href={href} target="_blank" rel="noreferrer">新規タブで開く</a>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem disabled>
-                            <div className="text-xs text-gray-500">
-                              ID: {fileId || 'なし'}<br />
-                              href: {href}
-                            </div>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
+                          <DropdownMenuItem 
+                            disabled={!fileId}
                             onClick={(e) => {
                               e.stopPropagation();
                               if (fileId) {
-                                navigator.clipboard.writeText(fileId);
-                                showToast('IDをコピーしました');
+                                handleOpenFile(file, navigate, () => showToast('ファイルを開きます...'), (err) => showToast(err, 'error'));
                               }
                             }}
                           >
-                            IDをコピー
+                            開く
+                          </DropdownMenuItem>
+                          <DropdownMenuItem asChild disabled={!fileId}>
+                            <a href={href} target="_blank" rel="noreferrer">新規タブで開く</a>
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={(e) => {

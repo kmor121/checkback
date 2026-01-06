@@ -2,7 +2,7 @@ import React from 'react';
 import { base44 } from '@/api/base44Client';
 import { createPageUrl } from '@/utils';
 
-export async function handleOpenFile(file, onSuccess, onError) {
+export async function handleOpenFile(file, navigate, onSuccess, onError) {
   try {
     const fileId = file.id;
     
@@ -13,11 +13,15 @@ export async function handleOpenFile(file, onSuccess, onError) {
       return;
     }
     
-    const pageUrl = createPageUrl('FileView');
-    const fullUrl = `${pageUrl}?fileId=${encodeURIComponent(fileId)}`;
-    
     if (onSuccess) onSuccess('ファイルを開きます...');
-    window.location.href = fullUrl;
+    
+    // navigateを使用してルーティング
+    if (navigate) {
+      navigate(`${createPageUrl('FileView')}?fileId=${encodeURIComponent(fileId)}`);
+    } else {
+      // フォールバック
+      window.location.href = `${createPageUrl('FileView')}?fileId=${encodeURIComponent(fileId)}`;
+    }
   } catch (error) {
     console.error('Failed to open file:', error);
     if (onError) onError('ファイルを開けませんでした');
