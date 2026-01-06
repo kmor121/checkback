@@ -106,6 +106,15 @@ function ShareViewContent() {
     enabled: !!shareLink?.file_id && shareLink?.can_view_comments,
   });
 
+  const { data: paintShapes = [] } = useQuery({
+    queryKey: ['sharedPaintShapes', shareLink?.file_id, shareLink?.id, currentPage],
+    queryFn: () => base44.entities.PaintShape.filter({ 
+      file_id: shareLink.file_id,
+      page_no: currentPage
+    }),
+    enabled: !!shareLink?.file_id,
+  });
+
 
 
   const handleSaveShape = async (shape) => {
@@ -330,23 +339,6 @@ function ShareViewContent() {
     return 0;
   });
 
-  const currentPagePaintShapes = allPaintShapes
-    .filter(ps => ps.page_no === currentPage && visiblePaints.has(ps.comment_id))
-    .map(ps => {
-      const shape = JSON.parse(ps.data_json);
-      return {
-        ...shape,
-        opacity: selectedCommentId === ps.comment_id ? 1 : 0.3,
-      };
-    });
-
-  const isPDF = file?.mime_type === 'application/pdf';
-  const isImage = file?.mime_type?.startsWith('image/');
-  const canPreview = isPDF || isImage;
-
-  const canvasWidth = 800 * (zoom / 100);
-  const canvasHeight = isPDF ? 1000 * (zoom / 100) : 600 * (zoom / 100);
-
   return (
     <div className="max-w-full mx-auto h-screen flex flex-col">
       <div className="border-b bg-white px-6 py-3 flex items-center justify-between">
@@ -381,25 +373,12 @@ function ShareViewContent() {
       </div>
 
       <div className="flex-1 flex overflow-hidden">
-        {/* 左：サムネ */}
+        {/* 左：サムネ（簡易版） */}
         <div className="w-48 border-r bg-gray-50 overflow-y-auto p-4">
           <div className="space-y-2">
-            {isPDF && Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => (
-              <div
-                key={pageNum}
-                onClick={() => setCurrentPage(pageNum)}
-                className={`cursor-pointer border-2 rounded p-2 text-center text-sm ${
-                  currentPage === pageNum ? 'border-blue-600 bg-blue-50' : 'border-gray-200'
-                }`}
-              >
-                {pageNum}
-              </div>
-            ))}
-            {isImage && (
-              <div className="border-2 border-blue-600 rounded p-2 text-center text-sm bg-blue-50">
-                1
-              </div>
-            )}
+            <div className="border-2 border-blue-600 rounded p-2 text-center text-sm bg-blue-50">
+              1
+            </div>
           </div>
         </div>
 
@@ -507,7 +486,7 @@ function ShareViewContent() {
                 />
                 <Button
                   onClick={handleSendComment}
-                  disabled={!commentBody.trim() && shapes.length === 0}
+                  disabled={!commentBody.trim()}
                   className="w-full bg-blue-600 hover:bg-blue-700"
                 >
                   <Send className="w-4 h-4 mr-2" />
