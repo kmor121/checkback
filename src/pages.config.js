@@ -8,6 +8,7 @@ import ProjectTalk from './pages/ProjectTalk';
 import Projects from './pages/Projects';
 import QuickCheck from './pages/QuickCheck';
 import ShareView from './pages/ShareView';
+import DebugRoutes from './pages/DebugRoutes';
 import __Layout from './Layout.jsx';
 
 
@@ -22,6 +23,7 @@ export const PAGES = {
     "Projects": Projects,
     "QuickCheck": QuickCheck,
     "ShareView": ShareView,
+    "DebugRoutes": DebugRoutes,
 }
 
 export const pagesConfig = {

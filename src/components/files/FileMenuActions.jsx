@@ -14,26 +14,14 @@ export async function handleOpenFile(file, onSuccess, onError) {
       return;
     }
     
-    const path = `${window.location.origin}${window.location.pathname}#/app/files/view?fileId=${fileId}`;
+    // Canonical URL: ハッシュルートで FileView ページを開く
+    const path = `${window.location.origin}${window.location.pathname}#/FileView?fileId=${fileId}`;
     console.log('Navigating to path:', path);
     
     if (onSuccess) onSuccess('ファイルを開きます...');
     
-    // 確実に遷移する実装
-    try {
-      window.location.assign(path);
-    } catch (navError) {
-      console.error('Navigation error, trying href fallback:', navError);
-      window.location.href = path;
-    }
-    
-    // フォールバック：100ms後にパスが変わってなければ再試行
-    setTimeout(() => {
-      if (!window.location.hash.includes(`fileId=${fileId}`)) {
-        console.warn('Navigation failed, retrying with location.replace');
-        window.location.replace(path);
-      }
-    }, 100);
+    // ハッシュ変更のみでページ遷移（リロードなし）
+    window.location.hash = `/FileView?fileId=${fileId}`;
   } catch (error) {
     console.error('Failed to open file:', error);
     if (onError) onError('ファイルを開けませんでした');
