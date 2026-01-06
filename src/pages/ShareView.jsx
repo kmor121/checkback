@@ -23,6 +23,7 @@ import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import * as pdfjsLib from 'pdfjs-dist';
 import PaintCanvas from '../components/viewer/PaintCanvas';
+import ErrorBoundary from '../components/ErrorBoundary';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
@@ -30,7 +31,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.j
 // Base44の仕様上、アプリ全体をPublicにするか、このページを完全に独立させる必要がある
 // このコンポーネントは認証API(base44.auth.me等)を一切呼ばない
 
-export default function ShareView() {
+function ShareViewContent() {
   const [guestName, setGuestName] = useState('');
   const [showNameDialog, setShowNameDialog] = useState(false);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
@@ -69,13 +70,6 @@ export default function ShareView() {
     const isVerified = sessionStorage.getItem(`passwordVerified_${token}`) === '1';
     setIsPasswordVerified(isVerified);
   }, [token]);
-  
-  // ShareLinkのパスワード検証
-  useEffect(() => {
-    if (shareLink && shareLink.password_enabled && !isPasswordVerified) {
-      setShowPasswordDialog(true);
-    }
-  }, [shareLink, isPasswordVerified]);
 
   const { data: shareLink, isLoading: linkLoading } = useQuery({
     queryKey: ['shareLink', token],
@@ -85,6 +79,13 @@ export default function ShareView() {
     },
     enabled: !!token,
   });
+
+  // ShareLinkのパスワード検証（shareLinkが取得された後に実行）
+  useEffect(() => {
+    if (shareLink && shareLink.password_enabled && !isPasswordVerified) {
+      setShowPasswordDialog(true);
+    }
+  }, [shareLink, isPasswordVerified]);
 
   const { data: file } = useQuery({
     queryKey: ['sharedFile', shareLink?.file_id],
@@ -615,5 +616,13 @@ export default function ShareView() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function ShareView() {
+  return (
+    <ErrorBoundary>
+      <ShareViewContent />
+    </ErrorBoundary>
   );
 }
