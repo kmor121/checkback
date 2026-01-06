@@ -15,14 +15,9 @@ export async function handleOpenFile(file, navigate, onSuccess, onError) {
     
     if (onSuccess) onSuccess('ファイルを開きます...');
     
-    // 直接URLパラメータとして渡す（最も確実な方法）
+    // Base44プレビュー環境では、window.location.hrefを使って直接遷移
     const fileViewUrl = `${createPageUrl('FileView')}?fileId=${encodeURIComponent(fileId)}`;
-    
-    if (navigate) {
-      navigate(fileViewUrl);
-    } else {
-      window.location.href = fileViewUrl;
-    }
+    window.location.href = fileViewUrl;
   } catch (error) {
     console.error('Failed to open file:', error);
     if (onError) onError('ファイルを開けませんでした');
