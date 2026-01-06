@@ -4,25 +4,19 @@ import { createPageUrl } from '@/utils';
 
 export async function handleOpenFile(file, onSuccess, onError) {
   try {
-    const fileId = file.file_id || file.ref_id || file._id || file.id;
-    console.log('Opening file - raw item:', file);
-    console.log('Resolved fileId:', fileId);
+    const fileId = file.id;
     
     if (!fileId) {
-      const errorMsg = 'ファイルIDが見つかりません（itemのID項目を確認）';
+      const errorMsg = 'ファイルIDが見つかりません';
       console.error(errorMsg, file);
       if (onError) onError(errorMsg);
       return;
     }
     
-    // Canonical URL: createPageUrl を使用
     const pageUrl = createPageUrl('FileView');
     const fullUrl = `${pageUrl}?fileId=${encodeURIComponent(fileId)}`;
-    console.log('Navigating to:', fullUrl);
     
     if (onSuccess) onSuccess('ファイルを開きます...');
-    
-    // window.location.href で遷移
     window.location.href = fullUrl;
   } catch (error) {
     console.error('Failed to open file:', error);
@@ -32,12 +26,10 @@ export async function handleOpenFile(file, onSuccess, onError) {
 
 export async function handleCopyShareLink(file, onSuccess, onError) {
   try {
-    const fileId = file.file_id || file.ref_id || file._id || file.id;
-    console.log('Copying share link - raw item:', file);
-    console.log('Resolved fileId:', fileId);
+    const fileId = file.id;
     
     if (!fileId) {
-      const errorMsg = 'ファイルIDが見つかりません（itemのID項目を確認）';
+      const errorMsg = 'ファイルIDが見つかりません';
       console.error(errorMsg, file);
       if (onError) onError(errorMsg);
       return;
@@ -114,12 +106,10 @@ export async function handleCopyShareLink(file, onSuccess, onError) {
 
 export async function handleDownloadFile(file, onSuccess, onError) {
   try {
-    const fileId = file.file_id || file.ref_id || file._id || file.id;
-    console.log('Downloading file - raw item:', file);
-    console.log('Resolved fileId:', fileId);
+    const fileId = file.id;
     
     if (!fileId || !file.file_url) {
-      const errorMsg = 'ファイル情報が見つかりません（itemのID項目を確認）';
+      const errorMsg = 'ファイル情報が見つかりません';
       console.error(errorMsg, file);
       if (onError) onError(errorMsg);
       return;

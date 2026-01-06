@@ -201,8 +201,8 @@ export default function QuickCheck() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {recentQuickFiles.map((file) => {
               const remainingDays = getRemainingDays(file.expires_at);
-              const fileId = file.file_id || file.ref_id || file._id || file.id;
-              const href = fileId ? `${createPageUrl('FileView')}?fileId=${encodeURIComponent(fileId)}` : '#';
+              const fileId = file.id;
+              const href = `${createPageUrl('FileView')}?fileId=${encodeURIComponent(fileId)}`;
               return (
                 <Card key={file.id} className="hover:shadow-lg transition-shadow">
                   <CardContent className="p-4">
