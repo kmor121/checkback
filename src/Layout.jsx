@@ -106,7 +106,14 @@ function RedirectToLogin({ currentPath }) {
       return;
     }
 
-    // リダイレクト回数チェック
+    // 同一セッションで既にリダイレクト中なら停止
+    if (sessionStorage.getItem('__redirecting') === '1') {
+      bootLog('RedirectToLogin: STOPPED - already redirecting');
+      setLoopDetected(true);
+      return;
+    }
+
+    // リダイレクト回数チェック（2回で停止）
     const cnt = Number(sessionStorage.getItem('redir_cnt') || '0');
     
     if (cnt >= 2) {
@@ -116,6 +123,7 @@ function RedirectToLogin({ currentPath }) {
     }
 
     sessionStorage.setItem('redir_cnt', String(cnt + 1));
+    sessionStorage.setItem('__redirecting', '1');
 
     // from_url生成（入れ子を防ぐため既存のfrom_urlを削除）
     const url = new URL(window.location.href);
@@ -126,7 +134,8 @@ function RedirectToLogin({ currentPath }) {
     sessionStorage.setItem('last_redirect_to', loginUrl);
     bootLog('RedirectToLogin: redirecting to ' + loginUrl + ' (attempt ' + (cnt + 1) + ')');
     
-    window.location.assign(loginUrl);
+    // フルリロードではなくハッシュルーティングで遷移
+    window.location.href = loginUrl;
   }, [currentPath]);
 
   if (loopDetected) {
@@ -141,11 +150,12 @@ function RedirectToLogin({ currentPath }) {
             <div><strong>Current Path:</strong> {currentPath}</div>
             <div><strong>Last Redirect To:</strong> {sessionStorage.getItem('last_redirect_to')}</div>
             <div><strong>Redirect Count:</strong> {sessionStorage.getItem('redir_cnt')}</div>
+            <div><strong>Nav Count:</strong> {sessionStorage.getItem('__nav_cnt')}</div>
           </div>
           <button
             onClick={() => {
               sessionStorage.clear();
-              window.location.href = '/login';
+              window.location.href = '/#/login';
             }}
             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
           >
@@ -262,9 +272,14 @@ export default function Layout({ children, currentPageName }) {
   useEffect(() => {
     bootLog('Layout: useEffect running (auth check)');
     
-    if (isPublicRoute) {
-      bootLog('Layout: public route, skipping auth');
+    // CRITICAL: public routes は絶対に認証チェックをスキップ（最優先）
+    const p = window.location.pathname;
+    const isPublic = p.startsWith('/login') || p.startsWith('/signup') || p.startsWith('/share/');
+    
+    if (isPublic) {
+      bootLog('Layout: PUBLIC ROUTE - skipping all auth checks');
       setIsCheckingAuth(false);
+      setUser(null);
       return;
     }
 
@@ -278,13 +293,14 @@ export default function Layout({ children, currentPageName }) {
         sessionStorage.removeItem('redir_cnt');
         sessionStorage.removeItem('last_redirect_to');
         sessionStorage.removeItem('__nav_cnt');
+        sessionStorage.removeItem('__redirecting');
       })
       .catch((err) => {
         bootLog('Layout: auth.me() FAILED: ' + (err?.message || String(err)));
         setUser(null);
         setIsCheckingAuth(false);
       });
-  }, [isPublicRoute]);
+  }, []);
 
   // React mount完了を通知
   useEffect(() => {
