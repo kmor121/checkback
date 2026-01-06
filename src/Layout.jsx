@@ -267,16 +267,17 @@ export default function Layout({ children, currentPageName }) {
         bootLog('Layout: auth.me() SUCCESS, user=' + (u?.email || u?.id || 'unknown'));
         setUser(u);
         setIsCheckingAuth(false);
-        // ログイン成功: カウンタをクリア
         sessionStorage.removeItem('redir_cnt');
         sessionStorage.removeItem('last_redirect_to');
         sessionStorage.removeItem('__nav_cnt');
         sessionStorage.removeItem('__redirecting');
       })
       .catch((err) => {
-        bootLog('Layout: auth.me() FAILED: ' + (err?.message || String(err)));
+        bootLog('Layout: auth.me() FAILED, redirecting to login: ' + (err?.message || String(err)));
         setUser(null);
         setIsCheckingAuth(false);
+        // 未認証なら即座にログインへリダイレクト
+        base44.auth.redirectToLogin(window.location.href);
       });
   }, []);
 
