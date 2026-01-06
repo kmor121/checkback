@@ -26,6 +26,10 @@ import PaintCanvas from '../components/viewer/PaintCanvas';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
+// CRITICAL: ShareViewは認証不要の公開ページ
+// Base44の仕様上、アプリ全体をPublicにするか、このページを完全に独立させる必要がある
+// このコンポーネントは認証API(base44.auth.me等)を一切呼ばない
+
 export default function ShareView() {
   const [guestName, setGuestName] = useState('');
   const [showNameDialog, setShowNameDialog] = useState(false);
@@ -47,9 +51,9 @@ export default function ShareView() {
   const pdfDocRef = useRef(null);
   const queryClient = useQueryClient();
   
-  // token取得：pathname ベースルーティング
-  const pathParts = window.location.pathname.split('/');
-  const token = pathParts[pathParts.length - 1] || window.location.hash.split('/share/')[1];
+  // token取得：URLパラメータから
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('token');
 
   useEffect(() => {
     if (!token) return;

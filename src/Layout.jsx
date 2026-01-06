@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { createPageUrl } from './utils';
 import { base44 } from '@/api/base44Client';
 import { useQuery } from '@tanstack/react-query';
+import { isPublicRoute, isPublicPage } from './pages/_public';
 import {
   Home,
   Zap,
@@ -156,6 +157,27 @@ export default function Layout({ children, currentPageName }) {
   
   const contentPaddingTop = 'calc(40vh + 40px)';
   
+  // CRITICAL: 公開ページ判定（認証チェック完全スキップ）
+  const currentPath = window.location.pathname;
+  const isPublic = isPublicRoute(currentPath) || isPublicPage(currentPageName);
+  
+  bootLog('Layout: path=' + currentPath + ', page=' + currentPageName + ', isPublic=' + isPublic);
+  
+  // 公開ページは即座にchildrenを返す（認証チェック不要）
+  if (isPublic) {
+    bootLog('Layout: PUBLIC PAGE - skipping all checks, rendering children directly');
+    return (
+      <>
+        <div className="fixed left-0 right-0 bg-green-600 text-white text-xs font-mono p-2 overflow-auto" style={{ top: 0, zIndex: 9999 }}>
+          ✓ PUBLIC PAGE: {currentPageName} | path: {currentPath} | NO AUTH REQUIRED
+        </div>
+        <div style={{ paddingTop: '32px' }}>
+          {children}
+        </div>
+      </>
+    );
+  }
+  
   // 無限ループ検知: nav_cnt >= 10 なら即座に停止画面を表示
   const currentNavCnt = Number(sessionStorage.getItem('__nav_cnt') || '0');
   if (currentNavCnt >= 10) {
@@ -195,13 +217,7 @@ export default function Layout({ children, currentPageName }) {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [globalError, setGlobalError] = useState(null);
   
-  // AuthGuard: public routesをスキップ
-  const currentPath = window.location.pathname;
-  const currentPathLower = currentPath.toLowerCase();
-  // Base44はフラットページなので ShareView の実体は "/ShareView"
-  const isPublicRoute = currentPathLower === '/shareview' || currentPath.startsWith('/share/');
-  
-  bootLog('Layout: path=' + currentPath + ', public=' + isPublicRoute + ', checking=' + isCheckingAuth);
+  bootLog('Layout: PRIVATE PAGE - starting auth check');
 
   // グローバルエラーハンドラ
   useEffect(() => {
@@ -225,13 +241,13 @@ export default function Layout({ children, currentPageName }) {
   const { data: notifications = [] } = useQuery({
     queryKey: ['notifications', user?.id],
     queryFn: () => base44.entities.UserNotification.filter({ user_id: user?.id }),
-    enabled: !!user && !isPublicRoute,
+    enabled: !!user,
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ['projects', user?.id],
     queryFn: () => base44.entities.Project.filter({ owner_user_id: user?.id }),
-    enabled: !!user && !isPublicRoute,
+    enabled: !!user,
   });
 
   const { data: workspace } = useQuery({
@@ -240,25 +256,12 @@ export default function Layout({ children, currentPageName }) {
       const workspaces = await base44.entities.Workspace.list();
       return workspaces[0] || { plan_tier: 'free', project_limit: 5 };
     },
-    enabled: !isPublicRoute,
+    enabled: true,
   });
 
   useEffect(() => {
-    bootLog('Layout: useEffect running (auth check)');
+    bootLog('Layout: useEffect running (auth check for PRIVATE page)');
     
-    // CRITICAL: public routes は絶対に認証チェックをスキップ（最優先）
-    const path = window.location.pathname;
-    const pathLower = path.toLowerCase();
-    const isPublic = pathLower === '/shareview' || path.startsWith('/share/');
-    
-    if (isPublic) {
-      bootLog('Layout: PUBLIC ROUTE (' + path + ') - skipping all auth checks');
-      setIsCheckingAuth(false);
-      setUser(null);
-      return;
-    }
-
-    bootLog('Layout: PRIVATE ROUTE (' + path + ') - checking auth');
     base44.auth.me()
       .then(u => {
         bootLog('Layout: auth.me() SUCCESS, user=' + (u?.email || u?.id || 'unknown'));
@@ -275,7 +278,7 @@ export default function Layout({ children, currentPageName }) {
         setUser(null);
         setIsCheckingAuth(false);
       });
-  }, [isPublicRoute]);
+  }, []);
 
   // React mount完了を通知
   useEffect(() => {
@@ -298,16 +301,7 @@ export default function Layout({ children, currentPageName }) {
     );
   };
 
-  // Public routeならガードをスキップ
-  if (isPublicRoute) {
-    bootLog('Layout: returning PUBLIC route content');
-    return (
-      <>
-        <DebugBar />
-        <div style={{ paddingTop: '340px' }}>{children}</div>
-      </>
-    );
-  }
+
 
   // 認証チェック中
   if (isCheckingAuth) {
