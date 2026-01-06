@@ -41,53 +41,13 @@ function FileViewContent() {
   const [commentBody, setCommentBody] = useState('');
   const [shareLinkOpen, setShareLinkOpen] = useState(false);
   const [debugInfo, setDebugInfo] = useState({});
-  const [fileId, setFileId] = useState(null);
-  const [fileFromState, setFileFromState] = useState(null);
   const queryClient = useQueryClient();
   
   const [searchParams] = useSearchParams();
   const location = useLocation();
   
-  // 初回マウント時にfileIdとfileを取得
-  useEffect(() => {
-    let foundFileId = null;
-    let foundFile = null;
-    
-    // 1. sessionStorageから取得（最優先）
-    const storedFileId = sessionStorage.getItem('fileView_fileId');
-    if (storedFileId) {
-      foundFileId = storedFileId;
-      try {
-        const fileJson = sessionStorage.getItem('fileView_file');
-        if (fileJson) {
-          foundFile = JSON.parse(fileJson);
-        }
-      } catch (e) {
-        console.error('Failed to parse file from sessionStorage:', e);
-      }
-      // sessionStorageをクリア
-      sessionStorage.removeItem('fileView_fileId');
-      sessionStorage.removeItem('fileView_file');
-    }
-    
-    // 2. location.stateから取得
-    if (!foundFileId && location.state?.fileId) {
-      foundFileId = location.state.fileId;
-      foundFile = location.state.file;
-    }
-    
-    // 3. URLパラメータから取得
-    if (!foundFileId) {
-      foundFileId = searchParams.get('fileId');
-    }
-    
-    if (foundFileId) {
-      setFileId(foundFileId);
-    }
-    if (foundFile) {
-      setFileFromState(foundFile);
-    }
-  }, [location.state, searchParams]);
+  // URLパラメータから直接fileIdを取得（最もシンプルで確実）
+  const fileId = searchParams.get('fileId');
 
   // デバッグ情報を収集
   useEffect(() => {
@@ -99,13 +59,10 @@ function FileViewContent() {
       locationHash: location.hash,
       locationPathname: location.pathname,
       fileIdFromSearchParams: searchParams.get('fileId'),
-      fileIdFromState: location.state?.fileId,
-      fileIdFromSessionStorage: sessionStorage.getItem('fileView_fileId'),
-      hasFileFromState: !!fileFromState,
       fileIdFinal: fileId,
       timestamp: new Date().toISOString(),
     });
-  }, [fileId, location, searchParams, fileFromState]);
+  }, [fileId, location, searchParams]);
 
   useEffect(() => {
     base44.auth.me().then(setUser).catch(() => {});
@@ -114,12 +71,6 @@ function FileViewContent() {
   const { data: file, isLoading: fileLoading, error: fileError } = useQuery({
     queryKey: ['file', fileId],
     queryFn: async () => {
-      // stateから取得したファイルがあればそれを使用
-      if (fileFromState) {
-        console.log('Using file from location.state:', fileFromState);
-        return fileFromState;
-      }
-      
       console.log('Fetching file with ID:', fileId);
       let files = await base44.entities.FileAsset.filter({ id: fileId });
       if (!files || files.length === 0) {
@@ -128,8 +79,7 @@ function FileViewContent() {
       console.log('Files found:', files);
       return files[0];
     },
-    enabled: !!fileId || !!fileFromState,
-    initialData: fileFromState,
+    enabled: !!fileId,
   });
 
   const { data: comments = [], isLoading: commentsLoading } = useQuery({
