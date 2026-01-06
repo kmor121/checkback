@@ -197,7 +197,9 @@ export default function Layout({ children, currentPageName }) {
   
   // AuthGuard: public routesをスキップ
   const currentPath = window.location.pathname;
-  const isPublicRoute = currentPath.startsWith('/share/');
+  const currentPathLower = currentPath.toLowerCase();
+  // Base44はフラットページなので ShareView の実体は "/ShareView"
+  const isPublicRoute = currentPathLower === '/shareview' || currentPath.startsWith('/share/');
   
   bootLog('Layout: path=' + currentPath + ', public=' + isPublicRoute + ', checking=' + isCheckingAuth);
 
@@ -246,7 +248,8 @@ export default function Layout({ children, currentPageName }) {
     
     // CRITICAL: public routes は絶対に認証チェックをスキップ（最優先）
     const path = window.location.pathname;
-    const isPublic = path.startsWith('/share/');
+    const pathLower = path.toLowerCase();
+    const isPublic = pathLower === '/shareview' || path.startsWith('/share/');
     
     if (isPublic) {
       bootLog('Layout: PUBLIC ROUTE (' + path + ') - skipping all auth checks');
