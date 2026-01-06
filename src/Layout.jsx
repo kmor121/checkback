@@ -30,68 +30,79 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 
-// ==================== BOOT SCREEN (固定DOM) ====================
-// document.body直下に固定で残す（Reactの再レンダーで消えない）
-let bootElement = document.getElementById('__boot');
-if (!bootElement) {
-  bootElement = document.createElement('div');
-  bootElement.id = '__boot';
-  bootElement.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#111;color:#0f0;font:12px/1.4 monospace;padding:8px;white-space:pre-wrap;max-height:40vh;overflow:auto;';
-  
-  // DOM準備後に確実に追加
-  const appendBoot = () => {
-    if (!document.body.contains(bootElement)) {
-      document.body.appendChild(bootElement);
-    }
-  };
-  
-  if (document.body) {
-    appendBoot();
-  } else {
-    document.addEventListener('DOMContentLoaded', appendBoot);
-  }
-}
+// ==================== DEBUG MODE ====================
+const DEBUG_MODE = import.meta.env.VITE_DEBUG === 'true';
 
-// ログ関数（既存のbootElementを再利用）
+// ログ関数（開発時のみ）
 function bootLog(msg) {
-  const boot = document.getElementById('__boot');
-  if (boot) {
-    boot.textContent += msg + '\n';
-    boot.scrollTop = boot.scrollHeight;
-  }
+  if (!DEBUG_MODE) return;
   console.log('[BOOT]', msg);
 }
 
-// 初期化ログ（毎回リセットせず追記）
-bootLog('');
-bootLog('========== BOOT: ' + new Date().toISOString() + ' ==========');
-bootLog('href=' + window.location.href);
-bootLog('pathname=' + window.location.pathname);
-bootLog('search=' + window.location.search);
+// デバッグ画面初期化（開発時のみ）
+if (DEBUG_MODE) {
+  let bootElement = document.getElementById('__boot');
+  if (!bootElement) {
+    bootElement = document.createElement('div');
+    bootElement.id = '__boot';
+    bootElement.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#111;color:#0f0;font:12px/1.4 monospace;padding:8px;white-space:pre-wrap;max-height:40vh;overflow:auto;';
+    
+    const appendBoot = () => {
+      if (!document.body.contains(bootElement)) {
+        document.body.appendChild(bootElement);
+      }
+    };
+    
+    if (document.body) {
+      appendBoot();
+    } else {
+      document.addEventListener('DOMContentLoaded', appendBoot);
+    }
+  }
 
-// 無限遷移検知（nav_cntをインクリメント）
-let navCnt = Number(sessionStorage.getItem('__nav_cnt') || '0');
-navCnt += 1;
-sessionStorage.setItem('__nav_cnt', String(navCnt));
-bootLog('nav_cnt=' + navCnt + (navCnt >= 10 ? ' ⚠️ LOOP DETECTED' : ''));
-
-// グローバルエラーハンドラ（重複登録を防ぐ）
-if (!window.__bootErrorHandlersSet) {
-  window.__bootErrorHandlersSet = true;
+  // 無限遷移検知
+  let navCnt = Number(sessionStorage.getItem('__nav_cnt') || '0');
+  navCnt += 1;
+  sessionStorage.setItem('__nav_cnt', String(navCnt));
   
-  window.addEventListener('error', (e) => {
-    bootLog('ERROR: ' + (e?.error?.message || e.message || 'unknown'));
-    if (e?.error?.stack) bootLog(String(e.error.stack).substring(0, 800));
-  });
+  const boot = document.getElementById('__boot');
+  if (boot) {
+    boot.textContent += '\n========== BOOT: ' + new Date().toISOString() + ' ==========\n';
+    boot.textContent += 'href=' + window.location.href + '\n';
+    boot.textContent += 'pathname=' + window.location.pathname + '\n';
+    boot.textContent += 'search=' + window.location.search + '\n';
+    boot.textContent += 'nav_cnt=' + navCnt + (navCnt >= 10 ? ' ⚠️ LOOP DETECTED' : '') + '\n';
+    boot.scrollTop = boot.scrollHeight;
+  }
 
-  window.addEventListener('unhandledrejection', (e) => {
-    bootLog('REJECTION: ' + (e?.reason?.message || e.reason || 'unknown'));
-    if (e?.reason?.stack) bootLog(String(e.reason.stack).substring(0, 800));
-  });
-  
-  bootLog('BOOT: error handlers registered');
+  // グローバルエラーハンドラ
+  if (!window.__bootErrorHandlersSet) {
+    window.__bootErrorHandlersSet = true;
+    
+    window.addEventListener('error', (e) => {
+      const msg = 'ERROR: ' + (e?.error?.message || e.message || 'unknown');
+      console.error(msg);
+      const boot = document.getElementById('__boot');
+      if (boot) {
+        boot.textContent += msg + '\n';
+        if (e?.error?.stack) boot.textContent += String(e.error.stack).substring(0, 800) + '\n';
+        boot.scrollTop = boot.scrollHeight;
+      }
+    });
+
+    window.addEventListener('unhandledrejection', (e) => {
+      const msg = 'REJECTION: ' + (e?.reason?.message || e.reason || 'unknown');
+      console.error(msg);
+      const boot = document.getElementById('__boot');
+      if (boot) {
+        boot.textContent += msg + '\n';
+        if (e?.reason?.stack) boot.textContent += String(e.reason.stack).substring(0, 800) + '\n';
+        boot.scrollTop = boot.scrollHeight;
+      }
+    });
+  }
 }
-// ==================== END BOOT SCREEN ====================
+// ==================== END DEBUG MODE ====================
 
 // リダイレクトコンポーネント（Base44 SDK のログインにリダイレクト）
 function RedirectToLogin({ currentPath }) {
@@ -168,10 +179,12 @@ export default function Layout({ children, currentPageName }) {
     bootLog('Layout: PUBLIC PAGE - skipping all checks, rendering children directly');
     return (
       <>
-        <div className="fixed left-0 right-0 bg-green-600 text-white text-xs font-mono p-2 overflow-auto" style={{ top: 0, zIndex: 9999 }}>
-          ✓ PUBLIC PAGE: {currentPageName} | path: {currentPath} | NO AUTH REQUIRED
-        </div>
-        <div style={{ paddingTop: '32px' }}>
+        {DEBUG_MODE && (
+          <div className="fixed left-0 right-0 bg-green-600 text-white text-xs font-mono p-2 overflow-auto" style={{ top: 0, zIndex: 9999 }}>
+            ✓ PUBLIC PAGE: {currentPageName} | path: {currentPath} | NO AUTH REQUIRED
+          </div>
+        )}
+        <div style={{ paddingTop: DEBUG_MODE ? '32px' : '0' }}>
           {children}
         </div>
       </>
@@ -286,8 +299,9 @@ export default function Layout({ children, currentPageName }) {
     bootLog('Layout: REACT MOUNTED');
   }, []);
 
-  // デバッグバー（ブート画面の下に表示）
+  // デバッグバー（開発時のみ）
   const DebugBar = () => {
+    if (!DEBUG_MODE) return null;
     return (
       <div className="fixed left-0 right-0 bg-black text-white text-xs font-mono p-2 overflow-auto" style={{ top: '40vh', zIndex: 9998 }}>
         <div className="flex flex-wrap gap-4">
@@ -295,7 +309,6 @@ export default function Layout({ children, currentPageName }) {
           <span><strong>search:</strong> {window.location.search || '(none)'}</span>
           <span><strong>authed:</strong> {user ? 'true' : 'false'}</span>
           <span><strong>checking:</strong> {isCheckingAuth.toString()}</span>
-          <span><strong>public:</strong> {isPublicRoute.toString()}</span>
           <span><strong>nav_cnt:</strong> {sessionStorage.getItem('__nav_cnt') || '0'}</span>
         </div>
       </div>
@@ -391,7 +404,7 @@ export default function Layout({ children, currentPageName }) {
       <DebugBar />
       <div className="min-h-screen bg-gray-50" style={{ paddingTop: '40px' }}>
         {/* 上部ヘッダー */}
-        <header className="fixed top-0 left-0 right-0 h-16 bg-white border-b border-gray-200 z-40 flex items-center justify-between px-6" style={{ top: '40px' }}>
+        <header className="fixed top-0 left-0 right-0 h-16 bg-white border-b border-gray-200 z-40 flex items-center justify-between px-6" style={{ top: DEBUG_MODE ? '40px' : '0' }}>
         <div className="flex items-center gap-4">
           <h1 className="text-xl font-bold text-blue-600">CheckBack</h1>
           <div className="relative">
@@ -450,7 +463,7 @@ export default function Layout({ children, currentPageName }) {
       </header>
 
       {/* 左サイドバー */}
-      <aside className="fixed left-0 bottom-0 w-64 bg-white border-r border-gray-200 overflow-y-auto" style={{ top: `calc(${contentPaddingTop} + 4rem)` }}>
+      <aside className="fixed left-0 bottom-0 w-64 bg-white border-r border-gray-200 overflow-y-auto" style={{ top: DEBUG_MODE ? `calc(${contentPaddingTop} + 4rem)` : '4rem' }}>
         <div className="p-4">
           {workspace && (
             <div className="mb-6 p-3 bg-blue-50 rounded-lg">
@@ -493,7 +506,7 @@ export default function Layout({ children, currentPageName }) {
       </aside>
 
         {/* メインコンテンツ */}
-        <main className="ml-64 p-6" style={{ marginTop: `calc(${contentPaddingTop} + 4rem)` }}>
+        <main className="ml-64 p-6" style={{ marginTop: DEBUG_MODE ? `calc(${contentPaddingTop} + 4rem)` : '4rem' }}>
           {children}
         </main>
 
