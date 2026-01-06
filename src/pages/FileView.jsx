@@ -47,15 +47,22 @@ function FileViewContent() {
   const location = useLocation();
   
   // fileIdを複数の方法で取得を試みる
-  let fileId = searchParams.get('fileId');
+  // 1. location.stateから取得（navigate経由）
+  let fileId = location.state?.fileId;
+  const fileFromState = location.state?.file;
   
-  // useSearchParamsで取得できない場合、locationのsearchから直接取得
+  // 2. URLパラメータから取得
+  if (!fileId) {
+    fileId = searchParams.get('fileId');
+  }
+  
+  // 3. locationのsearchから直接取得
   if (!fileId && location.search) {
     const params = new URLSearchParams(location.search);
     fileId = params.get('fileId');
   }
   
-  // それでも取得できない場合、ハッシュ部分から取得
+  // 4. ハッシュ部分から取得
   if (!fileId && location.hash) {
     const hashParams = new URLSearchParams(location.hash.split('?')[1]);
     fileId = hashParams.get('fileId');
@@ -71,10 +78,12 @@ function FileViewContent() {
       locationHash: location.hash,
       locationPathname: location.pathname,
       fileIdFromSearchParams: searchParams.get('fileId'),
+      fileIdFromState: location.state?.fileId,
+      hasFileFromState: !!fileFromState,
       fileIdFinal: fileId,
       timestamp: new Date().toISOString(),
     });
-  }, [fileId, location, searchParams]);
+  }, [fileId, location, searchParams, fileFromState]);
 
   useEffect(() => {
     base44.auth.me().then(setUser).catch(() => {});
@@ -83,8 +92,13 @@ function FileViewContent() {
   const { data: file, isLoading: fileLoading, error: fileError } = useQuery({
     queryKey: ['file', fileId],
     queryFn: async () => {
+      // stateから取得したファイルがあればそれを使用
+      if (fileFromState) {
+        console.log('Using file from location.state:', fileFromState);
+        return fileFromState;
+      }
+      
       console.log('Fetching file with ID:', fileId);
-      // idとidの両方を試す
       let files = await base44.entities.FileAsset.filter({ id: fileId });
       if (!files || files.length === 0) {
         files = await base44.entities.FileAsset.filter({ _id: fileId });
@@ -92,7 +106,8 @@ function FileViewContent() {
       console.log('Files found:', files);
       return files[0];
     },
-    enabled: !!fileId,
+    enabled: !!fileId || !!fileFromState,
+    initialData: fileFromState,
   });
 
   const { data: comments = [], isLoading: commentsLoading } = useQuery({

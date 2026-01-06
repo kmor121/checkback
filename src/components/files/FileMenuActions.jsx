@@ -15,9 +15,14 @@ export async function handleOpenFile(file, navigate, onSuccess, onError) {
     
     if (onSuccess) onSuccess('ファイルを開きます...');
     
-    // navigateを使用してルーティング
+    // navigateを使用してstateでfileIdとfile全体を渡す
     if (navigate) {
-      navigate(`${createPageUrl('FileView')}?fileId=${encodeURIComponent(fileId)}`);
+      navigate(createPageUrl('FileView'), { 
+        state: { 
+          fileId: fileId,
+          file: file 
+        } 
+      });
     } else {
       // フォールバック
       window.location.href = `${createPageUrl('FileView')}?fileId=${encodeURIComponent(fileId)}`;
