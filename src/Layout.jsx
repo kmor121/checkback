@@ -29,57 +29,67 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 
-// ==================== BOOT SCREEN ====================
-// グローバルスコープで実行（Layout外）
+// ==================== BOOT SCREEN (固定DOM) ====================
+// document.body直下に固定で残す（Reactの再レンダーで消えない）
 let bootElement = document.getElementById('__boot');
 if (!bootElement) {
   bootElement = document.createElement('div');
   bootElement.id = '__boot';
-  bootElement.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#111;color:#0f0;font:12px/1.4 monospace;padding:8px;white-space:pre-wrap;max-height:300px;overflow:auto;';
-  bootElement.textContent = 'BOOT: Layout.js loaded\n';
-  if (document.body) {
-    document.body.appendChild(bootElement);
-  } else {
-    document.addEventListener('DOMContentLoaded', () => {
+  bootElement.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#111;color:#0f0;font:12px/1.4 monospace;padding:8px;white-space:pre-wrap;max-height:40vh;overflow:auto;';
+  
+  // DOM準備後に確実に追加
+  const appendBoot = () => {
+    if (!document.body.contains(bootElement)) {
       document.body.appendChild(bootElement);
-    });
+    }
+  };
+  
+  if (document.body) {
+    appendBoot();
+  } else {
+    document.addEventListener('DOMContentLoaded', appendBoot);
   }
 }
 
+// ログ関数（既存のbootElementを再利用）
 function bootLog(msg) {
-  if (bootElement) {
-    bootElement.textContent += msg + '\n';
-    bootElement.scrollTop = bootElement.scrollHeight;
+  const boot = document.getElementById('__boot');
+  if (boot) {
+    boot.textContent += msg + '\n';
+    boot.scrollTop = boot.scrollHeight;
   }
   console.log('[BOOT]', msg);
 }
 
+// 初期化ログ（毎回リセットせず追記）
+bootLog('');
+bootLog('========== BOOT: ' + new Date().toISOString() + ' ==========');
 bootLog('href=' + window.location.href);
 bootLog('pathname=' + window.location.pathname);
 bootLog('search=' + window.location.search);
 
-// 無限遷移検知
+// 無限遷移検知（nav_cntをインクリメント）
 let navCnt = Number(sessionStorage.getItem('__nav_cnt') || '0');
 navCnt += 1;
 sessionStorage.setItem('__nav_cnt', String(navCnt));
-bootLog('nav_cnt=' + navCnt);
+bootLog('nav_cnt=' + navCnt + (navCnt >= 10 ? ' ⚠️ LOOP DETECTED' : ''));
 
-if (navCnt >= 10) {
-  bootLog('⚠️ NAVIGATION COUNT >= 10: STOPPING ALL REDIRECTS');
+// グローバルエラーハンドラ（重複登録を防ぐ）
+if (!window.__bootErrorHandlersSet) {
+  window.__bootErrorHandlersSet = true;
+  
+  window.addEventListener('error', (e) => {
+    bootLog('ERROR: ' + (e?.error?.message || e.message || 'unknown'));
+    if (e?.error?.stack) bootLog(String(e.error.stack).substring(0, 800));
+  });
+
+  window.addEventListener('unhandledrejection', (e) => {
+    bootLog('REJECTION: ' + (e?.reason?.message || e.reason || 'unknown'));
+    if (e?.reason?.stack) bootLog(String(e.reason.stack).substring(0, 800));
+  });
+  
+  bootLog('BOOT: error handlers registered');
 }
-
-// グローバルエラーハンドラ
-window.addEventListener('error', (e) => {
-  bootLog('ERROR: ' + (e?.error?.message || e.message || 'unknown'));
-  if (e?.error?.stack) bootLog(String(e.error.stack).substring(0, 500));
-});
-
-window.addEventListener('unhandledrejection', (e) => {
-  bootLog('REJECTION: ' + (e?.reason?.message || e.reason || 'unknown'));
-  if (e?.reason?.stack) bootLog(String(e.reason.stack).substring(0, 500));
-});
-
-bootLog('BOOT: error handlers registered');
 // ==================== END BOOT SCREEN ====================
 
 // リダイレクトコンポーネント（render中に遷移しない）
@@ -158,8 +168,38 @@ function RedirectToLogin({ currentPath }) {
 }
 
 export default function Layout({ children, currentPageName }) {
-  bootLog('Layout: component rendering');
-  bootLog('Layout: currentPageName=' + currentPageName);
+  bootLog('Layout: component rendering, page=' + currentPageName);
+  
+  // 無限ループ検知: nav_cnt >= 10 なら即座に停止画面を表示
+  const currentNavCnt = Number(sessionStorage.getItem('__nav_cnt') || '0');
+  if (currentNavCnt >= 10) {
+    bootLog('Layout: STOPPING - nav_cnt >= 10');
+    return (
+      <div className="min-h-screen bg-red-50 flex items-center justify-center" style={{ paddingTop: '40vh' }}>
+        <div className="bg-white rounded-lg shadow-lg p-8 max-w-2xl">
+          <h1 className="text-3xl font-bold text-red-600 mb-4">🚫 Redirect Loop Detected</h1>
+          <p className="text-lg mb-4">
+            ページ遷移が10回以上発生したため、無限ループを検知して停止しました。
+          </p>
+          <div className="bg-gray-100 p-4 rounded font-mono text-sm mb-4">
+            <div><strong>Current Path:</strong> {window.location.pathname}</div>
+            <div><strong>Search:</strong> {window.location.search || '(none)'}</div>
+            <div><strong>Nav Count:</strong> {currentNavCnt}</div>
+            <div><strong>Redir Count:</strong> {sessionStorage.getItem('redir_cnt') || '0'}</div>
+          </div>
+          <button
+            onClick={() => {
+              sessionStorage.clear();
+              window.location.href = '/';
+            }}
+            className="px-6 py-3 bg-blue-600 text-white rounded hover:bg-blue-700 font-semibold"
+          >
+            セッションをクリアしてトップに戻る
+          </button>
+        </div>
+      </div>
+    );
+  }
   
   const [user, setUser] = useState(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
@@ -175,7 +215,7 @@ export default function Layout({ children, currentPageName }) {
                        currentPath.startsWith('/signup') || 
                        currentPath.startsWith('/share/');
   
-  bootLog('Layout: currentPath=' + currentPath + ', isPublicRoute=' + isPublicRoute);
+  bootLog('Layout: path=' + currentPath + ', public=' + isPublicRoute + ', checking=' + isCheckingAuth);
 
   // グローバルエラーハンドラ
   useEffect(() => {
@@ -249,21 +289,18 @@ export default function Layout({ children, currentPageName }) {
     bootLog('Layout: REACT MOUNTED');
   }, []);
 
-  // デバッグバー（常時表示）
+  // デバッグバー（ブート画面の下に表示）
   const DebugBar = () => {
-    bootLog('DebugBar: rendering');
     return (
-      <div className="fixed left-0 right-0 bg-black text-white text-xs font-mono p-2 z-50 overflow-auto" style={{ top: '300px' }}>
+      <div className="fixed left-0 right-0 bg-black text-white text-xs font-mono p-2 overflow-auto" style={{ top: '40vh', zIndex: 9998 }}>
         <div className="flex flex-wrap gap-4">
           <span><strong>pathname:</strong> {window.location.pathname}</span>
           <span><strong>search:</strong> {window.location.search || '(none)'}</span>
-          <span><strong>href:</strong> {window.location.href}</span>
           <span><strong>authed:</strong> {user ? 'true' : 'false'}</span>
-          <span><strong>isCheckingAuth:</strong> {isCheckingAuth.toString()}</span>
-          <span><strong>isPublicRoute:</strong> {isPublicRoute.toString()}</span>
-          <span><strong>redir_cnt:</strong> {sessionStorage.getItem('redir_cnt') || '0'}</span>
+          <span><strong>checking:</strong> {isCheckingAuth.toString()}</span>
+          <span><strong>public:</strong> {isPublicRoute.toString()}</span>
           <span><strong>nav_cnt:</strong> {sessionStorage.getItem('__nav_cnt') || '0'}</span>
-          <span><strong>lastRedirectTo:</strong> {sessionStorage.getItem('last_redirect_to') || '(none)'}</span>
+          <span><strong>redir_cnt:</strong> {sessionStorage.getItem('redir_cnt') || '0'}</span>
         </div>
       </div>
     );
@@ -426,7 +463,7 @@ export default function Layout({ children, currentPageName }) {
       </header>
 
       {/* 左サイドバー */}
-      <aside className="fixed left-0 bottom-0 w-64 bg-white border-r border-gray-200 overflow-y-auto" style={{ top: 'calc(340px + 4rem)' }}>
+      <aside className="fixed left-0 bottom-0 w-64 bg-white border-r border-gray-200 overflow-y-auto" style={{ top: `calc(${contentPaddingTop} + 4rem)` }}>
         <div className="p-4">
           {workspace && (
             <div className="mb-6 p-3 bg-blue-50 rounded-lg">
@@ -469,7 +506,7 @@ export default function Layout({ children, currentPageName }) {
       </aside>
 
         {/* メインコンテンツ */}
-        <main className="ml-64 p-6" style={{ marginTop: 'calc(340px + 4rem)' }}>
+        <main className="ml-64 p-6" style={{ marginTop: `calc(${contentPaddingTop} + 4rem)` }}>
           {children}
         </main>
 
