@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
@@ -16,11 +16,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { handleOpenFile, handleCopyShareLink, handleDownloadFile } from '../components/files/FileMenuActions';
+import { handleCopyShareLink, handleDownloadFile } from '../components/files/FileMenuActions';
 import { createPageUrl } from '@/utils';
 
 export default function QuickCheck() {
-  const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [uploadedFile, setUploadedFile] = useState(null);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
@@ -204,13 +203,17 @@ export default function QuickCheck() {
             {recentQuickFiles.map((file) => {
               const remainingDays = getRemainingDays(file.expires_at);
               const fileId = file.id;
-              const href = `${createPageUrl('FileView')}?fileId=${encodeURIComponent(fileId)}`;
               return (
                 <Card key={file.id} className="hover:shadow-lg transition-shadow">
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-medium truncate">{file.title}</h3>
+                        <Link 
+                          to={`${createPageUrl('FileView')}?fileId=${encodeURIComponent(fileId)}`}
+                          className="font-medium truncate hover:text-blue-600 block"
+                        >
+                          {file.title}
+                        </Link>
                         <div className="flex items-center gap-2 mt-1">
                           {file.comment_count > 0 && (
                             <Badge variant="secondary" className="text-xs">
@@ -228,25 +231,11 @@ export default function QuickCheck() {
                       </div>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
+                          <Button variant="ghost" size="icon" onClick={(e) => e.stopPropagation()}>
                             <MoreVertical className="w-4 h-4" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem 
-                            disabled={!fileId}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (fileId) {
-                                handleOpenFile(file, navigate, () => showToast('ファイルを開きます...'), (err) => showToast(err, 'error'));
-                              }
-                            }}
-                          >
-                            開く
-                          </DropdownMenuItem>
-                          <DropdownMenuItem asChild disabled={!fileId}>
-                            <a href={href} target="_blank" rel="noreferrer">新規タブで開く</a>
-                          </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={(e) => {
                               e.stopPropagation();
