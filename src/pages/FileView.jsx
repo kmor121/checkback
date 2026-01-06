@@ -58,14 +58,16 @@ function FileViewContent() {
     base44.auth.me().then(setUser).catch(() => {});
   }, []);
 
-  const { data: file } = useQuery({
+  const { data: file, isLoading: fileLoading, error: fileError } = useQuery({
     queryKey: ['file', fileId],
     queryFn: async () => {
+      console.log('Fetching file with ID:', fileId);
       // idとidの両方を試す
       let files = await base44.entities.FileAsset.filter({ id: fileId });
       if (!files || files.length === 0) {
         files = await base44.entities.FileAsset.filter({ _id: fileId });
       }
+      console.log('Files found:', files);
       return files[0];
     },
     enabled: !!fileId,
