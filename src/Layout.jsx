@@ -29,15 +29,78 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 
+// ==================== BOOT SCREEN ====================
+// グローバルスコープで実行（Layout外）
+let bootElement = document.getElementById('__boot');
+if (!bootElement) {
+  bootElement = document.createElement('div');
+  bootElement.id = '__boot';
+  bootElement.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#111;color:#0f0;font:12px/1.4 monospace;padding:8px;white-space:pre-wrap;max-height:300px;overflow:auto;';
+  bootElement.textContent = 'BOOT: Layout.js loaded\n';
+  if (document.body) {
+    document.body.appendChild(bootElement);
+  } else {
+    document.addEventListener('DOMContentLoaded', () => {
+      document.body.appendChild(bootElement);
+    });
+  }
+}
+
+function bootLog(msg) {
+  if (bootElement) {
+    bootElement.textContent += msg + '\n';
+    bootElement.scrollTop = bootElement.scrollHeight;
+  }
+  console.log('[BOOT]', msg);
+}
+
+bootLog('href=' + window.location.href);
+bootLog('pathname=' + window.location.pathname);
+bootLog('search=' + window.location.search);
+
+// 無限遷移検知
+let navCnt = Number(sessionStorage.getItem('__nav_cnt') || '0');
+navCnt += 1;
+sessionStorage.setItem('__nav_cnt', String(navCnt));
+bootLog('nav_cnt=' + navCnt);
+
+if (navCnt >= 10) {
+  bootLog('⚠️ NAVIGATION COUNT >= 10: STOPPING ALL REDIRECTS');
+}
+
+// グローバルエラーハンドラ
+window.addEventListener('error', (e) => {
+  bootLog('ERROR: ' + (e?.error?.message || e.message || 'unknown'));
+  if (e?.error?.stack) bootLog(String(e.error.stack).substring(0, 500));
+});
+
+window.addEventListener('unhandledrejection', (e) => {
+  bootLog('REJECTION: ' + (e?.reason?.message || e.reason || 'unknown'));
+  if (e?.reason?.stack) bootLog(String(e.reason.stack).substring(0, 500));
+});
+
+bootLog('BOOT: error handlers registered');
+// ==================== END BOOT SCREEN ====================
+
 // リダイレクトコンポーネント（render中に遷移しない）
 function RedirectToLogin({ currentPath }) {
+  bootLog('RedirectToLogin: rendering for ' + currentPath);
   const [loopDetected, setLoopDetected] = useState(false);
   
   useEffect(() => {
+    // 無限遷移検知: nav_cnt >= 10 なら停止
+    const navCnt = Number(sessionStorage.getItem('__nav_cnt') || '0');
+    if (navCnt >= 10) {
+      bootLog('RedirectToLogin: STOPPED due to nav_cnt >= 10');
+      setLoopDetected(true);
+      return;
+    }
+
     // リダイレクト回数チェック
     const cnt = Number(sessionStorage.getItem('redir_cnt') || '0');
     
     if (cnt >= 2) {
+      bootLog('RedirectToLogin: STOPPED due to redir_cnt >= 2');
       setLoopDetected(true);
       return;
     }
@@ -51,7 +114,7 @@ function RedirectToLogin({ currentPath }) {
     const loginUrl = `/login?from_url=${encodeURIComponent(cleanUrl)}`;
 
     sessionStorage.setItem('last_redirect_to', loginUrl);
-    console.log('Redirecting to login (attempt', cnt + 1, '):', loginUrl);
+    bootLog('RedirectToLogin: redirecting to ' + loginUrl + ' (attempt ' + (cnt + 1) + ')');
     
     window.location.assign(loginUrl);
   }, [currentPath]);
@@ -95,6 +158,9 @@ function RedirectToLogin({ currentPath }) {
 }
 
 export default function Layout({ children, currentPageName }) {
+  bootLog('Layout: component rendering');
+  bootLog('Layout: currentPageName=' + currentPageName);
+  
   const [user, setUser] = useState(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [notificationOpen, setNotificationOpen] = useState(false);
@@ -108,6 +174,8 @@ export default function Layout({ children, currentPageName }) {
   const isPublicRoute = currentPath.startsWith('/login') || 
                        currentPath.startsWith('/signup') || 
                        currentPath.startsWith('/share/');
+  
+  bootLog('Layout: currentPath=' + currentPath + ', isPublicRoute=' + isPublicRoute);
 
   // グローバルエラーハンドラ
   useEffect(() => {
@@ -150,57 +218,75 @@ export default function Layout({ children, currentPageName }) {
   });
 
   useEffect(() => {
+    bootLog('Layout: useEffect running (auth check)');
+    
     if (isPublicRoute) {
+      bootLog('Layout: public route, skipping auth');
       setIsCheckingAuth(false);
       return;
     }
 
+    bootLog('Layout: calling base44.auth.me()');
     base44.auth.me()
       .then(u => {
+        bootLog('Layout: auth.me() SUCCESS, user=' + (u?.email || u?.id || 'unknown'));
         setUser(u);
         setIsCheckingAuth(false);
         // ログイン成功: リダイレクトカウンタをクリア
         sessionStorage.removeItem('redir_cnt');
         sessionStorage.removeItem('last_redirect_to');
+        sessionStorage.removeItem('__nav_cnt');
       })
-      .catch(() => {
+      .catch((err) => {
+        bootLog('Layout: auth.me() FAILED: ' + (err?.message || String(err)));
         setUser(null);
         setIsCheckingAuth(false);
       });
   }, [isPublicRoute]);
 
+  // React mount完了を通知
+  useEffect(() => {
+    bootLog('Layout: REACT MOUNTED');
+  }, []);
+
   // デバッグバー（常時表示）
-  const DebugBar = () => (
-    <div className="fixed top-0 left-0 right-0 bg-black text-white text-xs font-mono p-2 z-50 overflow-auto">
-      <div className="flex flex-wrap gap-4">
-        <span><strong>pathname:</strong> {window.location.pathname}</span>
-        <span><strong>search:</strong> {window.location.search || '(none)'}</span>
-        <span><strong>href:</strong> {window.location.href}</span>
-        <span><strong>authed:</strong> {user ? 'true' : 'false'}</span>
-        <span><strong>isCheckingAuth:</strong> {isCheckingAuth.toString()}</span>
-        <span><strong>isPublicRoute:</strong> {isPublicRoute.toString()}</span>
-        <span><strong>redirectCount:</strong> {sessionStorage.getItem('redir_cnt') || '0'}</span>
-        <span><strong>lastRedirectTo:</strong> {sessionStorage.getItem('last_redirect_to') || '(none)'}</span>
+  const DebugBar = () => {
+    bootLog('DebugBar: rendering');
+    return (
+      <div className="fixed left-0 right-0 bg-black text-white text-xs font-mono p-2 z-50 overflow-auto" style={{ top: '300px' }}>
+        <div className="flex flex-wrap gap-4">
+          <span><strong>pathname:</strong> {window.location.pathname}</span>
+          <span><strong>search:</strong> {window.location.search || '(none)'}</span>
+          <span><strong>href:</strong> {window.location.href}</span>
+          <span><strong>authed:</strong> {user ? 'true' : 'false'}</span>
+          <span><strong>isCheckingAuth:</strong> {isCheckingAuth.toString()}</span>
+          <span><strong>isPublicRoute:</strong> {isPublicRoute.toString()}</span>
+          <span><strong>redir_cnt:</strong> {sessionStorage.getItem('redir_cnt') || '0'}</span>
+          <span><strong>nav_cnt:</strong> {sessionStorage.getItem('__nav_cnt') || '0'}</span>
+          <span><strong>lastRedirectTo:</strong> {sessionStorage.getItem('last_redirect_to') || '(none)'}</span>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   // Public routeならガードをスキップ
   if (isPublicRoute) {
+    bootLog('Layout: returning PUBLIC route content');
     return (
       <>
         <DebugBar />
-        <div style={{ paddingTop: '40px' }}>{children}</div>
+        <div style={{ paddingTop: '340px' }}>{children}</div>
       </>
     );
   }
 
   // 認証チェック中
   if (isCheckingAuth) {
+    bootLog('Layout: returning CHECKING auth screen');
     return (
       <>
         <DebugBar />
-        <div className="min-h-screen bg-blue-50 flex items-center justify-center" style={{ paddingTop: '40px' }}>
+        <div className="min-h-screen bg-blue-50 flex items-center justify-center" style={{ paddingTop: '340px' }}>
           <div className="bg-white rounded-lg shadow-lg p-8 max-w-md">
             <h2 className="text-xl font-bold mb-4">AuthGuard: checking...</h2>
             <div className="mt-4">認証状態を確認中...</div>
@@ -212,10 +298,11 @@ export default function Layout({ children, currentPageName }) {
 
   // 未認証ならリダイレクト
   if (!user) {
+    bootLog('Layout: returning REDIRECT to login');
     return (
       <>
         <DebugBar />
-        <div style={{ paddingTop: '40px' }}>
+        <div style={{ paddingTop: '340px' }}>
           <RedirectToLogin currentPath={currentPath} />
         </div>
       </>
@@ -339,7 +426,7 @@ export default function Layout({ children, currentPageName }) {
       </header>
 
       {/* 左サイドバー */}
-      <aside className="fixed left-0 bottom-0 w-64 bg-white border-r border-gray-200 overflow-y-auto" style={{ top: 'calc(40px + 4rem)' }}>
+      <aside className="fixed left-0 bottom-0 w-64 bg-white border-r border-gray-200 overflow-y-auto" style={{ top: 'calc(340px + 4rem)' }}>
         <div className="p-4">
           {workspace && (
             <div className="mb-6 p-3 bg-blue-50 rounded-lg">
@@ -382,7 +469,7 @@ export default function Layout({ children, currentPageName }) {
       </aside>
 
         {/* メインコンテンツ */}
-        <main className="ml-64 p-6" style={{ marginTop: 'calc(40px + 4rem)' }}>
+        <main className="ml-64 p-6" style={{ marginTop: 'calc(340px + 4rem)' }}>
           {children}
         </main>
 
