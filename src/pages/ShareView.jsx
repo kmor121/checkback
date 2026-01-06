@@ -23,6 +23,7 @@ import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import * as pdfjsLib from 'pdfjs-dist';
 import PaintCanvas from '../components/viewer/PaintCanvas';
+import PaintToolbar from '../components/viewer/PaintToolbar';
 import ErrorBoundary from '../components/ErrorBoundary';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
@@ -45,11 +46,15 @@ function ShareViewContent() {
   const [commentSort, setCommentSort] = useState('page');
   const [commentBody, setCommentBody] = useState('');
   const [isPainting, setIsPainting] = useState(false);
+  const [paintTool, setPaintTool] = useState('pen');
   const [paintShapes, setPaintShapes] = useState([]);
   const [selectedCommentId, setSelectedCommentId] = useState(null);
   const [visiblePaints, setVisiblePaints] = useState(new Set());
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
   const canvasRef = useRef(null);
   const pdfDocRef = useRef(null);
+  const paintCanvasRef = useRef(null);
   const queryClient = useQueryClient();
   
   // token取得：URLパラメータから
@@ -233,6 +238,31 @@ function ShareViewContent() {
       setVisiblePaints(newVisible);
     }
     setSelectedCommentId(commentId);
+  };
+
+  const handlePaintUndo = () => {
+    if (paintCanvasRef.current?.undo) {
+      paintCanvasRef.current.undo();
+    }
+  };
+
+  const handlePaintRedo = () => {
+    if (paintCanvasRef.current?.redo) {
+      paintCanvasRef.current.redo();
+    }
+  };
+
+  const handlePaintClear = () => {
+    if (paintCanvasRef.current?.clear) {
+      paintCanvasRef.current.clear();
+    }
+  };
+
+  const handleTogglePainting = () => {
+    if (!isPainting) {
+      setPaintTool('pen');
+    }
+    setIsPainting(!isPainting);
   };
 
   if (!token) {
@@ -430,26 +460,26 @@ function ShareViewContent() {
         <div className="flex-1 bg-gray-100 overflow-auto p-4">
           <div className="bg-white rounded shadow-lg mx-auto" style={{ width: 'fit-content' }}>
             {canPreview ? (
-              <div className="relative">
+              <div className="relative" style={{ position: 'relative' }}>
                 {isPDF && (
-                  <canvas ref={canvasRef} className="block" />
+                  <canvas ref={canvasRef} className="block" style={{ position: 'relative', zIndex: 0 }} />
                 )}
                 {isImage && (
                   <img 
                     src={file.file_url} 
                     alt={file.title}
-                    style={{ width: canvasWidth }}
+                    style={{ width: canvasWidth, position: 'relative', zIndex: 0, display: 'block' }}
                   />
                 )}
-                <div className="absolute top-0 left-0">
-                  <PaintCanvas
-                    width={canvasWidth}
-                    height={canvasHeight}
-                    onShapesChange={setPaintShapes}
-                    existingShapes={currentPagePaintShapes}
-                    isPainting={isPainting}
-                  />
-                </div>
+                <PaintCanvas
+                  width={canvasWidth}
+                  height={canvasHeight}
+                  onShapesChange={setPaintShapes}
+                  existingShapes={currentPagePaintShapes}
+                  isPainting={isPainting}
+                  tool={paintTool}
+                  onToolChange={paintCanvasRef}
+                />
               </div>
             ) : (
               <div className="p-12 text-center">
@@ -493,6 +523,21 @@ function ShareViewContent() {
         {/* 右：コメント */}
         {shareLink.can_view_comments && (
           <div className="w-96 border-l bg-white flex flex-col">
+            {/* ペイントツールバー */}
+            {isPainting && (
+              <div className="p-4 border-b">
+                <PaintToolbar
+                  tool={paintTool}
+                  onToolChange={setPaintTool}
+                  canUndo={canUndo}
+                  canRedo={canRedo}
+                  onUndo={handlePaintUndo}
+                  onRedo={handlePaintRedo}
+                  onClear={handlePaintClear}
+                />
+              </div>
+            )}
+            
             <div className="p-4 border-b space-y-2">
               <Select value={commentFilter} onValueChange={setCommentFilter}>
                 <SelectTrigger>
@@ -562,10 +607,10 @@ function ShareViewContent() {
                     <Button
                       variant={isPainting ? 'default' : 'outline'}
                       size="sm"
-                      onClick={() => setIsPainting(!isPainting)}
+                      onClick={handleTogglePainting}
                     >
                       <Paintbrush className="w-4 h-4 mr-2" />
-                      {isPainting ? 'ペイント中' : 'ペイント'}
+                      {isPainting ? 'ペイント終了' : 'ペイント開始'}
                     </Button>
                   )}
                 </div>
