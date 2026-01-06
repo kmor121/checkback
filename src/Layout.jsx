@@ -109,33 +109,24 @@ function RedirectToLogin({ currentPath }) {
     // 同一セッションで既にリダイレクト中なら停止
     if (sessionStorage.getItem('__redirecting') === '1') {
       bootLog('RedirectToLogin: STOPPED - already redirecting');
-      setLoopDetected(true);
       return;
     }
 
-    // リダイレクト回数チェック（2回で停止）
-    const cnt = Number(sessionStorage.getItem('redir_cnt') || '0');
-    
-    if (cnt >= 2) {
-      bootLog('RedirectToLogin: STOPPED due to redir_cnt >= 2');
-      setLoopDetected(true);
-      return;
-    }
-
-    sessionStorage.setItem('redir_cnt', String(cnt + 1));
     sessionStorage.setItem('__redirecting', '1');
 
-    // from_url生成（入れ子を防ぐため既存のfrom_urlを削除）
-    const url = new URL(window.location.href);
-    url.searchParams.delete('from_url');
-    const cleanUrl = url.origin + url.pathname + url.search;
-    const loginUrl = `/login?from_url=${encodeURIComponent(cleanUrl)}`;
+    // from_url生成（現在のハッシュをエンコード、入れ子を防ぐ）
+    const currentHash = window.location.hash.replace('#', '') || '/';
+    const loginUrl = `#/login?from_url=${encodeURIComponent(currentHash)}`;
 
-    sessionStorage.setItem('last_redirect_to', loginUrl);
-    bootLog('RedirectToLogin: redirecting to ' + loginUrl + ' (attempt ' + (cnt + 1) + ')');
+    bootLog('RedirectToLogin: redirecting to ' + loginUrl);
     
-    // フルリロードではなくハッシュルーティングで遷移
-    window.location.href = loginUrl;
+    // ハッシュ変更のみ（ページリロードなし）
+    window.location.hash = loginUrl.replace('#', '');
+    
+    // 100ms後にリダイレクトフラグをクリア（Login ページに到達後）
+    setTimeout(() => {
+      sessionStorage.removeItem('__redirecting');
+    }, 100);
   }, [currentPath]);
 
   if (loopDetected) {
@@ -155,7 +146,7 @@ function RedirectToLogin({ currentPath }) {
           <button
             onClick={() => {
               sessionStorage.clear();
-              window.location.href = '/#/login';
+              window.location.hash = '/login';
             }}
             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
           >
@@ -202,7 +193,7 @@ export default function Layout({ children, currentPageName }) {
           <button
             onClick={() => {
               sessionStorage.clear();
-              window.location.href = '/';
+              window.location.hash = '/';
             }}
             className="px-6 py-3 bg-blue-600 text-white rounded hover:bg-blue-700 font-semibold"
           >
@@ -221,13 +212,13 @@ export default function Layout({ children, currentPageName }) {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [globalError, setGlobalError] = useState(null);
   
-  // AuthGuard: public routesをスキップ
-  const currentPath = window.location.pathname;
-  const isPublicRoute = currentPath.startsWith('/login') || 
-                       currentPath.startsWith('/signup') || 
-                       currentPath.startsWith('/share/');
+  // AuthGuard: public routesをスキップ（hash ベースのルーティング）
+  const currentHash = window.location.hash.replace('#', '') || '/';
+  const isPublicRoute = currentHash === '/login' || 
+                       currentHash.startsWith('/login?') ||
+                       currentHash.startsWith('/share/');
   
-  bootLog('Layout: path=' + currentPath + ', public=' + isPublicRoute + ', checking=' + isCheckingAuth);
+  bootLog('Layout: hash=' + currentHash + ', public=' + isPublicRoute + ', checking=' + isCheckingAuth);
 
   // グローバルエラーハンドラ
   useEffect(() => {
@@ -273,17 +264,17 @@ export default function Layout({ children, currentPageName }) {
     bootLog('Layout: useEffect running (auth check)');
     
     // CRITICAL: public routes は絶対に認証チェックをスキップ（最優先）
-    const p = window.location.pathname;
-    const isPublic = p.startsWith('/login') || p.startsWith('/signup') || p.startsWith('/share/');
+    const hash = window.location.hash.replace('#', '') || '/';
+    const isPublic = hash === '/login' || hash.startsWith('/login?') || hash.startsWith('/share/');
     
     if (isPublic) {
-      bootLog('Layout: PUBLIC ROUTE - skipping all auth checks');
+      bootLog('Layout: PUBLIC ROUTE (' + hash + ') - skipping all auth checks');
       setIsCheckingAuth(false);
       setUser(null);
       return;
     }
 
-    bootLog('Layout: calling base44.auth.me()');
+    bootLog('Layout: PRIVATE ROUTE (' + hash + ') - checking auth');
     base44.auth.me()
       .then(u => {
         bootLog('Layout: auth.me() SUCCESS, user=' + (u?.email || u?.id || 'unknown'));
@@ -312,7 +303,7 @@ export default function Layout({ children, currentPageName }) {
     return (
       <div className="fixed left-0 right-0 bg-black text-white text-xs font-mono p-2 overflow-auto" style={{ top: '40vh', zIndex: 9998 }}>
         <div className="flex flex-wrap gap-4">
-          <span><strong>pathname:</strong> {window.location.pathname}</span>
+          <span><strong>hash:</strong> {window.location.hash || '(none)'}</span>
           <span><strong>search:</strong> {window.location.search || '(none)'}</span>
           <span><strong>authed:</strong> {user ? 'true' : 'false'}</span>
           <span><strong>checking:</strong> {isCheckingAuth.toString()}</span>
