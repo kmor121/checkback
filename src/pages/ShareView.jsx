@@ -24,6 +24,7 @@ import { ja } from 'date-fns/locale';
 import ViewerCanvas from '../components/viewer/ViewerCanvas';
 import FloatingToolbar from '../components/viewer/FloatingToolbar';
 import ErrorBoundary from '../components/ErrorBoundary';
+import DebugOverlay from '../components/DebugOverlay';
 
 // CRITICAL: ShareViewは認証不要の公開ページ
 // Base44の仕様上、アプリ全体をPublicにするか、このページを完全に独立させる必要がある
@@ -540,8 +541,11 @@ function ShareViewContent() {
 
 export default function ShareView() {
   return (
-    <ErrorBoundary>
-      <ShareViewContent />
-    </ErrorBoundary>
+    <>
+      <DebugOverlay />
+      <ErrorBoundary>
+        <ShareViewContent />
+      </ErrorBoundary>
+    </>
   );
 }

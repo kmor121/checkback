@@ -28,6 +28,7 @@ import ErrorBoundary from '../components/ErrorBoundary';
 // import ViewerCanvas from '../components/viewer/ViewerCanvas';
 import FloatingToolbar from '../components/viewer/FloatingToolbar';
 import ShareLinkModal from '../components/viewer/ShareLinkModal';
+import DebugOverlay from '../components/DebugOverlay';
 
 function FileViewContent() {
   const [user, setUser] = useState(null);
@@ -426,8 +427,11 @@ function FileViewContent() {
 
 export default function FileView() {
   return (
-    <ErrorBoundary>
-      <FileViewContent />
-    </ErrorBoundary>
+    <>
+      <DebugOverlay />
+      <ErrorBoundary>
+        <FileViewContent />
+      </ErrorBoundary>
+    </>
   );
 }
