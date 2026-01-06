@@ -47,8 +47,14 @@ function ShareViewContent() {
   const [strokeColor, setStrokeColor] = useState('#ff0000');
   const [strokeWidth, setStrokeWidth] = useState(2);
   const [shapes, setShapes] = useState([]);
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
+
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3000);
+  };
   
   // token取得：URLパラメータから
   const params = new URLSearchParams(window.location.search);
@@ -102,6 +108,26 @@ function ShareViewContent() {
 
 
 
+  const handleSaveShape = async (shape) => {
+    try {
+      await base44.entities.PaintShape.create({
+        file_id: shareLink.file_id,
+        share_link_id: shareLink.id,
+        page_no: currentPage,
+        shape_type: shape.tool,
+        data_json: JSON.stringify(shape),
+        author_name: guestName || 'Guest',
+      });
+      
+      queryClient.invalidateQueries(['sharedPaintShapes']);
+      showToast('保存完了', 'success');
+    } catch (error) {
+      console.error('Save shape error:', error);
+      showToast(`保存失敗: ${error.message}`, 'error');
+      throw error;
+    }
+  };
+
   const createCommentMutation = useMutation({
     mutationFn: async (data) => {
       const existingComments = await base44.entities.ReviewComment.filter({ file_id: shareLink.file_id });
@@ -115,30 +141,19 @@ function ShareViewContent() {
         author_name: guestName,
         body: data.body,
         resolved: false,
-        has_paint: shapes.length > 0,
+        has_paint: false,
       });
-
-      if (shapes.length > 0) {
-        await Promise.all(
-          shapes.map(shape => 
-            base44.entities.PaintShape.create({
-              file_id: shareLink.file_id,
-              comment_id: comment.id,
-              page_no: currentPage,
-              shape_type: shape.tool,
-              data_json: JSON.stringify(shape),
-            })
-          )
-        );
-      }
 
       return comment;
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['sharedComments']);
       setCommentBody('');
-      setShapes([]);
       setPaintMode(false);
+      showToast('コメントを送信しました', 'success');
+    },
+    onError: (error) => {
+      showToast(`送信失敗: ${error.message}`, 'error');
     },
   });
 
@@ -147,9 +162,24 @@ function ShareViewContent() {
       setShowNameDialog(true);
       return;
     }
-    if (!commentBody.trim() && shapes.length === 0) return;
+    if (!commentBody.trim()) return;
     createCommentMutation.mutate({ body: commentBody });
   };
+
+  // PaintShapeをViewerCanvas用の形式に変換
+  const existingShapes = paintShapes.map(ps => {
+    try {
+      const data = JSON.parse(ps.data_json);
+      return {
+        id: ps.id,
+        tool: ps.shape_type,
+        ...data,
+      };
+    } catch (e) {
+      console.error('Failed to parse shape:', e);
+      return null;
+    }
+  }).filter(Boolean);
 
   const handleSaveName = () => {
     if (!guestName.trim()) return;
@@ -380,8 +410,8 @@ function ShareViewContent() {
             fileUrl={file?.file_url}
             mimeType={file?.mime_type}
             pageNumber={currentPage}
-            shapes={shapes}
-            onShapesChange={setShapes}
+            existingShapes={existingShapes}
+            onSaveShape={handleSaveShape}
             paintMode={paintMode}
             tool={tool}
             strokeColor={strokeColor}
@@ -535,11 +565,22 @@ function ShareViewContent() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
 
-export default function ShareView() {
+      {/* トースト通知 */}
+      {toast.show && (
+        <div className="fixed bottom-4 right-4 z-50">
+          <div className={`px-6 py-3 rounded-lg shadow-lg ${
+            toast.type === 'error' ? 'bg-red-600 text-white' : 'bg-green-600 text-white'
+          }`}>
+            {toast.message}
+          </div>
+        </div>
+      )}
+      </div>
+      );
+      }
+
+      export default function ShareView() {
   return (
     <>
       <DebugOverlay />

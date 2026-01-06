@@ -43,8 +43,14 @@ function FileViewContent() {
   const [strokeWidth, setStrokeWidth] = useState(2);
   const [shapes, setShapes] = useState([]);
   const [zoom, setZoom] = useState(100);
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
+
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3000);
+  };
   
   const [searchParams] = useSearchParams();
   const location = useLocation();
@@ -91,6 +97,12 @@ function FileViewContent() {
     enabled: !!fileId && !!file,
   });
 
+  const { data: paintShapes = [] } = useQuery({
+    queryKey: ['paintShapes', fileId],
+    queryFn: () => base44.entities.PaintShape.filter({ file_id: fileId, page_no: 1 }),
+    enabled: !!fileId,
+  });
+
   // UserRecent記録（エラーを出さない）
   useEffect(() => {
     if (file && user) {
@@ -118,6 +130,25 @@ function FileViewContent() {
     }
   }, [file, user, fileId]);
 
+  const handleSaveShape = async (shape) => {
+    try {
+      await base44.entities.PaintShape.create({
+        file_id: fileId,
+        page_no: 1,
+        shape_type: shape.tool,
+        data_json: JSON.stringify(shape),
+        author_name: user?.full_name || 'User',
+      });
+
+      queryClient.invalidateQueries(['paintShapes']);
+      showToast('保存完了', 'success');
+    } catch (error) {
+      console.error('Save shape error:', error);
+      showToast(`保存失敗: ${error.message}`, 'error');
+      throw error;
+    }
+  };
+
   const createCommentMutation = useMutation({
     mutationFn: async (data) => {
       const existingComments = await base44.entities.ReviewComment.filter({ file_id: fileId });
@@ -132,30 +163,19 @@ function FileViewContent() {
         author_name: user?.full_name,
         body: data.body,
         resolved: false,
-        has_paint: shapes.length > 0,
+        has_paint: false,
       });
-
-      if (shapes.length > 0) {
-        await Promise.all(
-          shapes.map(shape => 
-            base44.entities.PaintShape.create({
-              file_id: fileId,
-              comment_id: comment.id,
-              page_no: 1,
-              shape_type: shape.tool,
-              data_json: JSON.stringify(shape),
-            })
-          )
-        );
-      }
 
       return comment;
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['comments']);
       setCommentBody('');
-      setShapes([]);
       setPaintMode(false);
+      showToast('コメントを送信しました', 'success');
+    },
+    onError: (error) => {
+      showToast(`送信失敗: ${error.message}`, 'error');
     },
   });
 
@@ -167,9 +187,24 @@ function FileViewContent() {
   });
 
   const handleSendComment = () => {
-    if (!commentBody.trim() && shapes.length === 0) return;
+    if (!commentBody.trim()) return;
     createCommentMutation.mutate({ body: commentBody });
   };
+
+  // PaintShapeをViewerCanvas用の形式に変換
+  const existingShapes = paintShapes.map(ps => {
+    try {
+      const data = JSON.parse(ps.data_json);
+      return {
+        id: ps.id,
+        tool: ps.shape_type,
+        ...data,
+      };
+    } catch (e) {
+      console.error('Failed to parse shape:', e);
+      return null;
+    }
+  }).filter(Boolean);
 
   const filteredComments = comments.filter(c => {
     if (commentFilter === 'resolved' && !c.resolved) return false;
@@ -291,8 +326,8 @@ function FileViewContent() {
               fileUrl={file?.file_url}
               mimeType={file?.mime_type}
               pageNumber={1}
-              shapes={shapes}
-              onShapesChange={setShapes}
+              existingShapes={existingShapes}
+              onSaveShape={handleSaveShape}
               paintMode={paintMode}
               tool={tool}
               strokeColor={strokeColor}
@@ -420,7 +455,18 @@ function FileViewContent() {
         onComplete={() => setPaintMode(false)}
       />
 
-      <ShareLinkModal open={shareLinkOpen} onOpenChange={setShareLinkOpen} fileId={fileId} />
+        <ShareLinkModal open={shareLinkOpen} onOpenChange={setShareLinkOpen} fileId={fileId} />
+
+        {/* トースト通知 */}
+        {toast.show && (
+          <div className="fixed bottom-4 right-4 z-50">
+            <div className={`px-6 py-3 rounded-lg shadow-lg ${
+              toast.type === 'error' ? 'bg-red-600 text-white' : 'bg-green-600 text-white'
+            }`}>
+              {toast.message}
+            </div>
+          </div>
+        )}
       </div>
   );
 }
