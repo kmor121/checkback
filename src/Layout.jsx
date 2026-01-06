@@ -92,17 +92,16 @@ if (!window.__bootErrorHandlersSet) {
 }
 // ==================== END BOOT SCREEN ====================
 
-// リダイレクトコンポーネント（render中に遷移しない）
+// リダイレクトコンポーネント（Base44 SDK のログインにリダイレクト）
 function RedirectToLogin({ currentPath }) {
   bootLog('RedirectToLogin: rendering for ' + currentPath);
-  const [loopDetected, setLoopDetected] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
   
   useEffect(() => {
     // 無限遷移検知: nav_cnt >= 10 なら停止
     const navCnt = Number(sessionStorage.getItem('__nav_cnt') || '0');
     if (navCnt >= 10) {
       bootLog('RedirectToLogin: STOPPED due to nav_cnt >= 10');
-      setLoopDetected(true);
       return;
     }
 
@@ -112,57 +111,41 @@ function RedirectToLogin({ currentPath }) {
       return;
     }
 
+    if (redirecting) return;
+    
+    setRedirecting(true);
     sessionStorage.setItem('__redirecting', '1');
 
-    // from_url生成（現在のハッシュをエンコード、入れ子を防ぐ）
-    const currentHash = window.location.hash.replace('#', '') || '/';
-    const loginUrl = `#/login?from_url=${encodeURIComponent(currentHash)}`;
-
-    bootLog('RedirectToLogin: redirecting to ' + loginUrl);
+    // Base44 SDK のログインを使用（from_url に現在のURLを渡す）
+    const nextUrl = window.location.href;
+    bootLog('RedirectToLogin: calling base44.auth.redirectToLogin(' + nextUrl + ')');
     
-    // ハッシュ変更のみ（ページリロードなし）
-    window.location.hash = loginUrl.replace('#', '');
-    
-    // 100ms後にリダイレクトフラグをクリア（Login ページに到達後）
-    setTimeout(() => {
+    try {
+      base44.auth.redirectToLogin(nextUrl);
+    } catch (error) {
+      bootLog('RedirectToLogin ERROR: ' + error.message);
       sessionStorage.removeItem('__redirecting');
-    }, 100);
-  }, [currentPath]);
-
-  if (loopDetected) {
-    return (
-      <div className="min-h-screen bg-red-50 flex items-center justify-center">
-        <div className="bg-white rounded-lg shadow-lg p-8 max-w-2xl">
-          <h2 className="text-2xl font-bold text-red-600 mb-4">🚫 Redirect Loop Detected</h2>
-          <p className="text-sm text-gray-600 mb-4">
-            リダイレクトが2回以上発生したため、ループを停止しました。
-          </p>
-          <div className="bg-gray-100 p-4 rounded text-xs font-mono mb-4">
-            <div><strong>Current Path:</strong> {currentPath}</div>
-            <div><strong>Last Redirect To:</strong> {sessionStorage.getItem('last_redirect_to')}</div>
-            <div><strong>Redirect Count:</strong> {sessionStorage.getItem('redir_cnt')}</div>
-            <div><strong>Nav Count:</strong> {sessionStorage.getItem('__nav_cnt')}</div>
-          </div>
-          <button
-            onClick={() => {
-              sessionStorage.clear();
-              window.location.hash = '/login';
-            }}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
-            セッションをクリアして /login に移動
-          </button>
-        </div>
-      </div>
-    );
-  }
+    }
+  }, [currentPath, redirecting]);
 
   return (
-    <div className="min-h-screen bg-yellow-50 flex items-center justify-center">
+    <div className="min-h-screen bg-blue-50 flex items-center justify-center">
       <div className="bg-white rounded-lg shadow-lg p-8 max-w-md">
-        <h2 className="text-xl font-bold mb-4">AuthGuard: unauthed</h2>
+        <h2 className="text-xl font-bold mb-4">認証が必要です</h2>
         <p className="text-sm text-gray-600 mb-2">Path: {currentPath}</p>
-        <div className="mt-4">ログインページにリダイレクトしています...</div>
+        <div className="mt-4">Base44 ログインページにリダイレクトしています...</div>
+        <div className="mt-4 text-xs text-gray-500">
+          リダイレクトされない場合は、
+          <button
+            onClick={() => {
+              sessionStorage.removeItem('__redirecting');
+              base44.auth.redirectToLogin(window.location.href);
+            }}
+            className="text-blue-600 underline ml-1"
+          >
+            こちらをクリック
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -193,7 +176,7 @@ export default function Layout({ children, currentPageName }) {
           <button
             onClick={() => {
               sessionStorage.clear();
-              window.location.hash = '/';
+              window.location.href = '/';
             }}
             className="px-6 py-3 bg-blue-600 text-white rounded hover:bg-blue-700 font-semibold"
           >
@@ -212,13 +195,11 @@ export default function Layout({ children, currentPageName }) {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [globalError, setGlobalError] = useState(null);
   
-  // AuthGuard: public routesをスキップ（hash ベースのルーティング）
-  const currentHash = window.location.hash.replace('#', '') || '/';
-  const isPublicRoute = currentHash === '/login' || 
-                       currentHash.startsWith('/login?') ||
-                       currentHash.startsWith('/share/');
+  // AuthGuard: public routesをスキップ
+  const currentPath = window.location.pathname;
+  const isPublicRoute = currentPath.startsWith('/share/');
   
-  bootLog('Layout: hash=' + currentHash + ', public=' + isPublicRoute + ', checking=' + isCheckingAuth);
+  bootLog('Layout: path=' + currentPath + ', public=' + isPublicRoute + ', checking=' + isCheckingAuth);
 
   // グローバルエラーハンドラ
   useEffect(() => {
@@ -264,23 +245,23 @@ export default function Layout({ children, currentPageName }) {
     bootLog('Layout: useEffect running (auth check)');
     
     // CRITICAL: public routes は絶対に認証チェックをスキップ（最優先）
-    const hash = window.location.hash.replace('#', '') || '/';
-    const isPublic = hash === '/login' || hash.startsWith('/login?') || hash.startsWith('/share/');
+    const path = window.location.pathname;
+    const isPublic = path.startsWith('/share/');
     
     if (isPublic) {
-      bootLog('Layout: PUBLIC ROUTE (' + hash + ') - skipping all auth checks');
+      bootLog('Layout: PUBLIC ROUTE (' + path + ') - skipping all auth checks');
       setIsCheckingAuth(false);
       setUser(null);
       return;
     }
 
-    bootLog('Layout: PRIVATE ROUTE (' + hash + ') - checking auth');
+    bootLog('Layout: PRIVATE ROUTE (' + path + ') - checking auth');
     base44.auth.me()
       .then(u => {
         bootLog('Layout: auth.me() SUCCESS, user=' + (u?.email || u?.id || 'unknown'));
         setUser(u);
         setIsCheckingAuth(false);
-        // ログイン成功: リダイレクトカウンタをクリア
+        // ログイン成功: カウンタをクリア
         sessionStorage.removeItem('redir_cnt');
         sessionStorage.removeItem('last_redirect_to');
         sessionStorage.removeItem('__nav_cnt');
@@ -291,7 +272,7 @@ export default function Layout({ children, currentPageName }) {
         setUser(null);
         setIsCheckingAuth(false);
       });
-  }, []);
+  }, [isPublicRoute]);
 
   // React mount完了を通知
   useEffect(() => {
@@ -303,13 +284,12 @@ export default function Layout({ children, currentPageName }) {
     return (
       <div className="fixed left-0 right-0 bg-black text-white text-xs font-mono p-2 overflow-auto" style={{ top: '40vh', zIndex: 9998 }}>
         <div className="flex flex-wrap gap-4">
-          <span><strong>hash:</strong> {window.location.hash || '(none)'}</span>
+          <span><strong>pathname:</strong> {window.location.pathname}</span>
           <span><strong>search:</strong> {window.location.search || '(none)'}</span>
           <span><strong>authed:</strong> {user ? 'true' : 'false'}</span>
           <span><strong>checking:</strong> {isCheckingAuth.toString()}</span>
           <span><strong>public:</strong> {isPublicRoute.toString()}</span>
           <span><strong>nav_cnt:</strong> {sessionStorage.getItem('__nav_cnt') || '0'}</span>
-          <span><strong>redir_cnt:</strong> {sessionStorage.getItem('redir_cnt') || '0'}</span>
         </div>
       </div>
     );
