@@ -25,14 +25,9 @@ import { ja } from 'date-fns/locale';
 import ErrorBoundary from '../components/ErrorBoundary';
 
 // PDFレンダリングは一旦無効化してデバッグ
-// import * as pdfjsLib from 'pdfjs-dist';
-// import PaintCanvas from '../components/viewer/PaintCanvas';
+// import ViewerCanvas from '../components/viewer/ViewerCanvas';
+import FloatingToolbar from '../components/viewer/FloatingToolbar';
 import ShareLinkModal from '../components/viewer/ShareLinkModal';
-
-// pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-//   'pdfjs-dist/build/pdf.worker.min.js',
-//   import.meta.url
-// ).toString();
 
 function FileViewContent() {
   const [user, setUser] = useState(null);
@@ -41,6 +36,13 @@ function FileViewContent() {
   const [commentBody, setCommentBody] = useState('');
   const [shareLinkOpen, setShareLinkOpen] = useState(false);
   const [debugInfo, setDebugInfo] = useState({});
+  const [paintMode, setPaintMode] = useState(false);
+  const [tool, setTool] = useState('pen');
+  const [strokeColor, setStrokeColor] = useState('#ff0000');
+  const [strokeWidth, setStrokeWidth] = useState(2);
+  const [shapes, setShapes] = useState([]);
+  const [zoom, setZoom] = useState(100);
+  const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
   
   const [searchParams] = useSearchParams();
@@ -119,7 +121,7 @@ function FileViewContent() {
     mutationFn: async (data) => {
       const existingComments = await base44.entities.ReviewComment.filter({ file_id: fileId });
       const maxSeqNo = existingComments.reduce((max, c) => Math.max(max, c.seq_no || 0), 0);
-      
+
       const comment = await base44.entities.ReviewComment.create({
         file_id: fileId,
         page_no: 1,
@@ -129,14 +131,30 @@ function FileViewContent() {
         author_name: user?.full_name,
         body: data.body,
         resolved: false,
-        has_paint: false,
+        has_paint: shapes.length > 0,
       });
+
+      if (shapes.length > 0) {
+        await Promise.all(
+          shapes.map(shape => 
+            base44.entities.PaintShape.create({
+              file_id: fileId,
+              comment_id: comment.id,
+              page_no: 1,
+              shape_type: shape.tool,
+              data_json: JSON.stringify(shape),
+            })
+          )
+        );
+      }
 
       return comment;
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['comments']);
       setCommentBody('');
+      setShapes([]);
+      setPaintMode(false);
     },
   });
 
@@ -148,7 +166,7 @@ function FileViewContent() {
   });
 
   const handleSendComment = () => {
-    if (!commentBody.trim()) return;
+    if (!commentBody.trim() && shapes.length === 0) return;
     createCommentMutation.mutate({ body: commentBody });
   };
 
@@ -165,9 +183,7 @@ function FileViewContent() {
     return 0;
   });
 
-  const isPDF = file?.mime_type === 'application/pdf';
-  const isImage = file?.mime_type?.startsWith('image/');
-  const canPreview = isPDF || isImage;
+
 
   // デバッグ表示が最優先
   if (!fileId) {
@@ -268,49 +284,32 @@ function FileViewContent() {
 
       <div className="flex-1 flex overflow-hidden">
         {/* 中央：プレビュー（簡易版） */}
-        <div className="flex-1 bg-gray-100 overflow-auto p-4">
-          <div className="bg-white rounded shadow-lg mx-auto p-8 max-w-4xl">
-            <h2 className="text-xl font-bold mb-4">ファイル情報</h2>
-            <div className="space-y-2 mb-6">
-              <div><strong>タイトル:</strong> {file.title}</div>
-              <div><strong>ファイル名:</strong> {file.original_filename}</div>
-              <div><strong>MIMEタイプ:</strong> {file.mime_type}</div>
-              <div><strong>サイズ:</strong> {file.size_bytes ? `${(file.size_bytes / 1024).toFixed(2)} KB` : 'N/A'}</div>
-              <div><strong>アップロード者:</strong> {file.uploaded_by_name}</div>
-              <div><strong>URL:</strong> <a href={file.file_url} target="_blank" rel="noreferrer" className="text-blue-600 underline break-all">{file.file_url}</a></div>
+        <div className="flex-1 bg-gray-100 overflow-hidden relative">
+            <ViewerCanvas
+              ref={viewerCanvasRef}
+              fileUrl={file?.file_url}
+              mimeType={file?.mime_type}
+              pageNumber={1}
+              shapes={shapes}
+              onShapesChange={setShapes}
+              paintMode={paintMode}
+              tool={tool}
+              strokeColor={strokeColor}
+              strokeWidth={strokeWidth}
+              zoom={zoom}
+            />
+
+            {/* ズーム制御 */}
+            <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-2 flex items-center gap-2">
+              <Button variant="outline" size="icon" onClick={() => setZoom(Math.max(50, zoom - 25))}>
+                <ZoomOut className="w-4 h-4" />
+              </Button>
+              <span className="text-sm font-medium w-16 text-center">{zoom}%</span>
+              <Button variant="outline" size="icon" onClick={() => setZoom(Math.min(200, zoom + 25))}>
+                <ZoomIn className="w-4 h-4" />
+              </Button>
             </div>
-
-            {isImage && (
-              <div className="mb-6">
-                <h3 className="font-semibold mb-2">プレビュー（画像）</h3>
-                <img 
-                  src={file.file_url} 
-                  alt={file.title}
-                  className="max-w-full border rounded"
-                />
-              </div>
-            )}
-
-            {isPDF && (
-              <div className="bg-yellow-50 border border-yellow-200 rounded p-4 mb-6">
-                <p className="text-sm">
-                  ⚠️ PDFレンダリングは現在無効化されています（デバッグ中）
-                </p>
-                <p className="text-sm mt-2">
-                  PDFファイルを表示するには、上記URLから直接開くか、ダウンロードしてください。
-                </p>
-              </div>
-            )}
-
-            {!canPreview && (
-              <div className="bg-gray-50 border border-gray-200 rounded p-4">
-                <p className="text-sm">
-                  このファイル形式はプレビューに対応していません。ダウンロードしてご確認ください。
-                </p>
-              </div>
-            )}
           </div>
-        </div>
 
         {/* 右：コメント */}
         <div className="w-96 border-l bg-white flex flex-col">
@@ -392,7 +391,7 @@ function FileViewContent() {
             />
             <Button
               onClick={handleSendComment}
-              disabled={!commentBody.trim()}
+              disabled={!commentBody.trim() && shapes.length === 0}
               className="w-full bg-blue-600 hover:bg-blue-700"
             >
               <Send className="w-4 h-4 mr-2" />
@@ -402,8 +401,26 @@ function FileViewContent() {
         </div>
       </div>
 
+      {/* フローティングツールバー */}
+      <FloatingToolbar
+        paintMode={paintMode}
+        onPaintModeChange={setPaintMode}
+        tool={tool}
+        onToolChange={setTool}
+        strokeColor={strokeColor}
+        onStrokeColorChange={setStrokeColor}
+        strokeWidth={strokeWidth}
+        onStrokeWidthChange={setStrokeWidth}
+        canUndo={viewerCanvasRef.current?.canUndo || false}
+        canRedo={viewerCanvasRef.current?.canRedo || false}
+        onUndo={() => viewerCanvasRef.current?.undo()}
+        onRedo={() => viewerCanvasRef.current?.redo()}
+        onClear={() => viewerCanvasRef.current?.clear()}
+        onComplete={() => setPaintMode(false)}
+      />
+
       <ShareLinkModal open={shareLinkOpen} onOpenChange={setShareLinkOpen} fileId={fileId} />
-    </div>
+      </div>
   );
 }
 

@@ -21,12 +21,9 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
-import * as pdfjsLib from 'pdfjs-dist';
-import PaintCanvas from '../components/viewer/PaintCanvas';
-import PaintToolbar from '../components/viewer/PaintToolbar';
+import ViewerCanvas from '../components/viewer/ViewerCanvas';
+import FloatingToolbar from '../components/viewer/FloatingToolbar';
 import ErrorBoundary from '../components/ErrorBoundary';
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 // CRITICAL: ShareViewは認証不要の公開ページ
 // Base44の仕様上、アプリ全体をPublicにするか、このページを完全に独立させる必要がある
@@ -40,21 +37,16 @@ function ShareViewContent() {
   const [passwordError, setPasswordError] = useState('');
   const [isPasswordVerified, setIsPasswordVerified] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [zoom, setZoom] = useState(100);
   const [commentFilter, setCommentFilter] = useState('all');
   const [commentSort, setCommentSort] = useState('page');
   const [commentBody, setCommentBody] = useState('');
-  const [isPainting, setIsPainting] = useState(false);
-  const [paintTool, setPaintTool] = useState('pen');
-  const [paintShapes, setPaintShapes] = useState([]);
-  const [selectedCommentId, setSelectedCommentId] = useState(null);
-  const [visiblePaints, setVisiblePaints] = useState(new Set());
-  const [canUndo, setCanUndo] = useState(false);
-  const [canRedo, setCanRedo] = useState(false);
-  const canvasRef = useRef(null);
-  const pdfDocRef = useRef(null);
-  const paintCanvasRef = useRef(null);
+  const [paintMode, setPaintMode] = useState(false);
+  const [tool, setTool] = useState('pen');
+  const [strokeColor, setStrokeColor] = useState('#ff0000');
+  const [strokeWidth, setStrokeWidth] = useState(2);
+  const [shapes, setShapes] = useState([]);
+  const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
   
   // token取得：URLパラメータから
@@ -107,46 +99,7 @@ function ShareViewContent() {
     enabled: !!shareLink?.file_id && shareLink?.can_view_comments,
   });
 
-  const { data: allPaintShapes = [] } = useQuery({
-    queryKey: ['sharedPaintShapes', shareLink?.file_id],
-    queryFn: () => base44.entities.PaintShape.filter({ file_id: shareLink.file_id }),
-    enabled: !!shareLink?.file_id && shareLink?.can_view_comments,
-  });
 
-  useEffect(() => {
-    if (file && file.mime_type === 'application/pdf') {
-      loadPDF();
-    }
-  }, [file]);
-
-  useEffect(() => {
-    if (file && pdfDocRef.current) {
-      renderPage(currentPage);
-    }
-  }, [currentPage, zoom, file]);
-
-  const loadPDF = async () => {
-    if (!file?.file_url) return;
-    try {
-      const pdf = await pdfjsLib.getDocument(file.file_url).promise;
-      pdfDocRef.current = pdf;
-      setTotalPages(pdf.numPages);
-      renderPage(1);
-    } catch (error) {
-      console.error('PDF load error:', error);
-    }
-  };
-
-  const renderPage = async (pageNum) => {
-    if (!pdfDocRef.current || !canvasRef.current) return;
-    const page = await pdfDocRef.current.getPage(pageNum);
-    const viewport = page.getViewport({ scale: zoom / 100 });
-    const canvas = canvasRef.current;
-    const context = canvas.getContext('2d');
-    canvas.height = viewport.height;
-    canvas.width = viewport.width;
-    await page.render({ canvasContext: context, viewport }).promise;
-  };
 
   const createCommentMutation = useMutation({
     mutationFn: async (data) => {
@@ -161,17 +114,17 @@ function ShareViewContent() {
         author_name: guestName,
         body: data.body,
         resolved: false,
-        has_paint: paintShapes.length > 0,
+        has_paint: shapes.length > 0,
       });
 
-      if (paintShapes.length > 0) {
+      if (shapes.length > 0) {
         await Promise.all(
-          paintShapes.map(shape => 
+          shapes.map(shape => 
             base44.entities.PaintShape.create({
               file_id: shareLink.file_id,
               comment_id: comment.id,
               page_no: currentPage,
-              shape_type: shape.type,
+              shape_type: shape.tool,
               data_json: JSON.stringify(shape),
             })
           )
@@ -182,10 +135,9 @@ function ShareViewContent() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['sharedComments']);
-      queryClient.invalidateQueries(['sharedPaintShapes']);
       setCommentBody('');
-      setPaintShapes([]);
-      setIsPainting(false);
+      setShapes([]);
+      setPaintMode(false);
     },
   });
 
@@ -194,7 +146,7 @@ function ShareViewContent() {
       setShowNameDialog(true);
       return;
     }
-    if (!commentBody.trim() && paintShapes.length === 0) return;
+    if (!commentBody.trim() && shapes.length === 0) return;
     createCommentMutation.mutate({ body: commentBody });
   };
 
@@ -227,43 +179,7 @@ function ShareViewContent() {
     }
   };
 
-  const handleCommentClick = (commentId) => {
-    if (visiblePaints.has(commentId)) {
-      const newVisible = new Set(visiblePaints);
-      newVisible.delete(commentId);
-      setVisiblePaints(newVisible);
-    } else {
-      const newVisible = new Set(visiblePaints);
-      newVisible.add(commentId);
-      setVisiblePaints(newVisible);
-    }
-    setSelectedCommentId(commentId);
-  };
 
-  const handlePaintUndo = () => {
-    if (paintCanvasRef.current?.undo) {
-      paintCanvasRef.current.undo();
-    }
-  };
-
-  const handlePaintRedo = () => {
-    if (paintCanvasRef.current?.redo) {
-      paintCanvasRef.current.redo();
-    }
-  };
-
-  const handlePaintClear = () => {
-    if (paintCanvasRef.current?.clear) {
-      paintCanvasRef.current.clear();
-    }
-  };
-
-  const handleTogglePainting = () => {
-    if (!isPainting) {
-      setPaintTool('pen');
-    }
-    setIsPainting(!isPainting);
-  };
 
   if (!token) {
     return (
@@ -457,87 +373,36 @@ function ShareViewContent() {
         </div>
 
         {/* 中央：プレビュー */}
-        <div className="flex-1 bg-gray-100 overflow-auto p-4">
-          <div className="bg-white rounded shadow-lg mx-auto" style={{ width: 'fit-content' }}>
-            {canPreview ? (
-              <div className="relative" style={{ position: 'relative' }}>
-                {isPDF && (
-                  <canvas ref={canvasRef} className="block" style={{ position: 'relative', zIndex: 0 }} />
-                )}
-                {isImage && (
-                  <img 
-                    src={file.file_url} 
-                    alt={file.title}
-                    style={{ width: canvasWidth, position: 'relative', zIndex: 0, display: 'block' }}
-                  />
-                )}
-                <PaintCanvas
-                  width={canvasWidth}
-                  height={canvasHeight}
-                  onShapesChange={setPaintShapes}
-                  existingShapes={currentPagePaintShapes}
-                  isPainting={isPainting}
-                  tool={paintTool}
-                  onToolChange={paintCanvasRef}
-                />
-              </div>
-            ) : (
-              <div className="p-12 text-center">
-                <p className="text-gray-500 mb-4">プレビュー未対応の形式です</p>
-                {shareLink.allow_download && (
-                  <Button>
-                    <Download className="w-4 h-4 mr-2" />
-                    ダウンロード
-                  </Button>
-                )}
-              </div>
-            )}
-          </div>
+        <div className="flex-1 bg-gray-100 overflow-hidden relative">
+          <ViewerCanvas
+            ref={viewerCanvasRef}
+            fileUrl={file?.file_url}
+            mimeType={file?.mime_type}
+            pageNumber={currentPage}
+            shapes={shapes}
+            onShapesChange={setShapes}
+            paintMode={paintMode}
+            tool={tool}
+            strokeColor={strokeColor}
+            strokeWidth={strokeWidth}
+            zoom={zoom}
+          />
 
-          {/* ズーム・ページ制御 */}
-          {canPreview && (
-            <div className="flex items-center justify-center gap-4 mt-4">
-              <Button variant="outline" size="icon" onClick={() => setZoom(Math.max(50, zoom - 25))}>
-                <ZoomOut className="w-4 h-4" />
-              </Button>
-              <span className="text-sm font-medium">{zoom}%</span>
-              <Button variant="outline" size="icon" onClick={() => setZoom(Math.min(200, zoom + 25))}>
-                <ZoomIn className="w-4 h-4" />
-              </Button>
-              {isPDF && (
-                <>
-                  <div className="w-px h-6 bg-gray-300" />
-                  <Button variant="outline" size="icon" onClick={() => setCurrentPage(Math.max(1, currentPage - 1))} disabled={currentPage === 1}>
-                    <ChevronLeft className="w-4 h-4" />
-                  </Button>
-                  <span className="text-sm">{currentPage} / {totalPages}</span>
-                  <Button variant="outline" size="icon" onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages}>
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                </>
-              )}
-            </div>
-          )}
+          {/* ズーム制御 */}
+          <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-2 flex items-center gap-2">
+            <Button variant="outline" size="icon" onClick={() => setZoom(Math.max(50, zoom - 25))}>
+              <ZoomOut className="w-4 h-4" />
+            </Button>
+            <span className="text-sm font-medium w-16 text-center">{zoom}%</span>
+            <Button variant="outline" size="icon" onClick={() => setZoom(Math.min(200, zoom + 25))}>
+              <ZoomIn className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
 
         {/* 右：コメント */}
         {shareLink.can_view_comments && (
           <div className="w-96 border-l bg-white flex flex-col">
-            {/* ペイントツールバー */}
-            {isPainting && (
-              <div className="p-4 border-b">
-                <PaintToolbar
-                  tool={paintTool}
-                  onToolChange={setPaintTool}
-                  canUndo={canUndo}
-                  canRedo={canRedo}
-                  onUndo={handlePaintUndo}
-                  onRedo={handlePaintRedo}
-                  onClear={handlePaintClear}
-                />
-              </div>
-            )}
-            
             <div className="p-4 border-b space-y-2">
               <Select value={commentFilter} onValueChange={setCommentFilter}>
                 <SelectTrigger>
@@ -570,8 +435,7 @@ function ShareViewContent() {
                 sortedComments.map((comment) => (
                   <Card 
                     key={comment.id} 
-                    className={`cursor-pointer hover:shadow-md transition-shadow ${visiblePaints.has(comment.id) ? 'ring-2 ring-blue-500' : ''}`}
-                    onClick={() => handleCommentClick(comment.id)}
+                    className="hover:shadow-md transition-shadow"
                   >
                     <CardContent className="p-3">
                       <div className="flex items-start gap-2 mb-2">
@@ -603,16 +467,6 @@ function ShareViewContent() {
               <div className="border-t p-4 space-y-2">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium">コメント追加</span>
-                  {canPreview && (
-                    <Button
-                      variant={isPainting ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={handleTogglePainting}
-                    >
-                      <Paintbrush className="w-4 h-4 mr-2" />
-                      {isPainting ? 'ペイント終了' : 'ペイント開始'}
-                    </Button>
-                  )}
                 </div>
                 <Textarea
                   placeholder="コメントを入力"
@@ -622,7 +476,7 @@ function ShareViewContent() {
                 />
                 <Button
                   onClick={handleSendComment}
-                  disabled={!commentBody.trim() && paintShapes.length === 0}
+                  disabled={!commentBody.trim() && shapes.length === 0}
                   className="w-full bg-blue-600 hover:bg-blue-700"
                 >
                   <Send className="w-4 h-4 mr-2" />
@@ -637,6 +491,26 @@ function ShareViewContent() {
           </div>
         )}
       </div>
+
+      {/* フローティングツールバー */}
+      {shareLink.can_post_comments && (
+        <FloatingToolbar
+          paintMode={paintMode}
+          onPaintModeChange={setPaintMode}
+          tool={tool}
+          onToolChange={setTool}
+          strokeColor={strokeColor}
+          onStrokeColorChange={setStrokeColor}
+          strokeWidth={strokeWidth}
+          onStrokeWidthChange={setStrokeWidth}
+          canUndo={viewerCanvasRef.current?.canUndo || false}
+          canRedo={viewerCanvasRef.current?.canRedo || false}
+          onUndo={() => viewerCanvasRef.current?.undo()}
+          onRedo={() => viewerCanvasRef.current?.redo()}
+          onClear={() => viewerCanvasRef.current?.clear()}
+          onComplete={() => setPaintMode(false)}
+        />
+      )}
 
       {/* 名前入力ダイアログ */}
       <Dialog open={showNameDialog} onOpenChange={setShowNameDialog}>
