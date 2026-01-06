@@ -170,12 +170,14 @@ function RedirectToLogin({ currentPath }) {
 export default function Layout({ children, currentPageName }) {
   bootLog('Layout: component rendering, page=' + currentPageName);
   
+  const contentPaddingTop = 'calc(40vh + 40px)';
+  
   // 無限ループ検知: nav_cnt >= 10 なら即座に停止画面を表示
   const currentNavCnt = Number(sessionStorage.getItem('__nav_cnt') || '0');
   if (currentNavCnt >= 10) {
     bootLog('Layout: STOPPING - nav_cnt >= 10');
     return (
-      <div className="min-h-screen bg-red-50 flex items-center justify-center" style={{ paddingTop: '40vh' }}>
+      <div className="min-h-screen bg-red-50 flex items-center justify-center" style={{ paddingTop: contentPaddingTop }}>
         <div className="bg-white rounded-lg shadow-lg p-8 max-w-2xl">
           <h1 className="text-3xl font-bold text-red-600 mb-4">🚫 Redirect Loop Detected</h1>
           <p className="text-lg mb-4">
