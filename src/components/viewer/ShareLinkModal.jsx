@@ -8,9 +8,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
+import { createPageUrl } from '@/utils';
 
 export default function ShareLinkModal({ open, onOpenChange, fileId }) {
   const [passwordEnabled, setPasswordEnabled] = useState(false);
@@ -61,7 +62,8 @@ export default function ShareLinkModal({ open, onOpenChange, fileId }) {
       return token;
     },
     onSuccess: (token) => {
-      const url = `${window.location.origin}${window.location.pathname}#/share/${token}`;
+      // Canonical URL: ShareView page with token parameter
+      const url = `${window.location.origin}${createPageUrl('ShareView')}?token=${token}`;
       setGeneratedUrl(url);
       queryClient.invalidateQueries(['shareLinks']);
     },
@@ -91,11 +93,22 @@ export default function ShareLinkModal({ open, onOpenChange, fileId }) {
               <div className="space-y-4">
                 <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
                   <p className="text-sm font-medium text-green-800 mb-2">共有リンクを発行しました</p>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 mb-3">
                     <Input value={generatedUrl} readOnly className="flex-1" />
-                    <Button onClick={handleCopy} size="icon">
+                    <Button onClick={handleCopy} size="icon" title="コピー">
                       {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                     </Button>
+                    <Button 
+                      onClick={() => window.open(generatedUrl, '_blank')} 
+                      size="icon" 
+                      variant="outline"
+                      title="新規タブで開く"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded border">
+                    <strong>Copied URL:</strong> {generatedUrl}
                   </div>
                 </div>
                 <Button variant="outline" onClick={() => setGeneratedUrl('')} className="w-full">
@@ -166,28 +179,56 @@ export default function ShareLinkModal({ open, onOpenChange, fileId }) {
                 発行履歴がありません
               </div>
             ) : (
-              shareLinks.map((link) => (
+              shareLinks.map((link) => {
+                const linkUrl = `${window.location.origin}${createPageUrl('ShareView')}?token=${link.token}`;
+                return (
                 <div key={link.id} className="border rounded-lg p-4">
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex-1">
                       <div className="text-sm font-medium mb-1">
                         {format(new Date(link.created_date), 'yyyy/MM/dd HH:mm', { locale: ja })}
                       </div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-gray-500 mb-1">
                         期限: {format(new Date(link.expires_at), 'yyyy/MM/dd', { locale: ja })}
+                      </div>
+                      <div className="text-xs text-blue-600 break-all">
+                        {linkUrl}
                       </div>
                     </div>
                     <Badge variant={link.is_active ? 'default' : 'secondary'}>
                       {link.is_active ? '有効' : '無効'}
                     </Badge>
                   </div>
-                  <div className="flex gap-2 flex-wrap text-xs">
+                  <div className="flex gap-2 flex-wrap text-xs mb-2">
                     {link.password_enabled && <Badge variant="outline">パスワード</Badge>}
                     {link.allow_download && <Badge variant="outline">DL可</Badge>}
                     {link.can_post_comments && <Badge variant="outline">投稿可</Badge>}
                   </div>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        navigator.clipboard.writeText(linkUrl);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }}
+                    >
+                      <Copy className="w-3 h-3 mr-1" />
+                      コピー
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => window.open(linkUrl, '_blank')}
+                    >
+                      <ExternalLink className="w-3 h-3 mr-1" />
+                      開く
+                    </Button>
+                  </div>
                 </div>
-              ))
+                );
+              })
             )}
           </TabsContent>
         </Tabs>
