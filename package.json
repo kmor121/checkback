@@ -79,7 +79,8 @@
     "zod": "^3.24.2",
     "pdfjs-dist": "^3.11.174",
     "konva": "^9.2.0",
-    "react-konva": "^18.2.10"
+    "react-konva": "^18.2.10",
+    "use-image": "^1.0.7"
   },
   "devDependencies": {
     "@eslint/js": "^9.19.0",
