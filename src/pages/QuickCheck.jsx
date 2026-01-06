@@ -16,7 +16,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { handleOpenFile, handleCopyShareLink, handleDownloadFile } from '../components/files/FileMenuActions';
-import { createPageUrl } from '../utils';
+import { createPageUrl } from '@/utils';
 
 export default function QuickCheck() {
   const [user, setUser] = useState(null);

@@ -1,6 +1,6 @@
 import React from 'react';
 import { base44 } from '@/api/base44Client';
-import { createPageUrl } from '../utils';
+import { createPageUrl } from '@/utils';
 
 export async function handleOpenFile(file, onSuccess, onError) {
   try {
