@@ -1,5 +1,6 @@
 import React from 'react';
 import { base44 } from '@/api/base44Client';
+import { createPageUrl } from '../utils';
 
 export async function handleOpenFile(file, onSuccess, onError) {
   try {
@@ -14,14 +15,15 @@ export async function handleOpenFile(file, onSuccess, onError) {
       return;
     }
     
-    // Canonical URL: ハッシュルートで FileView ページを開く
-    const path = `${window.location.origin}${window.location.pathname}#/FileView?fileId=${fileId}`;
-    console.log('Navigating to path:', path);
+    // Canonical URL: createPageUrl を使用
+    const pageUrl = createPageUrl('FileView');
+    const fullUrl = `${pageUrl}?fileId=${encodeURIComponent(fileId)}`;
+    console.log('Navigating to:', fullUrl);
     
     if (onSuccess) onSuccess('ファイルを開きます...');
     
-    // ハッシュ変更のみでページ遷移（リロードなし）
-    window.location.hash = `/FileView?fileId=${fileId}`;
+    // window.location.href で遷移
+    window.location.href = fullUrl;
   } catch (error) {
     console.error('Failed to open file:', error);
     if (onError) onError('ファイルを開けませんでした');
@@ -78,7 +80,7 @@ export async function handleCopyShareLink(file, onSuccess, onError) {
       token = newToken;
     }
     
-    const shareUrl = `${window.location.origin}/share/${token}`;
+    const shareUrl = `${window.location.origin}${window.location.pathname}#/share/${token}`;
     
     // クリップボードにコピー
     try {

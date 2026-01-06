@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { handleOpenFile, handleCopyShareLink, handleDownloadFile } from '../components/files/FileMenuActions';
+import { createPageUrl } from '../utils';
 
 export default function QuickCheck() {
   const [user, setUser] = useState(null);
@@ -201,7 +202,7 @@ export default function QuickCheck() {
             {recentQuickFiles.map((file) => {
               const remainingDays = getRemainingDays(file.expires_at);
               const fileId = file.file_id || file.ref_id || file._id || file.id;
-              const href = fileId ? `#/FileView?fileId=${encodeURIComponent(fileId)}` : '#';
+              const href = fileId ? `${createPageUrl('FileView')}?fileId=${encodeURIComponent(fileId)}` : '#';
               return (
                 <Card key={file.id} className="hover:shadow-lg transition-shadow">
                   <CardContent className="p-4">
