@@ -31,23 +31,57 @@ import { Input } from '@/components/ui/input';
 
 // リダイレクトコンポーネント（render中に遷移しない）
 function RedirectToLogin({ currentPath }) {
+  const [loopDetected, setLoopDetected] = useState(false);
+  
   useEffect(() => {
-    // ループ防止: 既にリダイレクト中なら何もしない
-    if (sessionStorage.getItem('redirecting_to_login') === '1') {
+    // リダイレクト回数チェック
+    const cnt = Number(sessionStorage.getItem('redir_cnt') || '0');
+    
+    if (cnt >= 2) {
+      setLoopDetected(true);
       return;
     }
 
-    sessionStorage.setItem('redirecting_to_login', '1');
+    sessionStorage.setItem('redir_cnt', String(cnt + 1));
 
     // from_url生成（入れ子を防ぐため既存のfrom_urlを削除）
     const url = new URL(window.location.href);
     url.searchParams.delete('from_url');
-    const cleanUrl = url.origin + url.pathname + (url.search || '');
+    const cleanUrl = url.origin + url.pathname + url.search;
     const loginUrl = `/login?from_url=${encodeURIComponent(cleanUrl)}`;
 
-    console.log('Redirecting to login:', loginUrl);
+    sessionStorage.setItem('last_redirect_to', loginUrl);
+    console.log('Redirecting to login (attempt', cnt + 1, '):', loginUrl);
+    
     window.location.assign(loginUrl);
   }, [currentPath]);
+
+  if (loopDetected) {
+    return (
+      <div className="min-h-screen bg-red-50 flex items-center justify-center">
+        <div className="bg-white rounded-lg shadow-lg p-8 max-w-2xl">
+          <h2 className="text-2xl font-bold text-red-600 mb-4">🚫 Redirect Loop Detected</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            リダイレクトが2回以上発生したため、ループを停止しました。
+          </p>
+          <div className="bg-gray-100 p-4 rounded text-xs font-mono mb-4">
+            <div><strong>Current Path:</strong> {currentPath}</div>
+            <div><strong>Last Redirect To:</strong> {sessionStorage.getItem('last_redirect_to')}</div>
+            <div><strong>Redirect Count:</strong> {sessionStorage.getItem('redir_cnt')}</div>
+          </div>
+          <button
+            onClick={() => {
+              sessionStorage.clear();
+              window.location.href = '/login';
+            }}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            セッションをクリアして /login に移動
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-yellow-50 flex items-center justify-center">
@@ -67,13 +101,31 @@ export default function Layout({ children, currentPageName }) {
   const [notificationTab, setNotificationTab] = useState('unread');
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
-  const [authDebug, setAuthDebug] = useState('');
+  const [globalError, setGlobalError] = useState(null);
   
   // AuthGuard: public routesをスキップ
   const currentPath = window.location.pathname;
   const isPublicRoute = currentPath.startsWith('/login') || 
                        currentPath.startsWith('/signup') || 
                        currentPath.startsWith('/share/');
+
+  // グローバルエラーハンドラ
+  useEffect(() => {
+    const handleError = (event) => {
+      setGlobalError({
+        message: event.message || event.reason?.message || String(event.reason),
+        stack: event.error?.stack || event.reason?.stack || ''
+      });
+    };
+
+    window.addEventListener('error', handleError);
+    window.addEventListener('unhandledrejection', handleError);
+
+    return () => {
+      window.removeEventListener('error', handleError);
+      window.removeEventListener('unhandledrejection', handleError);
+    };
+  }, []);
 
   // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
   const { data: notifications = [] } = useQuery({
@@ -98,8 +150,6 @@ export default function Layout({ children, currentPageName }) {
   });
 
   useEffect(() => {
-    setAuthDebug(`Path: ${currentPath}, Public: ${isPublicRoute}`);
-    
     if (isPublicRoute) {
       setIsCheckingAuth(false);
       return;
@@ -109,35 +159,98 @@ export default function Layout({ children, currentPageName }) {
       .then(u => {
         setUser(u);
         setIsCheckingAuth(false);
-        sessionStorage.removeItem('redirecting_to_login');
+        // ログイン成功: リダイレクトカウンタをクリア
+        sessionStorage.removeItem('redir_cnt');
+        sessionStorage.removeItem('last_redirect_to');
       })
       .catch(() => {
         setUser(null);
         setIsCheckingAuth(false);
       });
-  }, []);
+  }, [isPublicRoute]);
+
+  // デバッグバー（常時表示）
+  const DebugBar = () => (
+    <div className="fixed top-0 left-0 right-0 bg-black text-white text-xs font-mono p-2 z-50 overflow-auto">
+      <div className="flex flex-wrap gap-4">
+        <span><strong>pathname:</strong> {window.location.pathname}</span>
+        <span><strong>search:</strong> {window.location.search || '(none)'}</span>
+        <span><strong>href:</strong> {window.location.href}</span>
+        <span><strong>authed:</strong> {user ? 'true' : 'false'}</span>
+        <span><strong>isCheckingAuth:</strong> {isCheckingAuth.toString()}</span>
+        <span><strong>isPublicRoute:</strong> {isPublicRoute.toString()}</span>
+        <span><strong>redirectCount:</strong> {sessionStorage.getItem('redir_cnt') || '0'}</span>
+        <span><strong>lastRedirectTo:</strong> {sessionStorage.getItem('last_redirect_to') || '(none)'}</span>
+      </div>
+    </div>
+  );
 
   // Public routeならガードをスキップ
   if (isPublicRoute) {
-    return children;
+    return (
+      <>
+        <DebugBar />
+        <div style={{ paddingTop: '40px' }}>{children}</div>
+      </>
+    );
   }
 
   // 認証チェック中
   if (isCheckingAuth) {
     return (
-      <div className="min-h-screen bg-blue-50 flex items-center justify-center">
-        <div className="bg-white rounded-lg shadow-lg p-8 max-w-md">
-          <h2 className="text-xl font-bold mb-4">AuthGuard: checking...</h2>
-          <p className="text-sm text-gray-600">{authDebug}</p>
-          <div className="mt-4">認証状態を確認中...</div>
+      <>
+        <DebugBar />
+        <div className="min-h-screen bg-blue-50 flex items-center justify-center" style={{ paddingTop: '40px' }}>
+          <div className="bg-white rounded-lg shadow-lg p-8 max-w-md">
+            <h2 className="text-xl font-bold mb-4">AuthGuard: checking...</h2>
+            <div className="mt-4">認証状態を確認中...</div>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   // 未認証ならリダイレクト
   if (!user) {
-    return <RedirectToLogin currentPath={currentPath} />;
+    return (
+      <>
+        <DebugBar />
+        <div style={{ paddingTop: '40px' }}>
+          <RedirectToLogin currentPath={currentPath} />
+        </div>
+      </>
+    );
+  }
+
+  // グローバルエラー表示
+  if (globalError) {
+    return (
+      <>
+        <DebugBar />
+        <div className="min-h-screen bg-red-50 p-8" style={{ paddingTop: '60px' }}>
+          <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-6">
+            <h2 className="text-2xl font-bold text-red-600 mb-4">⚠️ Global Error Caught</h2>
+            <div className="bg-red-100 p-4 rounded mb-4">
+              <strong>Message:</strong> {globalError.message}
+            </div>
+            {globalError.stack && (
+              <pre className="bg-gray-100 p-4 rounded overflow-auto text-xs">
+                {globalError.stack}
+              </pre>
+            )}
+            <button
+              onClick={() => {
+                setGlobalError(null);
+                window.location.reload();
+              }}
+              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              ページをリロード
+            </button>
+          </div>
+        </div>
+      </>
+    );
   }
 
   const handleLogout = async () => {
@@ -163,9 +276,11 @@ export default function Layout({ children, currentPageName }) {
   });
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* 上部ヘッダー */}
-      <header className="fixed top-0 left-0 right-0 h-16 bg-white border-b border-gray-200 z-40 flex items-center justify-between px-6">
+    <>
+      <DebugBar />
+      <div className="min-h-screen bg-gray-50" style={{ paddingTop: '40px' }}>
+        {/* 上部ヘッダー */}
+        <header className="fixed top-0 left-0 right-0 h-16 bg-white border-b border-gray-200 z-40 flex items-center justify-between px-6" style={{ top: '40px' }}>
         <div className="flex items-center gap-4">
           <h1 className="text-xl font-bold text-blue-600">CheckBack</h1>
           <div className="relative">
@@ -224,7 +339,7 @@ export default function Layout({ children, currentPageName }) {
       </header>
 
       {/* 左サイドバー */}
-      <aside className="fixed left-0 top-16 bottom-0 w-64 bg-white border-r border-gray-200 overflow-y-auto">
+      <aside className="fixed left-0 bottom-0 w-64 bg-white border-r border-gray-200 overflow-y-auto" style={{ top: 'calc(40px + 4rem)' }}>
         <div className="p-4">
           {workspace && (
             <div className="mb-6 p-3 bg-blue-50 rounded-lg">
@@ -266,10 +381,10 @@ export default function Layout({ children, currentPageName }) {
         </div>
       </aside>
 
-      {/* メインコンテンツ */}
-      <main className="ml-64 mt-16 p-6">
-        {children}
-      </main>
+        {/* メインコンテンツ */}
+        <main className="ml-64 p-6" style={{ marginTop: 'calc(40px + 4rem)' }}>
+          {children}
+        </main>
 
       {/* 通知ドロワー */}
       <Sheet open={notificationOpen} onOpenChange={setNotificationOpen}>
@@ -346,6 +461,7 @@ export default function Layout({ children, currentPageName }) {
           </Tabs>
         </SheetContent>
       </Sheet>
-    </div>
-  );
-}
+      </div>
+      </>
+      );
+      }
