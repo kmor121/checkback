@@ -43,13 +43,15 @@ function FileViewContent() {
   const [debugInfo, setDebugInfo] = useState({});
   const queryClient = useQueryClient();
   
-  const params = new URLSearchParams(window.location.search);
-  const fileId = params.get('fileId');
+  const [searchParams] = useSearchParams();
+  const fileId = searchParams.get('fileId');
 
   // デバッグ情報を収集
   useEffect(() => {
     setDebugInfo({
       currentUrl: window.location.href,
+      searchParamsRaw: window.location.search,
+      hashRaw: window.location.hash,
       fileId: fileId,
       timestamp: new Date().toISOString(),
     });
