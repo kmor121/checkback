@@ -43,3 +43,10 @@ export function isPublicRoute(pathname) {
   
   return false;
 }
+
+// Default export for pages.config.js compatibility
+export default {
+  PUBLIC_PAGES,
+  isPublicPage,
+  isPublicRoute,
+};
