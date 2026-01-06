@@ -29,16 +29,94 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 
+// リダイレクトコンポーネント（render中に遷移しない）
+function RedirectToLogin({ currentPath }) {
+  useEffect(() => {
+    // ループ防止: 既にリダイレクト中なら何もしない
+    if (sessionStorage.getItem('redirecting_to_login') === '1') {
+      return;
+    }
+
+    sessionStorage.setItem('redirecting_to_login', '1');
+
+    // from_url生成（入れ子を防ぐため既存のfrom_urlを削除）
+    const url = new URL(window.location.href);
+    url.searchParams.delete('from_url');
+    const cleanUrl = url.origin + url.pathname + (url.search || '');
+    const loginUrl = `/login?from_url=${encodeURIComponent(cleanUrl)}`;
+
+    console.log('Redirecting to login:', loginUrl);
+    window.location.assign(loginUrl);
+  }, [currentPath]);
+
+  return (
+    <div className="min-h-screen bg-yellow-50 flex items-center justify-center">
+      <div className="bg-white rounded-lg shadow-lg p-8 max-w-md">
+        <h2 className="text-xl font-bold mb-4">AuthGuard: unauthed</h2>
+        <p className="text-sm text-gray-600 mb-2">Path: {currentPath}</p>
+        <div className="mt-4">ログインページにリダイレクトしています...</div>
+      </div>
+    </div>
+  );
+}
+
 export default function Layout({ children, currentPageName }) {
   const [user, setUser] = useState(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [notificationTab, setNotificationTab] = useState('unread');
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [authDebug, setAuthDebug] = useState('');
   
+  // AuthGuard: public routesをスキップ
+  const currentPath = window.location.pathname;
+  const isPublicRoute = currentPath.startsWith('/login') || 
+                       currentPath.startsWith('/signup') || 
+                       currentPath.startsWith('/share/');
+
   useEffect(() => {
-    base44.auth.me().then(setUser).catch(() => {});
+    setAuthDebug(`Path: ${currentPath}, Public: ${isPublicRoute}`);
+    
+    if (isPublicRoute) {
+      setIsCheckingAuth(false);
+      return;
+    }
+
+    base44.auth.me()
+      .then(u => {
+        setUser(u);
+        setIsCheckingAuth(false);
+        sessionStorage.removeItem('redirecting_to_login');
+      })
+      .catch(() => {
+        setUser(null);
+        setIsCheckingAuth(false);
+      });
   }, []);
+
+  // Public routeならガードをスキップ
+  if (isPublicRoute) {
+    return children;
+  }
+
+  // 認証チェック中
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-blue-50 flex items-center justify-center">
+        <div className="bg-white rounded-lg shadow-lg p-8 max-w-md">
+          <h2 className="text-xl font-bold mb-4">AuthGuard: checking...</h2>
+          <p className="text-sm text-gray-600">{authDebug}</p>
+          <div className="mt-4">認証状態を確認中...</div>
+        </div>
+      </div>
+    );
+  }
+
+  // 未認証ならリダイレクト
+  if (!user) {
+    return <RedirectToLogin currentPath={currentPath} />;
+  }
 
   const { data: notifications = [] } = useQuery({
     queryKey: ['notifications', user?.id],
