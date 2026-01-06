@@ -29,6 +29,10 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.j
 export default function ShareView() {
   const [guestName, setGuestName] = useState('');
   const [showNameDialog, setShowNameDialog] = useState(false);
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [password, setPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [isPasswordVerified, setIsPasswordVerified] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [zoom, setZoom] = useState(100);
@@ -43,16 +47,31 @@ export default function ShareView() {
   const pdfDocRef = useRef(null);
   const queryClient = useQueryClient();
   
-  const token = window.location.hash.split('/share/')[1];
+  // token取得：pathname ベースルーティング
+  const pathParts = window.location.pathname.split('/');
+  const token = pathParts[pathParts.length - 1] || window.location.hash.split('/share/')[1];
 
   useEffect(() => {
+    if (!token) return;
+    
     const storedName = localStorage.getItem(`guestName_${token}`);
     if (storedName) {
       setGuestName(storedName);
     } else {
       setShowNameDialog(true);
     }
+
+    // パスワード検証済みフラグを確認
+    const isVerified = sessionStorage.getItem(`passwordVerified_${token}`) === '1';
+    setIsPasswordVerified(isVerified);
   }, [token]);
+  
+  // ShareLinkのパスワード検証
+  useEffect(() => {
+    if (shareLink && shareLink.password_enabled && !isPasswordVerified) {
+      setShowPasswordDialog(true);
+    }
+  }, [shareLink, isPasswordVerified]);
 
   const { data: shareLink, isLoading: linkLoading } = useQuery({
     queryKey: ['shareLink', token],
@@ -175,6 +194,29 @@ export default function ShareView() {
     setShowNameDialog(false);
   };
 
+  const handlePasswordSubmit = async () => {
+    if (!password.trim()) {
+      setPasswordError('パスワードを入力してください');
+      return;
+    }
+
+    try {
+      // パスワードハッシュと比較（実装は簡易版：実際は backend function で検証）
+      // ここでは password_hash が存在すれば単純比較
+      if (shareLink.password_hash === password) {
+        sessionStorage.setItem(`passwordVerified_${token}`, '1');
+        setIsPasswordVerified(true);
+        setShowPasswordDialog(false);
+        setPassword('');
+        setPasswordError('');
+      } else {
+        setPasswordError('パスワードが正しくありません');
+      }
+    } catch (error) {
+      setPasswordError('エラーが発生しました');
+    }
+  };
+
   const handleCommentClick = (commentId) => {
     if (visiblePaints.has(commentId)) {
       const newVisible = new Set(visiblePaints);
@@ -188,10 +230,24 @@ export default function ShareView() {
     setSelectedCommentId(commentId);
   };
 
+  if (!token) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Card className="max-w-md">
+          <CardContent className="p-8 text-center">
+            <h2 className="text-xl font-bold text-red-600 mb-2">⚠️ トークンが不正です</h2>
+            <p className="text-gray-600">共有リンクのURLが正しくありません。</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (linkLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
+          <div className="animate-spin w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"></div>
           <div className="text-lg font-medium mb-2">読み込み中...</div>
         </div>
       </div>
@@ -200,24 +256,79 @@ export default function ShareView() {
 
   if (!shareLink) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <Card className="max-w-md">
           <CardContent className="p-8 text-center">
-            <h2 className="text-xl font-bold mb-2">リンクが見つかりません</h2>
-            <p className="text-gray-600">共有リンクが無効または削除されています。</p>
+            <h2 className="text-xl font-bold text-red-600 mb-2">🔗 リンクが見つかりません</h2>
+            <p className="text-gray-600 mb-4">共有リンクが無効または削除されています。</p>
+            <p className="text-sm text-gray-500">リンクの発行者にご確認ください。</p>
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  if (!shareLink.is_active || new Date(shareLink.expires_at) < new Date()) {
+  if (!shareLink.is_active) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <Card className="max-w-md">
           <CardContent className="p-8 text-center">
-            <h2 className="text-xl font-bold mb-2">リンクの有効期限が切れています</h2>
-            <p className="text-gray-600">このリンクは無効になっています。リンクの発行者にご確認ください。</p>
+            <h2 className="text-xl font-bold text-orange-600 mb-2">🚫 リンクが無効です</h2>
+            <p className="text-gray-600 mb-4">このリンクは無効化されています。</p>
+            <p className="text-sm text-gray-500">リンクの発行者にご確認ください。</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (shareLink.expires_at && new Date(shareLink.expires_at) < new Date()) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Card className="max-w-md">
+          <CardContent className="p-8 text-center">
+            <h2 className="text-xl font-bold text-red-600 mb-2">⏰ リンクの有効期限が切れています</h2>
+            <p className="text-gray-600 mb-4">このリンクは期限切れです。</p>
+            <p className="text-sm text-gray-500">
+              有効期限: {format(new Date(shareLink.expires_at), 'yyyy/MM/dd HH:mm', { locale: ja })}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // パスワード検証前
+  if (shareLink.password_enabled && !isPasswordVerified) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Card className="max-w-md">
+          <CardContent className="p-8">
+            <h2 className="text-xl font-bold mb-4 text-center">🔒 パスワードが必要です</h2>
+            <p className="text-sm text-gray-600 mb-4 text-center">
+              このファイルは パスワードで保護されています。
+            </p>
+            <div className="space-y-4">
+              <Input
+                type="password"
+                placeholder="パスワードを入力"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setPasswordError('');
+                }}
+                onKeyDown={(e) => e.key === 'Enter' && handlePasswordSubmit()}
+              />
+              {passwordError && (
+                <div className="text-sm text-red-600">{passwordError}</div>
+              )}
+              <Button
+                onClick={handlePasswordSubmit}
+                className="w-full bg-blue-600 hover:bg-blue-700"
+              >
+                確認
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -268,8 +379,18 @@ export default function ShareView() {
           </div>
         </div>
         <div className="flex gap-2">
-          {shareLink.allow_download && (
-            <Button variant="outline">
+          {shareLink.allow_download && file?.file_url && (
+            <Button 
+              variant="outline"
+              onClick={() => {
+                const link = document.createElement('a');
+                link.href = file.file_url;
+                link.download = file.original_filename || file.title || 'download';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+              }}
+            >
               <Download className="w-4 h-4 mr-2" />
               ダウンロード
             </Button>
@@ -428,18 +549,20 @@ export default function ShareView() {
             </div>
 
             {/* 入力ドック */}
-            {shareLink.can_post_comments && (
+            {shareLink.can_post_comments ? (
               <div className="border-t p-4 space-y-2">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium">コメント追加</span>
-                  <Button
-                    variant={isPainting ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setIsPainting(!isPainting)}
-                  >
-                    <Paintbrush className="w-4 h-4 mr-2" />
-                    {isPainting ? 'ペイント中' : 'ペイント'}
-                  </Button>
+                  {canPreview && (
+                    <Button
+                      variant={isPainting ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setIsPainting(!isPainting)}
+                    >
+                      <Paintbrush className="w-4 h-4 mr-2" />
+                      {isPainting ? 'ペイント中' : 'ペイント'}
+                    </Button>
+                  )}
                 </div>
                 <Textarea
                   placeholder="コメントを入力"
@@ -455,6 +578,10 @@ export default function ShareView() {
                   <Send className="w-4 h-4 mr-2" />
                   送信
                 </Button>
+              </div>
+            ) : (
+              <div className="border-t p-4 text-center text-sm text-gray-500">
+                コメント機能は無効です
               </div>
             )}
           </div>

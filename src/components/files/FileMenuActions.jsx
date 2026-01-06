@@ -80,7 +80,8 @@ export async function handleCopyShareLink(file, onSuccess, onError) {
       token = newToken;
     }
     
-    const shareUrl = `${window.location.origin}${window.location.pathname}#/share/${token}`;
+    // Canonical URL: /share/:token (ハッシュなし)
+    const shareUrl = `${window.location.origin}/share/${token}`;
     
     // クリップボードにコピー
     try {
