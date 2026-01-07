@@ -53,8 +53,8 @@ export default function FloatingToolbar({
   ];
   
   return (
-    <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50">
-      <div className="bg-white rounded-lg shadow-2xl border border-gray-200 p-3 flex items-center gap-2">
+    <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 pointer-events-none">
+      <div className="bg-white rounded-lg shadow-2xl border border-gray-200 p-3 flex items-center gap-2 pointer-events-auto">
         {/* モード切替 */}
         <Button
           variant={paintMode ? 'default' : 'outline'}
