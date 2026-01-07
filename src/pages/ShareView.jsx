@@ -55,16 +55,13 @@ function ShareViewContent() {
   const [showBoundingBoxes, setShowBoundingBoxes] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [activeCommentId, setActiveCommentId] = useState(null);
-  const [composerMode, setComposerMode] = useState('new');
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editingCommentText, setEditingCommentText] = useState('');
+  const [composerText, setComposerText] = useState('');
   const [draftAnchor, setDraftAnchor] = useState(null);
   const [showAllPaint, setShowAllPaint] = useState(false);
   const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
-
-  // composerModeをactiveCommentIdに基づいて自動更新
-  useEffect(() => {
-    setComposerMode(activeCommentId ? 'edit' : 'new');
-  }, [activeCommentId]);
 
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
@@ -406,9 +403,8 @@ function ShareViewContent() {
     },
     onSuccess: (comment) => {
       queryClient.invalidateQueries(['sharedComments']);
-      setCommentBody('');
+      setComposerText('');
       setActiveCommentId(comment.id);
-      setComposerMode('edit');
       setDraftAnchor(null);
       showToast('コメントを作成しました', 'success');
     },
@@ -422,61 +418,67 @@ function ShareViewContent() {
       setShowNameDialog(true);
       return;
     }
-    if (!commentBody.trim()) {
+    if (!composerText.trim()) {
       showToast('コメントを入力してください', 'error');
       return;
     }
 
-    if (composerMode === 'edit' && activeCommentId) {
-      // EDITモード：既存コメントを更新
-      base44.entities.ReviewComment.update(activeCommentId, { body: commentBody })
-        .then(() => {
-          queryClient.invalidateQueries(['sharedComments']);
-          setCommentBody('');
-          showToast('コメントを更新しました', 'success');
-        })
-        .catch((error) => {
-          showToast(`更新失敗: ${error.message}`, 'error');
-        });
+    // 常に新規コメント作成
+    let anchor_nx, anchor_ny;
+
+    if (draftAnchor) {
+      anchor_nx = draftAnchor.nx;
+      anchor_ny = draftAnchor.ny;
     } else {
-      // NEWモード：新規コメント作成
-      let anchor_nx, anchor_ny;
+      anchor_nx = 0.5;
+      anchor_ny = 0.5;
+    }
 
-      if (draftAnchor) {
-        anchor_nx = draftAnchor.nx;
-        anchor_ny = draftAnchor.ny;
-      } else {
-        // 無ければビューポート中心（または要求に応じて位置指定を強制）
-        anchor_nx = 0.5;
-        anchor_ny = 0.5;
-      }
+    createCommentMutation.mutate({
+      anchor_nx,
+      anchor_ny,
+      body: composerText,
+    });
+  };
 
-      createCommentMutation.mutate({
-        anchor_nx,
-        anchor_ny,
-        body: commentBody,
-      });
+  // コメント編集開始
+  const handleStartEditComment = (comment) => {
+    setEditingCommentId(comment.id);
+    setEditingCommentText(comment.body || '');
+  };
+
+  // コメント編集保存
+  const handleSaveEditComment = async () => {
+    if (!editingCommentText.trim()) {
+      showToast('コメントを入力してください', 'error');
+      return;
+    }
+
+    try {
+      await base44.entities.ReviewComment.update(editingCommentId, { body: editingCommentText });
+      queryClient.invalidateQueries(['sharedComments']);
+      setEditingCommentId(null);
+      setEditingCommentText('');
+      showToast('コメントを更新しました', 'success');
+    } catch (error) {
+      showToast(`更新失敗: ${error.message}`, 'error');
     }
   };
 
-  // 編集モードをキャンセルして新規モードに戻る
-  const handleCancelEdit = () => {
-    setActiveCommentId(null);
-    setComposerMode('new');
-    setCommentBody('');
-    setDraftAnchor(null);
+  // コメント編集キャンセル
+  const handleCancelEditComment = () => {
+    setEditingCommentId(null);
+    setEditingCommentText('');
   };
 
-  // キャンバスクリックでドラフトアンカー設定（NEWモード＋ペイントモード外のみ）
+  // キャンバスクリックでドラフトアンカー設定（ペイントモード外のみ）
   const handleCanvasClick = (anchorX, anchorY, bgWidth, bgHeight) => {
     if (paintMode) return;
 
-    if (composerMode === 'new') {
-      const anchor_nx = anchorX / bgWidth;
-      const anchor_ny = anchorY / bgHeight;
-      setDraftAnchor({ nx: anchor_nx, ny: anchor_ny });
-      showToast('ピンを配置しました。コメントを入力してください', 'info');
-    }
+    const anchor_nx = anchorX / bgWidth;
+    const anchor_ny = anchorY / bgHeight;
+    setDraftAnchor({ nx: anchor_nx, ny: anchor_ny });
+    showToast('ピンを配置しました。コメントを入力してください', 'info');
   };
 
   // PaintShapeをViewerCanvas用の形式に変換（全ペイント表示対応）
@@ -729,7 +731,7 @@ function ShareViewContent() {
               comments={[]}
               activeCommentId={activeCommentId}
               onCommentClick={setActiveCommentId}
-              draftAnchor={composerMode === 'new' ? draftAnchor : null}
+              draftAnchor={draftAnchor}
               onSaveShape={handleSaveShape}
               onDeleteShape={handleDeleteShape}
               paintMode={isReady && paintMode && !!activeCommentId}
@@ -815,35 +817,67 @@ function ShareViewContent() {
                 sortedComments.map((comment) => {
                   const shapesCount = paintShapes.filter(s => s.comment_id === comment.id).length;
                   const isActive = activeCommentId === comment.id;
+                  const isEditing = editingCommentId === comment.id;
                   
                   return (
                     <Card 
                       key={comment.id} 
-                      className={`hover:shadow-md transition-shadow cursor-pointer ${isActive ? 'border-2 border-blue-600 bg-blue-50' : ''}`}
-                      onClick={() => setActiveCommentId(isActive ? null : comment.id)}
+                      className={`hover:shadow-md transition-shadow ${isActive ? 'border-2 border-blue-600 bg-blue-50' : ''}`}
                     >
                       <CardContent className="p-3">
                         <div className="flex items-start gap-2 mb-2">
-                          <Badge variant="secondary" className="text-xs">#{comment.seq_no}</Badge>
+                          <Badge variant="secondary" className="text-xs cursor-pointer" onClick={() => setActiveCommentId(isActive ? null : comment.id)}>#{comment.seq_no}</Badge>
                           <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="text-sm font-medium">{comment.author_name}</span>
-                              {comment.author_type === 'guest' && (
-                                <Badge variant="outline" className="text-xs">ゲスト</Badge>
-                              )}
-                              {shapesCount > 0 && (
-                                <Badge variant="outline" className="text-xs flex items-center gap-1">
-                                  <Paintbrush className="w-3 h-3" />
-                                  {shapesCount}
-                                </Badge>
-                              )}
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium">{comment.author_name}</span>
+                                {comment.author_type === 'guest' && (
+                                  <Badge variant="outline" className="text-xs">ゲスト</Badge>
+                                )}
+                                {shapesCount > 0 && (
+                                  <Badge variant="outline" className="text-xs flex items-center gap-1">
+                                    <Paintbrush className="w-3 h-3" />
+                                    {shapesCount}
+                                  </Badge>
+                                )}
+                              </div>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => handleStartEditComment(comment)}
+                                className="h-auto p-1"
+                              >
+                                <span className="text-xs">編集</span>
+                              </Button>
                             </div>
-                            <p className="text-sm text-gray-700">{comment.body || '（本文なし）'}</p>
-                            <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
-                              <span>{comment.page_no}枚目</span>
-                              <span>•</span>
-                              <span>{format(new Date(comment.created_date), 'yyyy/MM/dd HH:mm', { locale: ja })}</span>
-                            </div>
+                            
+                            {isEditing ? (
+                              <div className="space-y-2">
+                                <Textarea
+                                  value={editingCommentText}
+                                  onChange={(e) => setEditingCommentText(e.target.value)}
+                                  rows={2}
+                                  className="text-sm"
+                                />
+                                <div className="flex gap-2">
+                                  <Button size="sm" onClick={handleSaveEditComment} className="bg-blue-600 hover:bg-blue-700">
+                                    保存
+                                  </Button>
+                                  <Button size="sm" variant="outline" onClick={handleCancelEditComment}>
+                                    キャンセル
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <p className="text-sm text-gray-700 cursor-pointer" onClick={() => setActiveCommentId(isActive ? null : comment.id)}>{comment.body || '（本文なし）'}</p>
+                                <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
+                                  <span>{comment.page_no}枚目</span>
+                                  <span>•</span>
+                                  <span>{format(new Date(comment.created_date), 'yyyy/MM/dd HH:mm', { locale: ja })}</span>
+                                </div>
+                              </>
+                            )}
                           </div>
                         </div>
                       </CardContent>
@@ -854,43 +888,27 @@ function ShareViewContent() {
               )}
             </div>
 
-            {/* 入力ドック（NEW/EDITモード対応） */}
+            {/* 入力ドック（常に新規投稿専用） */}
             {shareLink.can_post_comments ? (
               <div className="border-t p-3 bg-gray-50">
-                {composerMode === 'edit' && activeCommentId && (
-                  <div className="mb-2 flex items-center justify-between text-xs">
-                    <span className="text-gray-600">コメント編集中</span>
-                    <Button variant="ghost" size="sm" onClick={handleCancelEdit} className="h-auto p-1">
-                      <span className="text-xs">✕ キャンセル</span>
-                    </Button>
-                  </div>
-                )}
                 <div className="flex gap-2">
                   <Textarea
-                    placeholder={composerMode === 'new' ? 'コメントを入力' : '編集中...'}
-                    value={composerMode === 'edit' && activeCommentId && !commentBody ? 
-                      comments.find(c => c.id === activeCommentId)?.body || '' : 
-                      commentBody}
-                    onChange={(e) => setCommentBody(e.target.value)}
-                    onFocus={() => {
-                      if (composerMode === 'edit' && activeCommentId && !commentBody) {
-                        const comment = comments.find(c => c.id === activeCommentId);
-                        if (comment) setCommentBody(comment.body || '');
-                      }
-                    }}
+                    placeholder="コメントを入力"
+                    value={composerText}
+                    onChange={(e) => setComposerText(e.target.value)}
                     rows={2}
                     className="flex-1 text-sm"
                   />
                   <Button
                     onClick={handleSendComment}
-                    disabled={!commentBody.trim()}
+                    disabled={!composerText.trim()}
                     size="icon"
                     className="bg-blue-600 hover:bg-blue-700 h-auto"
                   >
                     <Send className="w-4 h-4" />
                   </Button>
                 </div>
-                {composerMode === 'new' && draftAnchor && (
+                {draftAnchor && (
                   <div className="mt-2 text-xs text-gray-600 flex items-center gap-1">
                     <div className="w-2 h-2 bg-blue-600 rounded-full" />
                     ピン配置済み（{(draftAnchor.nx * 100).toFixed(0)}%, {(draftAnchor.ny * 100).toFixed(0)}%）
