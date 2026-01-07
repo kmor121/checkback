@@ -83,10 +83,16 @@ const ViewerCanvas = forwardRef(({
     setRedoStack([]);
   }, [fileUrl, pageNumber]);
 
-  // existingShapesからの初回hydrate（上書き防止）
+  // existingShapesからの初回hydrate（上書き防止・空配列での全消し禁止）
   useEffect(() => {
-    if (!hydratedRef.current && existingShapes) {
+    // 空配列での全消しを防ぐ: existingShapes が空の場合は hydrate しない
+    if (!hydratedRef.current && existingShapes && existingShapes.length > 0) {
+      console.log('[ViewerCanvas] Hydrating shapes:', existingShapes.length);
       setShapes(existingShapes);
+      hydratedRef.current = true;
+    } else if (!hydratedRef.current && existingShapes && existingShapes.length === 0) {
+      // 空配列が来た場合は「初回で本当に空」と判断してhydrate完了とする
+      console.log('[ViewerCanvas] Hydrating with empty shapes (initial load)');
       hydratedRef.current = true;
     }
   }, [existingShapes]);
@@ -326,6 +332,7 @@ const ViewerCanvas = forwardRef(({
       setImgPos(imgCoords);
       setIsDrawing(true);
       
+      // clientShapeId を再生成しない（タイムスタンプ＋ランダムで一意性保証）
       const newShape = {
         id: `shape_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         tool,

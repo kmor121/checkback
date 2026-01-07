@@ -30,6 +30,8 @@ import DebugOverlay from '../components/DebugOverlay';
 // Base44の仕様上、アプリ全体をPublicにするか、このページを完全に独立させる必要がある
 // このコンポーネントは認証API(base44.auth.me等)を一切呼ばない
 
+const DEBUG_MODE = import.meta.env.VITE_DEBUG === 'true';
+
 function ShareViewContent() {
   const [guestName, setGuestName] = useState('');
   const [guestId, setGuestId] = useState('');
@@ -141,15 +143,26 @@ function ShareViewContent() {
     staleTime: 30000,
   });
 
-  const { data: paintShapes = [] } = useQuery({
+  const { data: paintShapes = [], isFetching: shapesFetching } = useQuery({
     queryKey: ['paintShapes', token, shareLink?.file_id, currentPage],
-    queryFn: () => base44.entities.PaintShape.filter({ 
-      file_id: shareLink.file_id,
-      page_no: currentPage
-    }),
-    enabled: isReady && !!shareLink?.file_id,
+    queryFn: async () => {
+      console.log('[ShareView] Fetching shapes:', { 
+        token: token?.substring(0, 10), 
+        fileId: shareLink.file_id, 
+        pageNo: currentPage 
+      });
+      const shapes = await base44.entities.PaintShape.filter({ 
+        file_id: shareLink.file_id,
+        page_no: currentPage
+      });
+      console.log('[ShareView] Fetched shapes count:', shapes.length);
+      return shapes;
+    },
+    enabled: isReady && !!shareLink?.file_id && !!token,
     refetchOnWindowFocus: false,
     staleTime: 60000,
+    // 空配列での全消しを防ぐ
+    placeholderData: (previousData) => previousData,
   });
 
 
@@ -290,19 +303,26 @@ function ShareViewContent() {
   };
 
   // PaintShapeをViewerCanvas用の形式に変換
-  const existingShapes = paintShapes.map(ps => {
-    try {
-      const data = JSON.parse(ps.data_json);
-      return {
-        id: ps.id,
-        tool: ps.shape_type,
-        ...data,
-      };
-    } catch (e) {
-      console.error('Failed to parse shape:', e);
-      return null;
+  const existingShapes = React.useMemo(() => {
+    // ready状態でないなら空配列を返さない（前回データを保持）
+    if (!isReady || !paintShapes) {
+      return [];
     }
-  }).filter(Boolean);
+    
+    return paintShapes.map(ps => {
+      try {
+        const data = JSON.parse(ps.data_json);
+        return {
+          id: ps.id,
+          tool: ps.shape_type,
+          ...data,
+        };
+      } catch (e) {
+        console.error('Failed to parse shape:', e);
+        return null;
+      }
+    }).filter(Boolean);
+  }, [paintShapes, isReady]);
 
   const handleSaveName = () => {
     if (!guestName.trim()) return;
@@ -407,6 +427,12 @@ function ShareViewContent() {
   if (shareLink.password_enabled && !isPasswordVerified) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        {DEBUG_MODE && (
+          <div className="fixed top-0 left-0 right-0 bg-yellow-100 border-b-2 border-yellow-600 p-2 text-xs font-mono z-50">
+            <div><strong>[ShareView Debug]</strong></div>
+            <div>ready: {isReady.toString()} | token: {token ? 'present' : 'missing'} | shareLink: {shareLink ? 'loaded' : 'null'} | passwordVerified: {isPasswordVerified.toString()}</div>
+          </div>
+        )}
         <Card className="max-w-md">
           <CardContent className="p-8">
             <h2 className="text-xl font-bold mb-4 text-center">🔒 パスワードが必要です</h2>
@@ -438,7 +464,9 @@ function ShareViewContent() {
         </Card>
       </div>
     );
-  }
+    }
+
+    const DEBUG_MODE = import.meta.env.VITE_DEBUG === 'true';
 
   const filteredComments = comments.filter(c => {
     if (commentFilter === 'resolved' && !c.resolved) return false;
