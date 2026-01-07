@@ -72,6 +72,7 @@ function ShareViewContent() {
   const [showAllPaint, setShowAllPaint] = useState(false);
   const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
+  const didInitActiveRef = useRef(false);
 
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
@@ -146,7 +147,10 @@ function ShareViewContent() {
 
   const { data: comments = [] } = useQuery({
     queryKey: ['sharedComments', shareLink?.file_id],
-    queryFn: () => base44.entities.ReviewComment.filter({ file_id: shareLink.file_id }),
+    queryFn: () => base44.entities.ReviewComment.filter({ 
+      file_id: shareLink.file_id,
+      share_token: token 
+    }),
     enabled: isReady && !!shareLink?.file_id && shareLink?.can_view_comments,
     staleTime: 30000,
   });
@@ -186,16 +190,28 @@ function ShareViewContent() {
     localStorage.setItem(key, String(showAllPaint));
   }, [showAllPaint, token, shareLink?.file_id, currentPage]);
 
-  // lastActiveCommentId の復元と保存
+  // lastActiveCommentId の復元（初回のみ）と保存
   useEffect(() => {
     if (!token || !shareLink?.file_id || !comments.length) return;
 
-    // activeCommentIdが無い場合のみ復元を試みる
-    if (!activeCommentId) {
+    // 初回のみ復元を試みる（ユーザー操作を邪魔しない）
+    if (!didInitActiveRef.current && !activeCommentId) {
+      // URL params で comment 指定があれば優先
+      const params = new URLSearchParams(window.location.search);
+      const commentIdFromUrl = params.get('comment');
+      
+      if (commentIdFromUrl && comments.find(c => c.id === commentIdFromUrl)) {
+        const targetComment = comments.find(c => c.id === commentIdFromUrl);
+        setActiveCommentId(commentIdFromUrl);
+        setCurrentPage(targetComment.page_no);
+        didInitActiveRef.current = true;
+        return;
+      }
+
+      // URL指定がない場合は localStorage から復元
       const key = `lastActiveCommentId:${token}:${shareLink.file_id}:${currentPage}`;
       const saved = localStorage.getItem(key);
 
-      // 保存されたIDが存在し、commentsに含まれるなら復元
       if (saved && comments.find(c => c.id === saved)) {
         setActiveCommentId(saved);
       } else if (comments.length > 0) {
@@ -205,6 +221,8 @@ function ShareViewContent() {
         , comments[0]);
         setActiveCommentId(latest.id);
       }
+      
+      didInitActiveRef.current = true;
     }
   }, [token, shareLink?.file_id, currentPage, comments, activeCommentId]);
 
@@ -383,9 +401,10 @@ function ShareViewContent() {
       return comment;
     },
     onSuccess: (comment) => {
-      queryClient.invalidateQueries(['sharedComments']);
+      queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id] });
       setComposerText('');
       setActiveCommentId(comment.id);
+      setCurrentPage(comment.page_no);
       setDraftAnchor(null);
       showToast('コメントを作成しました', 'success');
     },
@@ -437,7 +456,7 @@ function ShareViewContent() {
 
     try {
       await base44.entities.ReviewComment.update(editingCommentId, { body: editingCommentText });
-      queryClient.invalidateQueries(['sharedComments']);
+      queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id] });
       setEditingCommentId(null);
       setEditingCommentText('');
       showToast('コメントを更新しました', 'success');
@@ -469,8 +488,8 @@ function ShareViewContent() {
       // コメント削除
       await base44.entities.ReviewComment.delete(comment.id);
       
-      queryClient.invalidateQueries(['sharedComments']);
-      queryClient.invalidateQueries(['paintShapes', token, shareLink?.file_id, currentPage]);
+      queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id] });
+      queryClient.invalidateQueries({ queryKey: ['paintShapes', token, shareLink?.file_id, currentPage] });
       
       // 削除したコメントが選択中だったらクリア
       if (activeCommentId === comment.id) {
@@ -850,7 +869,15 @@ function ShareViewContent() {
                         <div className="flex items-start gap-2">
                           <div 
                             className="flex-1 cursor-pointer" 
-                            onClick={() => !isEditing && setActiveCommentId(isActive ? null : comment.id)}
+                            onClick={() => {
+                              if (isEditing) return;
+                              if (isActive) {
+                                setActiveCommentId(null);
+                              } else {
+                                setActiveCommentId(comment.id);
+                                setCurrentPage(comment.page_no);
+                              }
+                            }}
                           >
                             <div className="flex items-center gap-2 mb-1">
                               <span className="text-sm font-medium">{comment.author_name}</span>
