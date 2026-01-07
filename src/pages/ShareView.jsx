@@ -28,7 +28,9 @@ import {
   MoreVertical,
   Edit,
   Trash,
-  Link as LinkIcon
+  Link as LinkIcon,
+  X,
+  Trash2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
@@ -295,7 +297,6 @@ function ShareViewContent() {
       queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id, token] });
       setActiveCommentId(comment.id);
       lockedCommentIdRef.current = comment.id;
-      setComposerMode('new');
       setAutoCommentCreating(false);
       
       if (DEBUG_MODE) {
@@ -547,7 +548,7 @@ function ShareViewContent() {
       setCurrentPage(comment.page_no);
       setActiveCommentId(comment.id);
       lockedCommentIdRef.current = null;
-      setComposerMode(null);
+      setIsDockOpen(false);
       showToast('コメントを作成しました', 'success');
     },
     onError: (error) => {
@@ -598,33 +599,40 @@ function ShareViewContent() {
 
   // コメント編集開始
   const handleStartEditComment = (comment) => {
-    setEditingCommentId(comment.id);
-    setEditingCommentText(comment.body || '');
+    if (paintMode || isDockOpen) {
+      if (!window.confirm('編集中の内容が失われますが、よろしいですか？')) {
+        return;
+      }
+    }
+    
+    setActiveCommentId(comment.id);
+    setCurrentPage(comment.page_no);
+    lockedCommentIdRef.current = comment.id;
+    setComposerText(comment.body || '');
+    setPaintMode(false);
+    setIsDockOpen(true);
   };
 
-  // コメント編集保存
-  const handleSaveEditComment = async () => {
-    if (!editingCommentText.trim()) {
-      showToast('コメントを入力してください', 'error');
-      return;
+  // ドックを閉じる
+  const handleCloseDock = async () => {
+    if (lockedCommentIdRef.current) {
+      // 本文も描画もない場合は下書きを削除
+      const shapes = paintShapes.filter(s => s.comment_id === lockedCommentIdRef.current);
+      if (!composerText.trim() && shapes.length === 0) {
+        try {
+          await base44.entities.ReviewComment.delete(lockedCommentIdRef.current);
+          queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id, token] });
+        } catch (error) {
+          console.error('Failed to delete draft comment:', error);
+        }
+      }
     }
-
-    try {
-      await base44.entities.ReviewComment.update(editingCommentId, { body: editingCommentText });
-      queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id, token] });
-      setEditingCommentId(null);
-      setEditingCommentText('');
-      showToast('コメントを更新しました', 'success');
-    } catch (error) {
-      showToast(`更新失敗: ${error.message}`, 'error');
-    }
-  };
-
-  // コメント編集キャンセル
-  // コメント編集キャンセル
-  const handleCancelEditComment = () => {
-    setEditingCommentId(null);
-    setEditingCommentText('');
+    
+    setComposerText('');
+    lockedCommentIdRef.current = null;
+    setActiveCommentId(null);
+    setPaintMode(false);
+    setIsDockOpen(false);
   };
 
   // コメント削除（関連PaintShapeも削除）
