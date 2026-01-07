@@ -685,56 +685,61 @@ const ViewerCanvas = forwardRef(({
     };
     
     if (shape.tool === 'pen') {
-      let points = shape.points || [];
-      
-      // 正規化座標がある場合は復元
+      let points = [];
+
+      // 正規化座標を優先（必ずこれから復元）
       if (shape.normalizedPoints) {
-        points = [];
         for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
           const { x, y } = denormalizeCoords(shape.normalizedPoints[i], shape.normalizedPoints[i + 1]);
           points.push(x, y);
         }
+      } else if (shape.points) {
+        // 描画中の一時データ（normalizedPointsがない場合のみ）
+        points = shape.points;
       }
-      
+
       return <Line {...commonProps} points={points} tension={0.5} lineCap="round" lineJoin="round" hitStrokeWidth={20} fill={undefined} />;
     } else if (shape.tool === 'rect') {
-      // 描画中の一時的なshape
-      if (shape.x !== undefined && shape.width !== undefined && !shape.nx) {
-        return <Rect {...commonProps} x={shape.x} y={shape.y} width={shape.width} height={shape.height} fill={undefined} hitStrokeWidth={10} />;
-      }
-      
-      // 保存済みshape（正規化座標から復元）
+      // 正規化座標を優先（必ずこれから復元）
       if (shape.nx !== undefined) {
         const p1 = denormalizeCoords(shape.nx, shape.ny);
         const p2 = denormalizeCoords(shape.nx + shape.nw, shape.ny + shape.nh);
         return <Rect {...commonProps} x={p1.x} y={p1.y} width={p2.x - p1.x} height={p2.y - p1.y} fill={undefined} hitStrokeWidth={10} />;
       }
-      
+
+      // 描画中の一時データ（nxがない場合のみ）
+      if (shape.x !== undefined && shape.width !== undefined) {
+        return <Rect {...commonProps} x={shape.x} y={shape.y} width={shape.width} height={shape.height} fill={undefined} hitStrokeWidth={10} />;
+      }
+
       return null;
     } else if (shape.tool === 'circle') {
-      // 描画中の一時的なshape
-      if (shape.x !== undefined && shape.radius !== undefined && !shape.nx) {
-        return <Circle {...commonProps} x={shape.x} y={shape.y} radius={shape.radius} fill={undefined} hitStrokeWidth={10} />;
-      }
-      
-      // 保存済みshape（正規化座標から復元）
+      // 正規化座標を優先（必ずこれから復元）
       if (shape.nx !== undefined) {
         const center = denormalizeCoords(shape.nx, shape.ny);
         return <Circle {...commonProps} x={center.x} y={center.y} radius={shape.nr * bgSize.width} fill={undefined} hitStrokeWidth={10} />;
       }
-      
+
+      // 描画中の一時データ（nxがない場合のみ）
+      if (shape.x !== undefined && shape.radius !== undefined) {
+        return <Circle {...commonProps} x={shape.x} y={shape.y} radius={shape.radius} fill={undefined} hitStrokeWidth={10} />;
+      }
+
       return null;
     } else if (shape.tool === 'arrow') {
-      let points = shape.points || [];
-      
+      let points = [];
+
+      // 正規化座標を優先（必ずこれから復元）
       if (shape.normalizedPoints) {
-        points = [];
         for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
           const { x, y } = denormalizeCoords(shape.normalizedPoints[i], shape.normalizedPoints[i + 1]);
           points.push(x, y);
         }
+      } else if (shape.points) {
+        // 描画中の一時データ（normalizedPointsがない場合のみ）
+        points = shape.points;
       }
-      
+
       return <Arrow {...commonProps} points={points} pointerLength={10} pointerWidth={10} hitStrokeWidth={20} />;
     }
     return null;
