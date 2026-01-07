@@ -86,6 +86,7 @@ const ViewerCanvas = forwardRef(({
   const [lastMutation, setLastMutation] = useState(null);
   const [lastPayload, setLastPayload] = useState(null);
   const [lastSuccessId, setLastSuccessId] = useState(null);
+  const [isSaving, setIsSaving] = useState({});
   
   const isImage = mimeType?.startsWith('image/');
   const isEditMode = tool === 'select';
