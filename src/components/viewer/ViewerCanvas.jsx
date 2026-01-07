@@ -92,18 +92,26 @@ const ViewerCanvas = forwardRef(({
     }
   }, [isEditMode]);
 
-  // Transformer selection（編集モード時のみ）
+  // Transformer selection（編集モード時のみ、Rect/Circleのみ）
   useEffect(() => {
     if (!transformerRef.current) return;
     
     if (isEditMode && selectedId && shapeRefs.current[selectedId]) {
-      transformerRef.current.nodes([shapeRefs.current[selectedId]]);
-      transformerRef.current.getLayer().batchDraw();
+      const selectedShape = shapes.find(s => s.id === selectedId);
+      const canResize = selectedShape && (selectedShape.tool === 'rect' || selectedShape.tool === 'circle');
+      
+      if (canResize) {
+        transformerRef.current.nodes([shapeRefs.current[selectedId]]);
+        transformerRef.current.getLayer().batchDraw();
+      } else {
+        transformerRef.current.nodes([]);
+        transformerRef.current.getLayer().batchDraw();
+      }
     } else {
       transformerRef.current.nodes([]);
       transformerRef.current.getLayer().batchDraw();
     }
-  }, [selectedId, isEditMode]);
+  }, [selectedId, isEditMode, shapes]);
 
   // キーボードショートカット（入力欄フォーカス中は無効）
   useEffect(() => {
@@ -246,7 +254,7 @@ const ViewerCanvas = forwardRef(({
 
   // 削除
   const handleDelete = async () => {
-    if (!isEditMode || !selectedId) return;
+    if (!isEditMode || !selectedId || tool !== 'select') return;
     
     const index = shapes.findIndex(s => s.id === selectedId);
     if (index === -1) return;
@@ -254,14 +262,15 @@ const ViewerCanvas = forwardRef(({
     const shape = shapes[index];
     addToUndoStack({ type: 'delete', shape, index });
     
+    // Transformer解除（先に）
+    if (transformerRef.current) {
+      transformerRef.current.nodes([]);
+      transformerRef.current.getLayer()?.batchDraw();
+    }
+    
     // Optimistic update
     setShapes(prev => prev.filter(s => s.id !== selectedId));
     setSelectedId(null);
-    
-    // Transformer解除
-    if (transformerRef.current) {
-      transformerRef.current.nodes([]);
-    }
   };
 
   // 空白クリックで選択解除（編集モード時）
@@ -436,6 +445,7 @@ const ViewerCanvas = forwardRef(({
     const updatedShape = { ...shape };
     
     if (shape.tool === 'pen' && shape.normalizedPoints) {
+      // Pen: deltaとしてpointsに焼き込み
       const newPoints = [];
       for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
         const { x: px, y: py } = denormalizeCoords(shape.normalizedPoints[i], shape.normalizedPoints[i + 1]);
@@ -443,17 +453,23 @@ const ViewerCanvas = forwardRef(({
         newPoints.push(nx, ny);
       }
       updatedShape.normalizedPoints = newPoints;
+      // Pen/Arrowのみリセット
+      node.x(0);
+      node.y(0);
     } else if (shape.tool === 'rect') {
-      const { x: origX, y: origY } = denormalizeCoords(shape.nx, shape.ny);
-      const { nx, ny } = normalizeCoords(origX + x, origY + y);
+      // Rect: 絶対座標として直接保存
+      const { nx, ny } = normalizeCoords(x, y);
       updatedShape.nx = nx;
       updatedShape.ny = ny;
+      // Rect/Circleはリセットしない
     } else if (shape.tool === 'circle') {
-      const { x: origX, y: origY } = denormalizeCoords(shape.nx, shape.ny);
-      const { nx, ny } = normalizeCoords(origX + x, origY + y);
+      // Circle: 絶対座標として直接保存
+      const { nx, ny } = normalizeCoords(x, y);
       updatedShape.nx = nx;
       updatedShape.ny = ny;
-    } else if (shape.tool === 'arrow') {
+      // Rect/Circleはリセットしない
+    } else if (shape.tool === 'arrow' && shape.normalizedPoints) {
+      // Arrow: deltaとしてpointsに焼き込み
       const newPoints = [];
       for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
         const { x: px, y: py } = denormalizeCoords(shape.normalizedPoints[i], shape.normalizedPoints[i + 1]);
@@ -461,11 +477,10 @@ const ViewerCanvas = forwardRef(({
         newPoints.push(nx, ny);
       }
       updatedShape.normalizedPoints = newPoints;
+      // Pen/Arrowのみリセット
+      node.x(0);
+      node.y(0);
     }
-    
-    // ノードをリセット（ここで一度だけ）
-    node.x(0);
-    node.y(0);
     
     addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: updatedShape });
     
@@ -487,7 +502,7 @@ const ViewerCanvas = forwardRef(({
     }
   };
 
-  // Transform終了時の更新（Optimistic update）
+  // Transform終了時の更新（Optimistic update、Rect/Circleのみ）
   const handleTransformEnd = async (shape, e) => {
     const node = e.target;
     const scaleX = node.scaleX();
@@ -496,43 +511,45 @@ const ViewerCanvas = forwardRef(({
     const updatedShape = { ...shape };
     
     if (shape.tool === 'rect') {
-      const x = node.x();
-      const y = node.y();
-      const width = Math.max(5, node.width() * scaleX);
-      const height = Math.max(5, node.height() * scaleY);
+      const finalX = node.x();
+      const finalY = node.y();
+      const finalW = Math.max(5, node.width() * scaleX);
+      const finalH = Math.max(5, node.height() * scaleY);
       
-      // 元の位置からの変換を計算
-      const { x: origX, y: origY } = denormalizeCoords(shape.nx, shape.ny);
-      const finalX = origX + x;
-      const finalY = origY + y;
+      // ノードを更新（リセットではなく確定）
+      node.scaleX(1);
+      node.scaleY(1);
+      node.width(finalW);
+      node.height(finalH);
+      node.x(finalX);
+      node.y(finalY);
       
-      const { nx: nx1, ny: ny1 } = normalizeCoords(finalX, finalY);
-      const { nx: nx2, ny: ny2 } = normalizeCoords(finalX + width, finalY + height);
+      // 正規化座標に変換
+      const { nx, ny } = normalizeCoords(finalX, finalY);
+      const { nx: nx2, ny: ny2 } = normalizeCoords(finalX + finalW, finalY + finalH);
       
-      updatedShape.nx = nx1;
-      updatedShape.ny = ny1;
-      updatedShape.nw = nx2 - nx1;
-      updatedShape.nh = ny2 - ny1;
+      updatedShape.nx = nx;
+      updatedShape.ny = ny;
+      updatedShape.nw = nx2 - nx;
+      updatedShape.nh = ny2 - ny;
     } else if (shape.tool === 'circle') {
-      const x = node.x();
-      const y = node.y();
-      const radius = Math.max(3, node.radius() * Math.max(scaleX, scaleY));
+      const finalX = node.x();
+      const finalY = node.y();
+      const finalR = Math.max(3, node.radius() * Math.max(scaleX, scaleY));
       
-      const { x: origX, y: origY } = denormalizeCoords(shape.nx, shape.ny);
-      const finalX = origX + x;
-      const finalY = origY + y;
+      // ノードを更新（リセットではなく確定）
+      node.scaleX(1);
+      node.scaleY(1);
+      node.radius(finalR);
+      node.x(finalX);
+      node.y(finalY);
       
+      // 正規化座標に変換
       const { nx, ny } = normalizeCoords(finalX, finalY);
       updatedShape.nx = nx;
       updatedShape.ny = ny;
-      updatedShape.nr = radius / bgSize.width;
+      updatedShape.nr = finalR / bgSize.width;
     }
-    
-    // ノードをリセット（ここで一度だけ）
-    node.scaleX(1);
-    node.scaleY(1);
-    node.x(0);
-    node.y(0);
     
     addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: updatedShape });
     
@@ -573,6 +590,8 @@ const ViewerCanvas = forwardRef(({
   // Shape描画（正規化座標から復元）
   const renderShape = (shape, isExisting = false) => {
     const isSelected = selectedId === shape.id;
+    const canTransform = shape.tool === 'rect' || shape.tool === 'circle';
+    
     const commonProps = {
       key: shape.id,
       stroke: shape.stroke,
@@ -595,7 +614,8 @@ const ViewerCanvas = forwardRef(({
         e.cancelBubble = true;
       } : undefined,
       onDragEnd: isEditMode ? (e) => handleDragEnd(shape, e) : undefined,
-      onTransformEnd: isEditMode ? (e) => handleTransformEnd(shape, e) : undefined,
+      // TransformEndはRect/Circleのみ
+      onTransformEnd: (isEditMode && canTransform) ? (e) => handleTransformEnd(shape, e) : undefined,
     };
     
     if (shape.tool === 'pen') {
@@ -610,7 +630,7 @@ const ViewerCanvas = forwardRef(({
         }
       }
       
-      return <Line {...commonProps} points={points} tension={0.5} lineCap="round" lineJoin="round" />;
+      return <Line {...commonProps} points={points} tension={0.5} lineCap="round" lineJoin="round" hitStrokeWidth={20} />;
     } else if (shape.tool === 'rect') {
       let x = shape.x || 0;
       let y = shape.y || 0;
@@ -651,7 +671,7 @@ const ViewerCanvas = forwardRef(({
         }
       }
       
-      return <Arrow {...commonProps} points={points} pointerLength={10} pointerWidth={10} />;
+      return <Arrow {...commonProps} points={points} pointerLength={10} pointerWidth={10} hitStrokeWidth={20} />;
     }
     return null;
   };
