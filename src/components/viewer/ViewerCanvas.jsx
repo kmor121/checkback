@@ -368,6 +368,11 @@ const ViewerCanvas = forwardRef(({
       
       if (tool === 'pen') {
         newShape.points = [imgCoords.x, imgCoords.y];
+      } else if (tool === 'text') {
+        newShape.x = imgCoords.x;
+        newShape.y = imgCoords.y;
+        newShape.text = 'テキスト';
+        newShape.fontSize = 16;
       }
       
       setCurrentShape(newShape);
@@ -410,6 +415,9 @@ const ViewerCanvas = forwardRef(({
         newShape.y = currentShape.startY;
       } else if (tool === 'arrow') {
         newShape.points = [currentShape.startX, currentShape.startY, imgCoords.x, imgCoords.y];
+      } else if (tool === 'text') {
+        // Text描画中は位置更新しない（クリック一回で確定）
+        return;
       }
       
       setCurrentShape(newShape);
@@ -592,6 +600,12 @@ const ViewerCanvas = forwardRef(({
       // Pen/Arrowのみリセット
       node.x(0);
       node.y(0);
+    } else if (shape.tool === 'text') {
+      // Text: 絶対座標として直接保存
+      const { nx, ny } = normalizeCoords(x, y);
+      updatedShape.nx = nx;
+      updatedShape.ny = ny;
+      // Textはリセットしない
     }
     
     addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: updatedShape });
