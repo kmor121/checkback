@@ -69,6 +69,16 @@ const ViewerCanvas = forwardRef(({
   const isEditMode = tool === 'select';
   const isDrawMode = !isEditMode && paintMode;
   
+  // fileUrl/pageNumber変更時にリセット（hydrateより先に実行）
+  useEffect(() => {
+    hydratedRef.current = false;
+    setShapes([]);
+    setSelectedId(null);
+    setCurrentShape(null);
+    setUndoStack([]);
+    setRedoStack([]);
+  }, [fileUrl, pageNumber]);
+
   // existingShapesからの初回hydrate（上書き防止）
   useEffect(() => {
     if (!hydratedRef.current && existingShapes) {
@@ -76,14 +86,6 @@ const ViewerCanvas = forwardRef(({
       hydratedRef.current = true;
     }
   }, [existingShapes]);
-
-  // fileUrl/pageNumber変更時にリセット
-  useEffect(() => {
-    hydratedRef.current = false;
-    setShapes([]);
-    setSelectedId(null);
-    setCurrentShape(null);
-  }, [fileUrl, pageNumber]);
 
   // 描画モード開始時は選択解除
   useEffect(() => {
@@ -252,7 +254,7 @@ const ViewerCanvas = forwardRef(({
     }
   };
 
-  // 削除
+  // 削除（DB削除も実行）
   const handleDelete = async () => {
     if (!isEditMode || !selectedId || tool !== 'select') return;
     
@@ -271,6 +273,24 @@ const ViewerCanvas = forwardRef(({
     // Optimistic update
     setShapes(prev => prev.filter(s => s.id !== selectedId));
     setSelectedId(null);
+    
+    // DB削除を実行
+    if (onSaveShape) {
+      try {
+        await onSaveShape({ ...shape, _deleted: true });
+        setLastSaveStatus('success');
+      } catch (err) {
+        console.error('Delete shape error:', err);
+        setLastSaveStatus('error');
+        setLastError(err.message);
+        // 失敗時はrevert
+        setShapes(prev => {
+          const newShapes = [...prev];
+          newShapes.splice(index, 0, shape);
+          return newShapes;
+        });
+      }
+    }
   };
 
   // 空白クリックで選択解除（編集モード時）
@@ -368,8 +388,39 @@ const ViewerCanvas = forwardRef(({
       setLastEvent('up');
       setIsDrawing(false);
       
+      // しきい値チェック（誤クリック対策）
+      if (tool === 'rect') {
+        if (currentShape.width < 5 || currentShape.height < 5) {
+          setCurrentShape(null);
+          setIsDrawing(false);
+          return;
+        }
+      } else if (tool === 'circle') {
+        if (currentShape.radius < 3) {
+          setCurrentShape(null);
+          setIsDrawing(false);
+          return;
+        }
+      } else if (tool === 'arrow' && currentShape.points) {
+        const dx = currentShape.points[2] - currentShape.points[0];
+        const dy = currentShape.points[3] - currentShape.points[1];
+        const length = Math.sqrt(dx * dx + dy * dy);
+        if (length < 5) {
+          setCurrentShape(null);
+          setIsDrawing(false);
+          return;
+        }
+      }
+      
       // 正規化データを作成
-      const normalizedShape = { ...currentShape };
+      const normalizedShape = {
+        id: currentShape.id,
+        tool: currentShape.tool,
+        stroke: currentShape.stroke,
+        strokeWidth: currentShape.strokeWidth,
+        bgWidth: bgSize.width,
+        bgHeight: bgSize.height,
+      };
       
       if (tool === 'pen' && currentShape.points) {
         const normalizedPoints = [];
@@ -389,7 +440,7 @@ const ViewerCanvas = forwardRef(({
         const { nx, ny } = normalizeCoords(currentShape.x, currentShape.y);
         normalizedShape.nx = nx;
         normalizedShape.ny = ny;
-        normalizedShape.nr = currentShape.radius / bgSize.width; // 半径も正規化
+        normalizedShape.nr = currentShape.radius / bgSize.width;
       } else if (tool === 'arrow' && currentShape.points) {
         const normalizedPoints = [];
         for (let i = 0; i < currentShape.points.length; i += 2) {
@@ -398,9 +449,6 @@ const ViewerCanvas = forwardRef(({
         }
         normalizedShape.normalizedPoints = normalizedPoints;
       }
-      
-      normalizedShape.bgWidth = bgSize.width;
-      normalizedShape.bgHeight = bgSize.height;
       
       // Undo履歴に追加
       addToUndoStack({ type: 'add', shapeId: normalizedShape.id });
@@ -630,31 +678,31 @@ const ViewerCanvas = forwardRef(({
         }
       }
       
-      return <Line {...commonProps} points={points} tension={0.5} lineCap="round" lineJoin="round" hitStrokeWidth={20} />;
+      return <Line {...commonProps} points={points} tension={0.5} lineCap="round" lineJoin="round" hitStrokeWidth={20} fill={undefined} />;
     } else if (shape.tool === 'rect') {
       // 描画中の一時的なshape
-      if (shape.x !== undefined && shape.width !== undefined) {
-        return <Rect {...commonProps} x={shape.x} y={shape.y} width={shape.width} height={shape.height} />;
+      if (shape.x !== undefined && shape.width !== undefined && !shape.nx) {
+        return <Rect {...commonProps} x={shape.x} y={shape.y} width={shape.width} height={shape.height} fill={undefined} hitStrokeWidth={10} />;
       }
       
       // 保存済みshape（正規化座標から復元）
       if (shape.nx !== undefined) {
         const p1 = denormalizeCoords(shape.nx, shape.ny);
         const p2 = denormalizeCoords(shape.nx + shape.nw, shape.ny + shape.nh);
-        return <Rect {...commonProps} x={p1.x} y={p1.y} width={p2.x - p1.x} height={p2.y - p1.y} />;
+        return <Rect {...commonProps} x={p1.x} y={p1.y} width={p2.x - p1.x} height={p2.y - p1.y} fill={undefined} hitStrokeWidth={10} />;
       }
       
       return null;
     } else if (shape.tool === 'circle') {
       // 描画中の一時的なshape
-      if (shape.x !== undefined && shape.radius !== undefined) {
-        return <Circle {...commonProps} x={shape.x} y={shape.y} radius={shape.radius} />;
+      if (shape.x !== undefined && shape.radius !== undefined && !shape.nx) {
+        return <Circle {...commonProps} x={shape.x} y={shape.y} radius={shape.radius} fill={undefined} hitStrokeWidth={10} />;
       }
       
       // 保存済みshape（正規化座標から復元）
       if (shape.nx !== undefined) {
         const center = denormalizeCoords(shape.nx, shape.ny);
-        return <Circle {...commonProps} x={center.x} y={center.y} radius={shape.nr * bgSize.width} />;
+        return <Circle {...commonProps} x={center.x} y={center.y} radius={shape.nr * bgSize.width} fill={undefined} hitStrokeWidth={10} />;
       }
       
       return null;
