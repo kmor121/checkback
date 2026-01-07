@@ -364,10 +364,10 @@ const ViewerCanvas = forwardRef(({
       setPointerPos(stage.getPointerPosition());
       setImgPos(imgCoords);
       setIsDrawing(true);
-      
-      // clientShapeId を再生成しない（タイムスタンプ＋ランダムで一意性保証）
+
+      // CRITICAL: clientShapeId は1回だけ発行して固定（移動・編集で絶対に再生成しない）
       const newShape = {
-        id: `shape_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        id: generateUUID(),
         tool,
         stroke: strokeColor,
         strokeWidth: strokeWidth,
