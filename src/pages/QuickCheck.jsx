@@ -191,8 +191,16 @@ export default function QuickCheck() {
                     className="group"
                   >
                     <Card className="h-full hover:shadow-lg transition-all border border-gray-200 overflow-hidden">
-                      <div className="aspect-video bg-gray-100 flex items-center justify-center border-b">
-                        <FileText className="w-10 h-10 text-gray-300 group-hover:text-gray-400 transition-colors" />
+                      <div className="aspect-video bg-gray-100 flex items-center justify-center border-b overflow-hidden">
+                        {file.mime_type?.startsWith('image/') ? (
+                          <img 
+                            src={file.file_url} 
+                            alt={file.title}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <FileText className="w-10 h-10 text-gray-300 group-hover:text-gray-400 transition-colors" />
+                        )}
                       </div>
                       <CardContent className="p-2.5">
                         <div className="flex items-start justify-between gap-2 mb-1.5">
