@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
-import { Stage, Layer, Line, Rect, Circle, Arrow, Image as KonvaImage, Group } from 'react-konva';
+import { Stage, Layer, Line, Rect, Circle, Arrow, Image as KonvaImage, Group, Transformer } from 'react-konva';
 import useImage from 'use-image';
 
 const DEBUG_MODE = import.meta.env.VITE_DEBUG === 'true';
@@ -48,6 +48,13 @@ const ViewerCanvas = forwardRef(({
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentShape, setCurrentShape] = useState(null);
   const [localShapes, setLocalShapes] = useState([]);
+  const [selectedId, setSelectedId] = useState(null);
+  const transformerRef = useRef(null);
+  const shapeRefs = useRef({});
+  
+  // Undo/Redo
+  const [undoStack, setUndoStack] = useState([]);
+  const [redoStack, setRedoStack] = useState([]);
   
   // デバッグ用
   const [lastEvent, setLastEvent] = useState('none');
@@ -58,6 +65,35 @@ const ViewerCanvas = forwardRef(({
   
   const isImage = mimeType?.startsWith('image/');
   
+  // Transformer selection
+  useEffect(() => {
+    if (selectedId && transformerRef.current && shapeRefs.current[selectedId]) {
+      transformerRef.current.nodes([shapeRefs.current[selectedId]]);
+      transformerRef.current.getLayer().batchDraw();
+    } else if (transformerRef.current) {
+      transformerRef.current.nodes([]);
+      transformerRef.current.getLayer().batchDraw();
+    }
+  }, [selectedId]);
+
+  // キーボードショートカット
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedId) {
+          e.preventDefault();
+          handleDelete();
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        performUndo();
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedId, localShapes, undoStack]);
+
   // ResizeObserver
   useEffect(() => {
     if (!containerRef.current) return;
@@ -126,8 +162,77 @@ const ViewerCanvas = forwardRef(({
     y: ny * bgSize.height,
   });
   
+  // 操作履歴追加
+  const addToUndoStack = (action) => {
+    setUndoStack(prev => [...prev, action]);
+    setRedoStack([]); // 新しい操作でredoスタックはクリア
+  };
+
+  // Undo実行
+  const performUndo = () => {
+    if (undoStack.length === 0) return;
+    
+    const action = undoStack[undoStack.length - 1];
+    setUndoStack(prev => prev.slice(0, -1));
+    setRedoStack(prev => [...prev, action]);
+    
+    if (action.type === 'add') {
+      setLocalShapes(prev => prev.filter(s => s.id !== action.shapeId));
+    } else if (action.type === 'update') {
+      setLocalShapes(prev => prev.map(s => s.id === action.shapeId ? action.before : s));
+    } else if (action.type === 'delete') {
+      setLocalShapes(prev => {
+        const newShapes = [...prev];
+        newShapes.splice(action.index, 0, action.shape);
+        return newShapes;
+      });
+    }
+  };
+
+  // Redo実行
+  const performRedo = () => {
+    if (redoStack.length === 0) return;
+    
+    const action = redoStack[redoStack.length - 1];
+    setRedoStack(prev => prev.slice(0, -1));
+    setUndoStack(prev => [...prev, action]);
+    
+    if (action.type === 'add') {
+      // 再追加は困難なので省略
+    } else if (action.type === 'update') {
+      setLocalShapes(prev => prev.map(s => s.id === action.shapeId ? action.after : s));
+    } else if (action.type === 'delete') {
+      setLocalShapes(prev => prev.filter(s => s.id !== action.shape.id));
+    }
+  };
+
+  // 削除
+  const handleDelete = async () => {
+    if (!selectedId) return;
+    
+    const index = localShapes.findIndex(s => s.id === selectedId);
+    if (index === -1) return;
+    
+    const shape = localShapes[index];
+    addToUndoStack({ type: 'delete', shape, index });
+    
+    setLocalShapes(prev => prev.filter(s => s.id !== selectedId));
+    setSelectedId(null);
+    
+    // DB削除（existingShapesに含まれる場合）
+    if (existingShapes.find(s => s.id === selectedId) && onSaveShape) {
+      // ここではDB削除は省略（削除APIが必要）
+    }
+  };
+
   // PointerDown: 描画開始
   const handlePointerDown = (e) => {
+    // 空白クリックで選択解除
+    if (e.target === e.target.getStage()) {
+      setSelectedId(null);
+      return;
+    }
+    
     if (!paintMode) return;
     
     try {
@@ -245,6 +350,9 @@ const ViewerCanvas = forwardRef(({
       normalizedShape.bgWidth = bgSize.width;
       normalizedShape.bgHeight = bgSize.height;
       
+      // Undo履歴に追加
+      addToUndoStack({ type: 'add', shapeId: normalizedShape.id });
+      
       // ローカルに追加
       setLocalShapes([...localShapes, normalizedShape]);
       setCurrentShape(null);
@@ -270,29 +378,145 @@ const ViewerCanvas = forwardRef(({
     }
   };
   
+  // ドラッグ終了時の更新
+  const handleDragEnd = async (shape, e) => {
+    const node = e.target;
+    const { x, y } = node.position();
+    
+    const updatedShape = { ...shape };
+    
+    if (shape.tool === 'pen' && shape.normalizedPoints) {
+      // ペンは全ポイントを移動
+      const dx = x;
+      const dy = y;
+      const newPoints = [];
+      for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
+        const { x: px, y: py } = denormalizeCoords(shape.normalizedPoints[i], shape.normalizedPoints[i + 1]);
+        const { nx, ny } = normalizeCoords(px + dx, py + dy);
+        newPoints.push(nx, ny);
+      }
+      updatedShape.normalizedPoints = newPoints;
+      node.position({ x: 0, y: 0 }); // リセット
+    } else if (shape.tool === 'rect') {
+      const { nx, ny } = normalizeCoords(x, y);
+      updatedShape.nx = nx;
+      updatedShape.ny = ny;
+      node.position({ x: 0, y: 0 });
+    } else if (shape.tool === 'circle') {
+      const { nx, ny } = normalizeCoords(x, y);
+      updatedShape.nx = nx;
+      updatedShape.ny = ny;
+      node.position({ x: 0, y: 0 });
+    } else if (shape.tool === 'arrow') {
+      const dx = x;
+      const dy = y;
+      const newPoints = [];
+      for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
+        const { x: px, y: py } = denormalizeCoords(shape.normalizedPoints[i], shape.normalizedPoints[i + 1]);
+        const { nx, ny } = normalizeCoords(px + dx, py + dy);
+        newPoints.push(nx, ny);
+      }
+      updatedShape.normalizedPoints = newPoints;
+      node.position({ x: 0, y: 0 });
+    }
+    
+    addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: updatedShape });
+    setLocalShapes(prev => prev.map(s => s.id === shape.id ? updatedShape : s));
+    
+    if (onSaveShape) {
+      try {
+        await onSaveShape(updatedShape);
+      } catch (err) {
+        console.error('Update shape error:', err);
+      }
+    }
+  };
+
+  // Transform終了時の更新
+  const handleTransformEnd = async (shape, e) => {
+    const node = e.target;
+    const scaleX = node.scaleX();
+    const scaleY = node.scaleY();
+    
+    const updatedShape = { ...shape };
+    
+    if (shape.tool === 'rect') {
+      const { x, y } = node.position();
+      const width = node.width() * scaleX;
+      const height = node.height() * scaleY;
+      
+      const { nx: nx1, ny: ny1 } = normalizeCoords(x, y);
+      const { nx: nx2, ny: ny2 } = normalizeCoords(x + width, y + height);
+      
+      updatedShape.nx = nx1;
+      updatedShape.ny = ny1;
+      updatedShape.nw = nx2 - nx1;
+      updatedShape.nh = ny2 - ny1;
+      
+      node.scaleX(1);
+      node.scaleY(1);
+      node.position({ x: 0, y: 0 });
+    } else if (shape.tool === 'circle') {
+      const { x, y } = node.position();
+      const radius = node.radius() * Math.max(scaleX, scaleY);
+      
+      const { nx, ny } = normalizeCoords(x, y);
+      updatedShape.nx = nx;
+      updatedShape.ny = ny;
+      updatedShape.nr = radius / bgSize.width;
+      
+      node.scaleX(1);
+      node.scaleY(1);
+      node.position({ x: 0, y: 0 });
+    }
+    
+    addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: updatedShape });
+    setLocalShapes(prev => prev.map(s => s.id === shape.id ? updatedShape : s));
+    
+    if (onSaveShape) {
+      try {
+        await onSaveShape(updatedShape);
+      } catch (err) {
+        console.error('Update shape error:', err);
+      }
+    }
+  };
+
   // Undo/Redo
   useImperativeHandle(ref, () => ({
-    undo: () => {
-      if (localShapes.length > 0) {
-        const newShapes = localShapes.slice(0, -1);
-        setLocalShapes(newShapes);
-      }
-    },
-    redo: () => console.log('redo (not implemented)'),
+    undo: performUndo,
+    redo: performRedo,
     clear: () => {
       setLocalShapes([]);
       setCurrentShape(null);
+      setUndoStack([]);
+      setRedoStack([]);
+      setSelectedId(null);
     },
-    canUndo: localShapes.length > 0,
-    canRedo: false,
+    delete: handleDelete,
+    canUndo: undoStack.length > 0,
+    canRedo: redoStack.length > 0,
   }));
   
   // Shape描画（正規化座標から復元）
-  const renderShape = (shape) => {
+  const renderShape = (shape, isExisting = false) => {
+    const isSelected = selectedId === shape.id;
     const commonProps = {
       key: shape.id,
       stroke: shape.stroke,
       strokeWidth: shape.strokeWidth,
+      onClick: (e) => {
+        e.cancelBubble = true;
+        setSelectedId(shape.id);
+      },
+      ref: (node) => {
+        if (node) {
+          shapeRefs.current[shape.id] = node;
+        }
+      },
+      draggable: !paintMode && !isExisting,
+      onDragEnd: (e) => handleDragEnd(shape, e),
+      onTransformEnd: (e) => handleTransformEnd(shape, e),
     };
     
     if (shape.tool === 'pen') {
@@ -405,9 +629,10 @@ const ViewerCanvas = forwardRef(({
             scaleX={contentScale}
             scaleY={contentScale}
           >
-            {existingShapes.map(renderShape)}
-            {localShapes.map(renderShape)}
-            {currentShape && renderShape(currentShape)}
+            {existingShapes.map(s => renderShape(s, true))}
+            {localShapes.map(s => renderShape(s, false))}
+            {currentShape && renderShape(currentShape, false)}
+            <Transformer ref={transformerRef} />
           </Group>
         </Layer>
       </Stage>

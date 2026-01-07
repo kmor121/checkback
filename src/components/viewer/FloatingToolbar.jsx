@@ -148,13 +148,13 @@ export default function FloatingToolbar({
             
             <div className="w-px h-6 bg-gray-300" />
             
-            {/* Undo/Redo */}
+            {/* Undo/Redo/Delete */}
             <Button
               variant="outline"
               size="sm"
               onClick={onUndo}
               disabled={!canUndo}
-              title="元に戻す"
+              title="元に戻す (Ctrl+Z)"
             >
               <Undo2 className="w-4 h-4" />
             </Button>
@@ -171,7 +171,7 @@ export default function FloatingToolbar({
               variant="outline"
               size="sm"
               onClick={onClear}
-              title="クリア"
+              title="全削除"
             >
               <Trash2 className="w-4 h-4" />
             </Button>
