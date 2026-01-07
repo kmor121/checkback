@@ -157,19 +157,19 @@ export default function QuickCheck() {
 
         {/* アップロード枠 */}
         <Card className="mb-16 shadow-xl border-0">
-          <CardContent className="p-16">
+          <CardContent className="p-8">
             <label
               htmlFor="file-upload"
               onDrop={handleDrop}
               onDragOver={(e) => e.preventDefault()}
-              className="border-2 border-dashed border-gray-300 rounded-2xl p-16 flex flex-col items-center justify-center cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-all"
+              className="border-2 border-dashed border-gray-300 rounded-2xl p-12 flex flex-col items-center justify-center cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-all"
             >
-              <div className="w-20 h-20 rounded-full bg-blue-100 flex items-center justify-center mb-6">
-                <FileText className="w-10 h-10 text-blue-600" />
+              <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mb-4">
+                <FileText className="w-8 h-8 text-blue-600" />
               </div>
-              <h3 className="text-xl font-semibold mb-2">ここにアップロードしてみましょう</h3>
-              <p className="text-sm text-gray-500 mb-6">クリックまたはドラッグ＆ドロップでアップロード</p>
-              <p className="text-xs text-gray-400 mb-8">
+              <h3 className="text-lg font-semibold mb-2">ここにアップロードしてみましょう</h3>
+              <p className="text-sm text-gray-500 mb-3">クリックまたはドラッグ＆ドロップでアップロード</p>
+              <p className="text-xs text-gray-400">
                 .mp4 / .mov / .pdf / .jpeg / .png / .ai / .psd / .pptx / .docx / .xlsx
               </p>
               <input
