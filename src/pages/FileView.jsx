@@ -23,9 +23,7 @@ import {
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import ErrorBoundary from '../components/ErrorBoundary';
-
-// PDFレンダリングは一旦無効化してデバッグ
-// import ViewerCanvas from '../components/viewer/ViewerCanvas';
+import ViewerCanvas from '../components/viewer/ViewerCanvas';
 import FloatingToolbar from '../components/viewer/FloatingToolbar';
 import ShareLinkModal from '../components/viewer/ShareLinkModal';
 import DebugOverlay from '../components/DebugOverlay';
