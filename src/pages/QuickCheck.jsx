@@ -132,43 +132,25 @@ export default function QuickCheck() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-6xl mx-auto px-4 py-6">
-        {/* ステップ表示 */}
-        <div className="mb-6 flex items-center justify-center gap-2 text-xs">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-full shadow-sm">
-            <Upload className="w-3.5 h-3.5 text-gray-600" />
-            <span className="font-medium">アップロード</span>
-          </div>
-          <div className="w-6 border-t border-gray-300" />
-          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-full shadow-sm text-gray-400">
-            <LinkIcon className="w-3.5 h-3.5" />
-            <span className="font-medium">リンクを発行</span>
-          </div>
-          <div className="w-6 border-t border-gray-300" />
-          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-full shadow-sm text-gray-400">
-            <Play className="w-3.5 h-3.5" />
-            <span className="font-medium">チェックバック開始</span>
-          </div>
-        </div>
-
+      <div className="max-w-6xl mx-auto px-4 py-4">
         {/* タイトル */}
-        <h1 className="text-center text-3xl font-bold mb-2">クイックチェックを始めましょう</h1>
-        <p className="text-center text-gray-600 mb-8">ファイルをアップロードして共有リンクを発行</p>
+        <h1 className="text-center text-2xl font-bold mb-1">クイックチェックを始めましょう</h1>
+        <p className="text-center text-sm text-gray-600 mb-4">ファイルをアップロードして共有リンクを発行</p>
 
         {/* アップロード枠 */}
-        <Card className="mb-10 shadow-xl border-0">
-          <CardContent className="p-8">
+        <Card className="mb-6 shadow-lg border-0">
+          <CardContent className="p-4">
             <label
               htmlFor="file-upload"
               onDrop={handleDrop}
               onDragOver={(e) => e.preventDefault()}
-              className="border-2 border-dashed border-gray-300 rounded-2xl p-12 flex flex-col items-center justify-center cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-all"
+              className="border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-all"
             >
-              <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mb-4">
-                <FileText className="w-8 h-8 text-blue-600" />
+              <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mb-2">
+                <FileText className="w-6 h-6 text-blue-600" />
               </div>
-              <h3 className="text-lg font-semibold mb-2">ここにアップロードしてみましょう</h3>
-              <p className="text-sm text-gray-500 mb-3">クリックまたはドラッグ＆ドロップでアップロード</p>
+              <h3 className="text-base font-semibold mb-1">ここにアップロードしてみましょう</h3>
+              <p className="text-xs text-gray-500 mb-1">クリックまたはドラッグ＆ドロップでアップロード</p>
               <p className="text-xs text-gray-400">
                 .mp4 / .mov / .pdf / .jpeg / .png / .ai / .psd / .pptx / .docx / .xlsx
               </p>
@@ -181,9 +163,9 @@ export default function QuickCheck() {
               />
             </label>
             {uploadMutation.isPending && (
-              <div className="mt-6 text-center">
-                <div className="inline-block w-6 h-6 border-4 border-gray-300 border-t-blue-600 rounded-full animate-spin mb-2"></div>
-                <p className="text-sm text-gray-600">アップロード中...</p>
+              <div className="mt-3 text-center">
+                <div className="inline-block w-5 h-5 border-3 border-gray-300 border-t-blue-600 rounded-full animate-spin mb-1"></div>
+                <p className="text-xs text-gray-600">アップロード中...</p>
               </div>
             )}
           </CardContent>
@@ -192,14 +174,14 @@ export default function QuickCheck() {
         {/* 最近使用したファイル */}
         {recentQuickFiles.length > 0 && (
           <div>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold">最近使用したファイル</h2>
-              <Button variant="link" className="text-sm text-blue-600 h-auto p-0">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-base font-bold">最近使用したファイル</h2>
+              <Button variant="link" className="text-xs text-blue-600 h-auto p-0">
                 全て見る →
               </Button>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {recentQuickFiles.slice(0, 6).map((file) => {
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              {recentQuickFiles.slice(0, 8).map((file) => {
                 const remainingDays = getRemainingDays(file.expires_at);
                 const fileId = file.id;
                 return (
@@ -209,18 +191,18 @@ export default function QuickCheck() {
                     className="group"
                   >
                     <Card className="h-full hover:shadow-lg transition-all border border-gray-200 overflow-hidden">
-                      <div className="aspect-[16/9] bg-gray-100 flex items-center justify-center border-b">
-                        <FileText className="w-12 h-12 text-gray-300 group-hover:text-gray-400 transition-colors" />
+                      <div className="aspect-video bg-gray-100 flex items-center justify-center border-b">
+                        <FileText className="w-10 h-10 text-gray-300 group-hover:text-gray-400 transition-colors" />
                       </div>
-                      <CardContent className="p-3">
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <h3 className="font-medium text-sm truncate group-hover:text-blue-600 transition-colors">
+                      <CardContent className="p-2.5">
+                        <div className="flex items-start justify-between gap-2 mb-1.5">
+                          <h3 className="font-medium text-xs truncate group-hover:text-blue-600 transition-colors">
                             {file.title}
                           </h3>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild onClick={(e) => e.preventDefault()}>
-                              <Button variant="ghost" size="icon" className="h-6 w-6 -mt-1">
-                                <MoreVertical className="w-4 h-4" />
+                              <Button variant="ghost" size="icon" className="h-5 w-5 -mt-0.5">
+                                <MoreVertical className="w-3.5 h-3.5" />
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
@@ -243,16 +225,16 @@ export default function QuickCheck() {
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
-                        <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           {file.comment_count > 0 && (
-                            <Badge variant="secondary" className="text-xs">
-                              <MessageSquare className="w-3 h-3 mr-1" />
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                              <MessageSquare className="w-2.5 h-2.5 mr-0.5" />
                               {file.comment_count}
                             </Badge>
                           )}
                           {remainingDays !== null && (
-                            <Badge variant={remainingDays < 3 ? 'destructive' : 'secondary'} className="text-xs">
-                              <Clock className="w-3 h-3 mr-1" />
+                            <Badge variant={remainingDays < 3 ? 'destructive' : 'secondary'} className="text-[10px] px-1.5 py-0">
+                              <Clock className="w-2.5 h-2.5 mr-0.5" />
                               残り{remainingDays}日
                             </Badge>
                           )}
