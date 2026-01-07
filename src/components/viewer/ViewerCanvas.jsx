@@ -53,7 +53,6 @@ const ViewerCanvas = forwardRef(({
   onToolChange,
   showBoundingBoxes = false,
   showAllPaint = false,
-  isCreatingComment = false,
   onCanvasClick,
   debugInfo = null,
 }, ref) => {
@@ -335,10 +334,10 @@ const ViewerCanvas = forwardRef(({
     }
   };
 
-  // PointerDown: 描画開始（描画モード時のみ）または コメント作成クリック
+  // PointerDown: 描画開始（描画モード時のみ）または アンカークリック
   const handlePointerDown = (e) => {
-    // コメント作成モード時
-    if (isCreatingComment) {
+    if (!isDrawMode) {
+      // ペイントモード外でのクリック → アンカー設定
       const stage = e.target.getStage();
       if (!stage) return;
       
@@ -350,8 +349,6 @@ const ViewerCanvas = forwardRef(({
       }
       return;
     }
-    
-    if (!isDrawMode) return;
     
     try {
       const stage = e.target.getStage();
