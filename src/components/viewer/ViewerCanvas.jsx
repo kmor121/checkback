@@ -38,6 +38,8 @@ const ViewerCanvas = forwardRef(({
   strokeWidth = 2,
   zoom = 100,
   onToolChange,
+  showBoundingBoxes = false,
+  debugInfo = null,
 }, ref) => {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
@@ -698,6 +700,58 @@ const ViewerCanvas = forwardRef(({
       // TransformEndはRect/Circleのみ
       onTransformEnd: (isEditMode && canTransform) ? (e) => handleTransformEnd(shape, e) : undefined,
     };
+
+    // バウンディングボックス用の計算
+    let boundingBox = null;
+    if (showBoundingBoxes && DEBUG_MODE) {
+      if (shape.tool === 'pen' && shape.normalizedPoints) {
+        const points = [];
+        for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
+          const { x, y } = denormalizeCoords(shape.normalizedPoints[i], shape.normalizedPoints[i + 1]);
+          points.push({ x, y });
+        }
+        const xs = points.map(p => p.x);
+        const ys = points.map(p => p.y);
+        boundingBox = {
+          x: Math.min(...xs),
+          y: Math.min(...ys),
+          width: Math.max(...xs) - Math.min(...xs),
+          height: Math.max(...ys) - Math.min(...ys),
+        };
+      } else if (shape.tool === 'rect' && shape.nx !== undefined) {
+        const p1 = denormalizeCoords(shape.nx, shape.ny);
+        const p2 = denormalizeCoords(shape.nx + shape.nw, shape.ny + shape.nh);
+        boundingBox = {
+          x: p1.x,
+          y: p1.y,
+          width: p2.x - p1.x,
+          height: p2.y - p1.y,
+        };
+      } else if (shape.tool === 'circle' && shape.nx !== undefined) {
+        const center = denormalizeCoords(shape.nx, shape.ny);
+        const radius = shape.nr * bgSize.width;
+        boundingBox = {
+          x: center.x - radius,
+          y: center.y - radius,
+          width: radius * 2,
+          height: radius * 2,
+        };
+      } else if (shape.tool === 'arrow' && shape.normalizedPoints) {
+        const points = [];
+        for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
+          const { x, y } = denormalizeCoords(shape.normalizedPoints[i], shape.normalizedPoints[i + 1]);
+          points.push({ x, y });
+        }
+        const xs = points.map(p => p.x);
+        const ys = points.map(p => p.y);
+        boundingBox = {
+          x: Math.min(...xs),
+          y: Math.min(...ys),
+          width: Math.max(...xs) - Math.min(...xs),
+          height: Math.max(...ys) - Math.min(...ys),
+        };
+      }
+    }
     
     if (shape.tool === 'pen') {
       let points = [];
@@ -713,13 +767,23 @@ const ViewerCanvas = forwardRef(({
         points = shape.points;
       }
 
-      return <Line {...commonProps} points={points} tension={0.5} lineCap="round" lineJoin="round" hitStrokeWidth={20} fill={undefined} />;
+      return (
+        <React.Fragment key={shape.id}>
+          <Line {...commonProps} points={points} tension={0.5} lineCap="round" lineJoin="round" hitStrokeWidth={20} fill={undefined} />
+          {boundingBox && <Rect x={boundingBox.x} y={boundingBox.y} width={boundingBox.width} height={boundingBox.height} stroke="rgba(255,0,0,0.3)" strokeWidth={1} dash={[5,5]} fill={undefined} listening={false} />}
+        </React.Fragment>
+      );
     } else if (shape.tool === 'rect') {
       // 正規化座標を優先（必ずこれから復元）
       if (shape.nx !== undefined) {
         const p1 = denormalizeCoords(shape.nx, shape.ny);
         const p2 = denormalizeCoords(shape.nx + shape.nw, shape.ny + shape.nh);
-        return <Rect {...commonProps} x={p1.x} y={p1.y} width={p2.x - p1.x} height={p2.y - p1.y} fill={undefined} hitStrokeWidth={10} />;
+        return (
+          <React.Fragment key={shape.id}>
+            <Rect {...commonProps} x={p1.x} y={p1.y} width={p2.x - p1.x} height={p2.y - p1.y} fill={undefined} hitStrokeWidth={10} />
+            {boundingBox && <Rect x={boundingBox.x} y={boundingBox.y} width={boundingBox.width} height={boundingBox.height} stroke="rgba(255,0,0,0.3)" strokeWidth={1} dash={[5,5]} fill={undefined} listening={false} />}
+          </React.Fragment>
+        );
       }
 
       // 描画中の一時データ（nxがない場合のみ）
@@ -728,11 +792,16 @@ const ViewerCanvas = forwardRef(({
       }
 
       return null;
-    } else if (shape.tool === 'circle') {
+      } else if (shape.tool === 'circle') {
       // 正規化座標を優先（必ずこれから復元）
       if (shape.nx !== undefined) {
         const center = denormalizeCoords(shape.nx, shape.ny);
-        return <Circle {...commonProps} x={center.x} y={center.y} radius={shape.nr * bgSize.width} fill={undefined} hitStrokeWidth={10} />;
+        return (
+          <React.Fragment key={shape.id}>
+            <Circle {...commonProps} x={center.x} y={center.y} radius={shape.nr * bgSize.width} fill={undefined} hitStrokeWidth={10} />
+            {boundingBox && <Rect x={boundingBox.x} y={boundingBox.y} width={boundingBox.width} height={boundingBox.height} stroke="rgba(255,0,0,0.3)" strokeWidth={1} dash={[5,5]} fill={undefined} listening={false} />}
+          </React.Fragment>
+        );
       }
 
       // 描画中の一時データ（nxがない場合のみ）
@@ -741,7 +810,7 @@ const ViewerCanvas = forwardRef(({
       }
 
       return null;
-    } else if (shape.tool === 'arrow') {
+      } else if (shape.tool === 'arrow') {
       let points = [];
 
       // 正規化座標を優先（必ずこれから復元）
@@ -755,10 +824,15 @@ const ViewerCanvas = forwardRef(({
         points = shape.points;
       }
 
-      return <Arrow {...commonProps} points={points} pointerLength={10} pointerWidth={10} hitStrokeWidth={20} />;
-    }
-    return null;
-  };
+      return (
+        <React.Fragment key={shape.id}>
+          <Arrow {...commonProps} points={points} pointerLength={10} pointerWidth={10} hitStrokeWidth={20} />
+          {boundingBox && <Rect x={boundingBox.x} y={boundingBox.y} width={boundingBox.width} height={boundingBox.height} stroke="rgba(255,0,0,0.3)" strokeWidth={1} dash={[5,5]} fill={undefined} listening={false} />}
+        </React.Fragment>
+      );
+      }
+      return null;
+      };
   
   // エラー表示
   if (error) {
@@ -821,30 +895,87 @@ const ViewerCanvas = forwardRef(({
         </Layer>
       </Stage>
       
-      {/* デバッグオーバーレイ */}
+      {/* デバッグオーバーレイ（拡張版） */}
       {DEBUG_MODE && (
-        <div style={{ position: 'absolute', top: 8, left: 8, background: 'rgba(0,0,0,0.8)', color: '#0f0', padding: '8px', fontSize: '11px', fontFamily: 'monospace', borderRadius: '4px', pointerEvents: 'none', zIndex: 100, lineHeight: '1.4' }}>
-          <div><strong>ViewerCanvas Debug</strong></div>
-          <div>lastEvent: {lastEvent}</div>
-          <div>pointer: {pointerPos ? `${Math.round(pointerPos.x)}, ${Math.round(pointerPos.y)}` : 'null'}</div>
-          <div>imgPos: {imgPos ? `${Math.round(imgPos.x)}, ${Math.round(imgPos.y)}` : 'null'}</div>
-          <div>bgSize: {bgSize.width} x {bgSize.height}</div>
-          <div>fitScale: {fitScale.toFixed(2)}</div>
-          <div>userScale: {userScale.toFixed(2)}</div>
-          <div>contentScale: {contentScale.toFixed(2)}</div>
-          <div>offset: {Math.round(offsetX)}, {Math.round(offsetY)}</div>
-          <div>paintMode: {paintMode ? 'ON' : 'OFF'}</div>
-          <div>tool: {tool}</div>
-          <div>isDrawing: {isDrawing ? 'YES' : 'NO'}</div>
-          <div>shapes: {shapes.length}</div>
-          <div>hydrated: {hydratedRef.current ? 'YES' : 'NO'}</div>
-          <div style={{ color: lastSaveStatus === 'success' ? '#0f0' : lastSaveStatus === 'error' ? '#f00' : '#ff0' }}>
-            saveStatus: {lastSaveStatus}
+        <div style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.9)', color: '#0f0', padding: '10px', fontSize: '10px', fontFamily: 'monospace', borderRadius: '6px', pointerEvents: 'none', zIndex: 100, lineHeight: '1.5', maxWidth: '400px', maxHeight: '90vh', overflow: 'auto' }}>
+          <div style={{ color: '#ff0', fontWeight: 'bold', marginBottom: '8px' }}>🔍 ViewerCanvas Debug</div>
+
+          {/* Ready状態 */}
+          {debugInfo && (
+            <div style={{ marginBottom: '8px', borderBottom: '1px solid #333', paddingBottom: '6px' }}>
+              <div><strong style={{ color: '#0ff' }}>Ready:</strong> {debugInfo.isReady ? '✓ TRUE' : '✗ FALSE'}</div>
+              {debugInfo.readyDetails && (
+                <div style={{ paddingLeft: '8px', fontSize: '9px' }}>
+                  {Object.entries(debugInfo.readyDetails).map(([key, val]) => (
+                    <div key={key} style={{ color: val ? '#0f0' : '#f00' }}>
+                      {key}: {val ? '✓' : '✗'}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Query情報 */}
+          {debugInfo && (
+            <div style={{ marginBottom: '8px', borderBottom: '1px solid #333', paddingBottom: '6px' }}>
+              <div><strong style={{ color: '#0ff' }}>Query:</strong></div>
+              <div style={{ fontSize: '9px', wordBreak: 'break-all' }}>
+                token: {debugInfo.token?.substring(0, 12)}...
+              </div>
+              <div style={{ fontSize: '9px' }}>fileId: {debugInfo.fileId?.substring(0, 15)}</div>
+              <div style={{ fontSize: '9px' }}>pageNo: {debugInfo.pageNo}</div>
+              <div style={{ fontSize: '9px' }}>guestId: {debugInfo.guestId?.substring(0, 20)}</div>
+            </div>
+          )}
+
+          {/* Counts */}
+          <div style={{ marginBottom: '8px', borderBottom: '1px solid #333', paddingBottom: '6px' }}>
+            <div><strong style={{ color: '#0ff' }}>Counts:</strong></div>
+            <div>fetchedCount: <span style={{ color: '#ff0', fontWeight: 'bold' }}>{debugInfo?.fetchedCount || 0}</span></div>
+            <div>renderedCount: <span style={{ color: '#0f0', fontWeight: 'bold' }}>{shapes.length}</span></div>
+            <div>existingShapes: {existingShapes?.length || 0}</div>
+            <div>hydrated: {hydratedRef.current ? 'YES' : 'NO'}</div>
           </div>
-          {lastMutation && <div>lastMutation: {lastMutation}</div>}
-          {lastSuccessId && <div style={{ color: '#0f0' }}>lastSuccessId: {lastSuccessId}</div>}
-          {lastPayload && <div className="text-xs">payload: {lastPayload.substring(0, 100)}...</div>}
-          {lastError && <div style={{ color: '#f00' }}>error: {lastError}</div>}
+
+          {/* Background & View */}
+          <div style={{ marginBottom: '8px', borderBottom: '1px solid #333', paddingBottom: '6px' }}>
+            <div><strong style={{ color: '#0ff' }}>Background:</strong></div>
+            <div>bgSize: {bgSize.width} x {bgSize.height}</div>
+            <div><strong style={{ color: '#0ff' }}>View:</strong></div>
+            <div>scale: {contentScale.toFixed(2)} (fit:{fitScale.toFixed(2)} * zoom:{userScale.toFixed(2)})</div>
+            <div>offset: {Math.round(offsetX)}, {Math.round(offsetY)}</div>
+            <div>stage: {containerSize.width} x {containerSize.height}</div>
+          </div>
+
+          {/* Sample Shape */}
+          {shapes.length > 0 && (
+            <div style={{ marginBottom: '8px', borderBottom: '1px solid #333', paddingBottom: '6px' }}>
+              <div><strong style={{ color: '#0ff' }}>Sample (first):</strong></div>
+              <div style={{ fontSize: '9px' }}>type: {shapes[0].tool}</div>
+              <div style={{ fontSize: '9px', wordBreak: 'break-all' }}>id: {shapes[0].id}</div>
+              <div style={{ fontSize: '9px' }}>has_nx: {shapes[0].nx !== undefined ? 'YES' : 'NO'}</div>
+              <div style={{ fontSize: '9px' }}>has_normalizedPoints: {shapes[0].normalizedPoints ? 'YES' : 'NO'}</div>
+            </div>
+          )}
+
+          {/* Drawing State */}
+          <div style={{ marginBottom: '8px', borderBottom: '1px solid #333', paddingBottom: '6px' }}>
+            <div><strong style={{ color: '#0ff' }}>Drawing:</strong></div>
+            <div>paintMode: {paintMode ? 'ON' : 'OFF'}</div>
+            <div>tool: {tool}</div>
+            <div>isDrawing: {isDrawing ? 'YES' : 'NO'}</div>
+            <div>lastEvent: {lastEvent}</div>
+          </div>
+
+          {/* Save Status */}
+          <div>
+            <div style={{ color: lastSaveStatus === 'success' ? '#0f0' : lastSaveStatus === 'error' ? '#f00' : '#ff0' }}>
+              saveStatus: {lastSaveStatus}
+            </div>
+            {lastMutation && <div style={{ fontSize: '9px' }}>mutation: {lastMutation}</div>}
+            {lastError && <div style={{ color: '#f00', fontSize: '9px' }}>error: {lastError}</div>}
+          </div>
         </div>
       )}
     </div>

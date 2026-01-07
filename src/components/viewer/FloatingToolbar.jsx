@@ -11,7 +11,9 @@ import {
   Trash2,
   Check,
   Paintbrush,
-  MousePointer2
+  MousePointer2,
+  Maximize,
+  Eye
 } from 'lucide-react';
 import {
   Select,
@@ -38,7 +40,11 @@ export default function FloatingToolbar({
   onClearAll,
   onDelete,
   onComplete,
+  onResetView,
+  showBoundingBoxes,
+  onToggleBoundingBoxes,
 }) {
+  const DEBUG_MODE = import.meta.env.VITE_DEBUG === 'true';
   const colors = [
     { value: '#ff0000', label: '赤' },
     { value: '#00ff00', label: '緑' },
@@ -202,7 +208,33 @@ export default function FloatingToolbar({
             )}
 
             <div className="w-px h-6 bg-gray-300" />
-            
+
+            {/* Reset View */}
+            {onResetView && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onResetView}
+                title="ズーム・パンをリセット"
+              >
+                <Maximize className="w-4 h-4" />
+              </Button>
+            )}
+
+            {/* Bounding Boxes (DEBUG only) */}
+            {DEBUG_MODE && onToggleBoundingBoxes && (
+              <Button
+                variant={showBoundingBoxes ? 'default' : 'outline'}
+                size="sm"
+                onClick={onToggleBoundingBoxes}
+                title="バウンディングボックス表示切替"
+              >
+                <Eye className="w-4 h-4" />
+              </Button>
+            )}
+
+            <div className="w-px h-6 bg-gray-300" />
+
             {/* 完了 */}
             <Button
               variant="default"
@@ -213,9 +245,9 @@ export default function FloatingToolbar({
               <Check className="w-4 h-4" />
               完了
             </Button>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
+            </>
+            )}
+            </div>
+            </div>
+            );
+            }

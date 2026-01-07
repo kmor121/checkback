@@ -520,6 +520,7 @@ function FileViewContent() {
         onClearAll={user?.role === 'admin' ? handleClearAll : undefined}
         onDelete={() => viewerCanvasRef.current?.delete()}
         onComplete={() => setPaintMode(false)}
+        onResetView={() => setZoom(100)}
       />
 
       <ShareLinkModal open={shareLinkOpen} onOpenChange={setShareLinkOpen} fileId={fileId} />

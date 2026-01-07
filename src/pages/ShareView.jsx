@@ -674,6 +674,9 @@ function ShareViewContent() {
           onClearAll={handleClearAll}
           onDelete={() => viewerCanvasRef.current?.delete()}
           onComplete={() => setPaintMode(false)}
+          onResetView={() => setZoom(100)}
+          showBoundingBoxes={showBoundingBoxes}
+          onToggleBoundingBoxes={DEBUG_MODE ? () => setShowBoundingBoxes(!showBoundingBoxes) : undefined}
         />
       )}
 
