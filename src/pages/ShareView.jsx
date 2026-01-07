@@ -1117,33 +1117,6 @@ function ShareViewContent() {
                 })
               )}
             </div>
-
-            {/* 入力ドック（新規コメント投稿専用） */}
-            {shareLink.can_post_comments ? (
-            <div className="border-t p-3 bg-gray-50">
-              <div className="flex gap-2">
-                <Textarea
-                  placeholder="コメントを入力"
-                  value={composerText}
-                  onChange={(e) => setComposerText(e.target.value)}
-                  rows={2}
-                  className="flex-1 text-sm"
-                />
-                <Button
-                  onClick={handleSendComment}
-                  disabled={!composerText.trim()}
-                  size="icon"
-                  className="bg-blue-600 hover:bg-blue-700 h-auto"
-                >
-                  <Send className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-            ) : (
-            <div className="border-t p-4 text-center text-sm text-gray-500">
-              コメント機能は無効です
-            </div>
-            )}
           </div>
         )}
       </div>
