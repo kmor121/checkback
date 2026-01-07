@@ -321,32 +321,32 @@ function FileViewContent() {
       <div className="flex-1 flex overflow-hidden">
         {/* 中央：プレビュー */}
         <div className="flex-1 bg-gray-100 overflow-auto relative pb-24">
-            <ViewerCanvas
-              ref={viewerCanvasRef}
-              fileUrl={file?.file_url}
-              mimeType={file?.mime_type}
-              pageNumber={1}
-              existingShapes={existingShapes}
-              onSaveShape={handleSaveShape}
-              paintMode={paintMode}
-              tool={tool}
-              onToolChange={setTool}
-              strokeColor={strokeColor}
-              strokeWidth={strokeWidth}
-              zoom={zoom}
-            />
+          <ViewerCanvas
+            ref={viewerCanvasRef}
+            fileUrl={file?.file_url}
+            mimeType={file?.mime_type}
+            pageNumber={1}
+            existingShapes={existingShapes}
+            onSaveShape={handleSaveShape}
+            paintMode={paintMode}
+            tool={tool}
+            onToolChange={setTool}
+            strokeColor={strokeColor}
+            strokeWidth={strokeWidth}
+            zoom={zoom}
+          />
 
-            {/* ズーム制御 */}
-            <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-2 flex items-center gap-2">
-              <Button variant="outline" size="icon" onClick={() => setZoom(Math.max(50, zoom - 25))}>
-                <ZoomOut className="w-4 h-4" />
-              </Button>
-              <span className="text-sm font-medium w-16 text-center">{zoom}%</span>
-              <Button variant="outline" size="icon" onClick={() => setZoom(Math.min(200, zoom + 25))}>
-                <ZoomIn className="w-4 h-4" />
-              </Button>
-            </div>
+          {/* ズーム制御 */}
+          <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-2 flex items-center gap-2">
+            <Button variant="outline" size="icon" onClick={() => setZoom(Math.max(50, zoom - 25))}>
+              <ZoomOut className="w-4 h-4" />
+            </Button>
+            <span className="text-sm font-medium w-16 text-center">{zoom}%</span>
+            <Button variant="outline" size="icon" onClick={() => setZoom(Math.min(200, zoom + 25))}>
+              <ZoomIn className="w-4 h-4" />
+            </Button>
           </div>
+        </div>
 
         {/* 右：コメント */}
         <div className="w-96 border-l bg-white flex flex-col">
@@ -457,7 +457,7 @@ function FileViewContent() {
         onComplete={() => setPaintMode(false)}
       />
 
-        <ShareLinkModal open={shareLinkOpen} onOpenChange={setShareLinkOpen} fileId={fileId} />
+      <ShareLinkModal open={shareLinkOpen} onOpenChange={setShareLinkOpen} fileId={fileId} />
 
         {/* トースト通知 */}
         {toast.show && (
