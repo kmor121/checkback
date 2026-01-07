@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
-import { Stage, Layer, Line, Rect, Circle, Arrow, Image as KonvaImage } from 'react-konva';
+import { Stage, Layer, Line, Rect, Circle, Arrow, Image as KonvaImage, Group } from 'react-konva';
 import useImage from 'use-image';
 
 const DEBUG_MODE = import.meta.env.VITE_DEBUG === 'true';
@@ -39,6 +39,7 @@ const ViewerCanvas = forwardRef(({
 }, ref) => {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
+  const contentGroupRef = useRef(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [bgSize, setBgSize] = useState({ width: 800, height: 600 });
   const [error, setError] = useState(null);
@@ -51,6 +52,7 @@ const ViewerCanvas = forwardRef(({
   // デバッグ用
   const [lastEvent, setLastEvent] = useState('none');
   const [pointerPos, setPointerPos] = useState(null);
+  const [imgPos, setImgPos] = useState(null);
   const [lastSaveStatus, setLastSaveStatus] = useState('idle');
   const [lastError, setLastError] = useState(null);
   
@@ -86,28 +88,42 @@ const ViewerCanvas = forwardRef(({
     }
   }, []);
   
-  // スケール計算
-  const baseScale = Math.min(
+  // スケール計算 - 画面に収めるfitScaleとユーザーズーム
+  const fitScale = Math.min(
     containerSize.width / bgSize.width,
     containerSize.height / bgSize.height
   ) || 1;
   
   const userScale = zoom / 100;
-  const finalScale = baseScale * userScale;
+  const contentScale = fitScale * userScale;
   
-  const scaledWidth = bgSize.width * finalScale;
-  const scaledHeight = bgSize.height * finalScale;
+  const scaledWidth = bgSize.width * contentScale;
+  const scaledHeight = bgSize.height * contentScale;
   
-  // 座標を正規化（0-1の範囲に変換）
-  const normalizePoint = (x, y) => ({
-    nx: x / (bgSize.width * finalScale),
-    ny: y / (bgSize.height * finalScale),
+  // 中央寄せオフセット
+  const offsetX = Math.max(0, (containerSize.width - scaledWidth) / 2);
+  const offsetY = Math.max(0, (containerSize.height - scaledHeight) / 2);
+  
+  // pointer座標 → 画像座標への変換
+  const pointerToImageCoords = (stage) => {
+    const pos = stage.getPointerPosition();
+    if (!pos) return null;
+    
+    const imgX = (pos.x - offsetX) / contentScale;
+    const imgY = (pos.y - offsetY) / contentScale;
+    
+    return { x: imgX, y: imgY };
+  };
+  
+  // 正規化座標（0-1の範囲）
+  const normalizeCoords = (imgX, imgY) => ({
+    nx: imgX / bgSize.width,
+    ny: imgY / bgSize.height,
   });
   
-  // 正規化座標を実座標に戻す
-  const denormalizePoint = (nx, ny) => ({
-    x: nx * bgSize.width * finalScale,
-    y: ny * bgSize.height * finalScale,
+  const denormalizeCoords = (nx, ny) => ({
+    x: nx * bgSize.width,
+    y: ny * bgSize.height,
   });
   
   // PointerDown: 描画開始
@@ -118,20 +134,26 @@ const ViewerCanvas = forwardRef(({
       const stage = e.target.getStage();
       if (!stage) return;
       
-      const pos = stage.getPointerPosition();
-      if (!pos) return;
+      const imgCoords = pointerToImageCoords(stage);
+      if (!imgCoords) return;
       
       setLastEvent('down');
-      setPointerPos(pos);
+      setPointerPos(stage.getPointerPosition());
+      setImgPos(imgCoords);
       setIsDrawing(true);
       
       const newShape = {
         id: `shape_${Date.now()}`,
         tool,
-        points: [pos.x, pos.y],
         stroke: strokeColor,
         strokeWidth: strokeWidth,
+        startX: imgCoords.x,
+        startY: imgCoords.y,
       };
+      
+      if (tool === 'pen') {
+        newShape.points = [imgCoords.x, imgCoords.y];
+      }
       
       setCurrentShape(newShape);
     } catch (err) {
@@ -146,19 +168,34 @@ const ViewerCanvas = forwardRef(({
       const stage = e.target.getStage();
       if (!stage) return;
       
-      const pos = stage.getPointerPosition();
-      if (!pos) return;
+      const imgCoords = pointerToImageCoords(stage);
+      if (!imgCoords) return;
       
-      setPointerPos(pos);
+      setPointerPos(stage.getPointerPosition());
+      setImgPos(imgCoords);
       
       if (!paintMode || !isDrawing || !currentShape) return;
       
       setLastEvent('move');
       
-      const newShape = {
-        ...currentShape,
-        points: [...currentShape.points, pos.x, pos.y],
-      };
+      const newShape = { ...currentShape };
+      
+      if (tool === 'pen') {
+        newShape.points = [...currentShape.points, imgCoords.x, imgCoords.y];
+      } else if (tool === 'rect') {
+        newShape.x = Math.min(currentShape.startX, imgCoords.x);
+        newShape.y = Math.min(currentShape.startY, imgCoords.y);
+        newShape.width = Math.abs(imgCoords.x - currentShape.startX);
+        newShape.height = Math.abs(imgCoords.y - currentShape.startY);
+      } else if (tool === 'circle') {
+        const dx = imgCoords.x - currentShape.startX;
+        const dy = imgCoords.y - currentShape.startY;
+        newShape.radius = Math.sqrt(dx * dx + dy * dy);
+        newShape.x = currentShape.startX;
+        newShape.y = currentShape.startY;
+      } else if (tool === 'arrow') {
+        newShape.points = [currentShape.startX, currentShape.startY, imgCoords.x, imgCoords.y];
+      }
       
       setCurrentShape(newShape);
     } catch (err) {
@@ -174,29 +211,49 @@ const ViewerCanvas = forwardRef(({
       setLastEvent('up');
       setIsDrawing(false);
       
-      // 座標を正規化
-      const normalizedPoints = [];
-      for (let i = 0; i < currentShape.points.length; i += 2) {
-        const { nx, ny } = normalizePoint(currentShape.points[i], currentShape.points[i + 1]);
-        normalizedPoints.push(nx, ny);
+      // 正規化データを作成
+      const normalizedShape = { ...currentShape };
+      
+      if (tool === 'pen' && currentShape.points) {
+        const normalizedPoints = [];
+        for (let i = 0; i < currentShape.points.length; i += 2) {
+          const { nx, ny } = normalizeCoords(currentShape.points[i], currentShape.points[i + 1]);
+          normalizedPoints.push(nx, ny);
+        }
+        normalizedShape.normalizedPoints = normalizedPoints;
+      } else if (tool === 'rect') {
+        const { nx: nx1, ny: ny1 } = normalizeCoords(currentShape.x, currentShape.y);
+        const { nx: nx2, ny: ny2 } = normalizeCoords(currentShape.x + currentShape.width, currentShape.y + currentShape.height);
+        normalizedShape.nx = nx1;
+        normalizedShape.ny = ny1;
+        normalizedShape.nw = nx2 - nx1;
+        normalizedShape.nh = ny2 - ny1;
+      } else if (tool === 'circle') {
+        const { nx, ny } = normalizeCoords(currentShape.x, currentShape.y);
+        normalizedShape.nx = nx;
+        normalizedShape.ny = ny;
+        normalizedShape.nr = currentShape.radius / bgSize.width; // 半径も正規化
+      } else if (tool === 'arrow' && currentShape.points) {
+        const normalizedPoints = [];
+        for (let i = 0; i < currentShape.points.length; i += 2) {
+          const { nx, ny } = normalizeCoords(currentShape.points[i], currentShape.points[i + 1]);
+          normalizedPoints.push(nx, ny);
+        }
+        normalizedShape.normalizedPoints = normalizedPoints;
       }
       
-      const shapeToSave = {
-        ...currentShape,
-        normalizedPoints,
-        bgWidth: bgSize.width,
-        bgHeight: bgSize.height,
-      };
+      normalizedShape.bgWidth = bgSize.width;
+      normalizedShape.bgHeight = bgSize.height;
       
       // ローカルに追加
-      setLocalShapes([...localShapes, shapeToSave]);
+      setLocalShapes([...localShapes, normalizedShape]);
       setCurrentShape(null);
       
       // 親コンポーネントに保存を依頼
       if (onSaveShape) {
         setLastSaveStatus('saving');
         try {
-          await onSaveShape(shapeToSave);
+          await onSaveShape(normalizedShape);
           setLastSaveStatus('success');
           setLastError(null);
         } catch (err) {
@@ -232,17 +289,6 @@ const ViewerCanvas = forwardRef(({
   
   // Shape描画（正規化座標から復元）
   const renderShape = (shape) => {
-    let points = shape.points;
-    
-    // 正規化座標がある場合は復元
-    if (shape.normalizedPoints) {
-      points = [];
-      for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
-        const { x, y } = denormalizePoint(shape.normalizedPoints[i], shape.normalizedPoints[i + 1]);
-        points.push(x, y);
-      }
-    }
-    
     const commonProps = {
       key: shape.id,
       stroke: shape.stroke,
@@ -250,14 +296,59 @@ const ViewerCanvas = forwardRef(({
     };
     
     if (shape.tool === 'pen') {
+      let points = shape.points || [];
+      
+      // 正規化座標がある場合は復元
+      if (shape.normalizedPoints) {
+        points = [];
+        for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
+          const { x, y } = denormalizeCoords(shape.normalizedPoints[i], shape.normalizedPoints[i + 1]);
+          points.push(x, y);
+        }
+      }
+      
       return <Line {...commonProps} points={points} tension={0.5} lineCap="round" lineJoin="round" />;
     } else if (shape.tool === 'rect') {
-      return <Rect {...commonProps} x={points[0]} y={points[1]} width={points[2] - points[0]} height={points[3] - points[1]} />;
+      let x = shape.x || 0;
+      let y = shape.y || 0;
+      let width = shape.width || 0;
+      let height = shape.height || 0;
+      
+      if (shape.nx !== undefined) {
+        const p1 = denormalizeCoords(shape.nx, shape.ny);
+        const p2 = denormalizeCoords(shape.nx + shape.nw, shape.ny + shape.nh);
+        x = p1.x;
+        y = p1.y;
+        width = p2.x - p1.x;
+        height = p2.y - p1.y;
+      }
+      
+      return <Rect {...commonProps} x={x} y={y} width={width} height={height} />;
     } else if (shape.tool === 'circle') {
-      const radius = Math.sqrt(Math.pow(points[2] - points[0], 2) + Math.pow(points[3] - points[1], 2)) / 2;
-      return <Circle {...commonProps} x={(points[0] + points[2]) / 2} y={(points[1] + points[3]) / 2} radius={radius} />;
+      let x = shape.x || 0;
+      let y = shape.y || 0;
+      let radius = shape.radius || 0;
+      
+      if (shape.nx !== undefined) {
+        const center = denormalizeCoords(shape.nx, shape.ny);
+        x = center.x;
+        y = center.y;
+        radius = shape.nr * bgSize.width;
+      }
+      
+      return <Circle {...commonProps} x={x} y={y} radius={radius} />;
     } else if (shape.tool === 'arrow') {
-      return <Arrow {...commonProps} points={[points[0], points[1], points[2], points[3]]} pointerLength={10} pointerWidth={10} />;
+      let points = shape.points || [];
+      
+      if (shape.normalizedPoints) {
+        points = [];
+        for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
+          const { x, y } = denormalizeCoords(shape.normalizedPoints[i], shape.normalizedPoints[i + 1]);
+          points.push(x, y);
+        }
+      }
+      
+      return <Arrow {...commonProps} points={points} pointerLength={10} pointerWidth={10} />;
     }
     return null;
   };
@@ -281,56 +372,63 @@ const ViewerCanvas = forwardRef(({
   }
   
   return (
-    <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: '#e0e0e0' }}>
-      {/* Konva Stage */}
-      <div style={{ position: 'absolute', inset: 0, zIndex: 50, pointerEvents: paintMode ? 'auto' : 'none' }}>
-        <Stage
-          ref={stageRef}
-          width={scaledWidth}
-          height={scaledHeight}
-          scaleX={finalScale}
-          scaleY={finalScale}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          style={{ cursor: paintMode ? 'crosshair' : 'default' }}
-        >
-          {/* 背景Layer */}
-          <Layer listening={false}>
+    <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative', overflow: 'auto', background: '#e0e0e0' }}>
+      <Stage
+        ref={stageRef}
+        width={containerSize.width}
+        height={containerSize.height}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        style={{ cursor: paintMode ? 'crosshair' : 'default' }}
+      >
+        {/* 背景Layer（非インタラクティブ） */}
+        <Layer listening={false}>
+          <Group
+            x={offsetX}
+            y={offsetY}
+            scaleX={contentScale}
+            scaleY={contentScale}
+          >
             {isImage && fileUrl && (
               <BackgroundImage src={fileUrl} onLoad={setBgSize} />
             )}
-          </Layer>
-          
-          {/* 注釈Layer */}
-          <Layer>
+          </Group>
+        </Layer>
+        
+        {/* 注釈Layer（contentGroup内に配置） */}
+        <Layer>
+          <Group
+            ref={contentGroupRef}
+            x={offsetX}
+            y={offsetY}
+            scaleX={contentScale}
+            scaleY={contentScale}
+          >
             {existingShapes.map(renderShape)}
             {localShapes.map(renderShape)}
             {currentShape && renderShape(currentShape)}
-          </Layer>
-        </Stage>
-      </div>
+          </Group>
+        </Layer>
+      </Stage>
       
-      {/* プレースホルダー */}
-      <div style={{ position: 'absolute', inset: 0, zIndex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', fontSize: '14px' }}>
-        {fileUrl ? `File: ${mimeType || 'unknown'}` : 'No file loaded'}
-      </div>
-      
-      {/* デバッグ */}
+      {/* デバッグオーバーレイ */}
       {DEBUG_MODE && (
         <div style={{ position: 'absolute', top: 8, left: 8, background: 'rgba(0,0,0,0.8)', color: '#0f0', padding: '8px', fontSize: '11px', fontFamily: 'monospace', borderRadius: '4px', pointerEvents: 'none', zIndex: 100, lineHeight: '1.4' }}>
           <div><strong>ViewerCanvas Debug</strong></div>
           <div>lastEvent: {lastEvent}</div>
           <div>pointer: {pointerPos ? `${Math.round(pointerPos.x)}, ${Math.round(pointerPos.y)}` : 'null'}</div>
-          <div>stageSize: {Math.round(scaledWidth)} x {Math.round(scaledHeight)}</div>
+          <div>imgPos: {imgPos ? `${Math.round(imgPos.x)}, ${Math.round(imgPos.y)}` : 'null'}</div>
           <div>bgSize: {bgSize.width} x {bgSize.height}</div>
-          <div>scale: {finalScale.toFixed(2)}</div>
+          <div>fitScale: {fitScale.toFixed(2)}</div>
+          <div>userScale: {userScale.toFixed(2)}</div>
+          <div>contentScale: {contentScale.toFixed(2)}</div>
+          <div>offset: {Math.round(offsetX)}, {Math.round(offsetY)}</div>
           <div>paintMode: {paintMode ? 'ON' : 'OFF'}</div>
           <div>tool: {tool}</div>
           <div>isDrawing: {isDrawing ? 'YES' : 'NO'}</div>
           <div>existingShapes: {existingShapes.length}</div>
           <div>localShapes: {localShapes.length}</div>
-          <div>currentShape: {currentShape ? `${currentShape.points.length / 2} pts` : 'null'}</div>
           <div style={{ color: lastSaveStatus === 'success' ? '#0f0' : lastSaveStatus === 'error' ? '#f00' : '#ff0' }}>
             saveStatus: {lastSaveStatus}
           </div>

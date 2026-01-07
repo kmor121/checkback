@@ -383,7 +383,7 @@ function ShareViewContent() {
         </div>
 
         {/* 中央：プレビュー */}
-        <div className="flex-1 bg-gray-100 overflow-hidden relative">
+        <div className="flex-1 bg-gray-100 overflow-auto relative pb-24">
           <ViewerCanvas
             ref={viewerCanvasRef}
             fileUrl={file?.file_url}

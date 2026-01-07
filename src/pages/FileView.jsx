@@ -319,8 +319,8 @@ function FileViewContent() {
       </div>
 
       <div className="flex-1 flex overflow-hidden">
-        {/* 中央：プレビュー（簡易版） */}
-        <div className="flex-1 bg-gray-100 overflow-hidden relative">
+        {/* 中央：プレビュー */}
+        <div className="flex-1 bg-gray-100 overflow-auto relative pb-24">
             <ViewerCanvas
               ref={viewerCanvasRef}
               fileUrl={file?.file_url}
