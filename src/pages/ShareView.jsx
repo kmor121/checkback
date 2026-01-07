@@ -117,14 +117,14 @@ function ShareViewContent() {
     staleTime: 60000,
   });
 
-  // Ready状態の詳細判定（tokenとshareLinkの取得後）
-  const readyDetails = {
+  // Ready状態の詳細判定（useMemoで遅延評価）
+  const readyDetails = React.useMemo(() => ({
     tokenOk: !!token,
     shareLinkOk: !!shareLink,
     fileOk: !!shareLink?.file_id,
     pageOk: currentPage >= 0,
     passOk: !shareLink?.password_enabled || isPasswordVerified,
-  };
+  }), [token, shareLink, currentPage, isPasswordVerified]);
 
   // ShareLinkのパスワード検証と有効期限チェック
   useEffect(() => {
