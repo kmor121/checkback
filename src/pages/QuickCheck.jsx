@@ -266,7 +266,6 @@ export default function QuickCheck() {
           </div>
         )}
       </div>
-    </div>
 
       {/* アップロード完了モーダル */}
       <Dialog open={showCompleteModal} onOpenChange={setShowCompleteModal}>
