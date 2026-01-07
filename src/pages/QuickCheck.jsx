@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Upload, Link as LinkIcon, Play, Copy, Clock, MessageSquare, MoreVertical } from 'lucide-react';
+import { Upload, Link as LinkIcon, Play, Copy, Clock, MessageSquare, MoreVertical, FileText } from 'lucide-react';
 import { format, differenceInDays } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -131,90 +131,119 @@ export default function QuickCheck() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <h1 className="text-3xl font-bold mb-8">クイックチェック</h1>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-5xl mx-auto px-4 py-12">
+        {/* ステップ表示 */}
+        <div className="mb-12 flex items-center justify-center gap-3 text-sm">
+          <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-sm">
+            <Upload className="w-4 h-4 text-gray-600" />
+            <span className="font-medium">アップロード</span>
+          </div>
+          <div className="w-8 border-t border-gray-300" />
+          <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-sm text-gray-400">
+            <LinkIcon className="w-4 h-4" />
+            <span className="font-medium">リンクを発行</span>
+          </div>
+          <div className="w-8 border-t border-gray-300" />
+          <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-sm text-gray-400">
+            <Play className="w-4 h-4" />
+            <span className="font-medium">チェックバック開始</span>
+          </div>
+        </div>
 
-      {/* ステップ表示 */}
-      <div className="mb-8 flex items-center justify-center gap-4">
-        <div className="flex items-center gap-2">
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${uploadedFile ? 'bg-green-500' : 'bg-blue-600'} text-white font-semibold`}>
-            {uploadedFile ? '✓' : '1'}
-          </div>
-          <span className="text-sm font-medium">アップロード</span>
-        </div>
-        <div className="w-12 h-0.5 bg-gray-300" />
-        <div className="flex items-center gap-2">
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${showCompleteModal ? 'bg-blue-600' : 'bg-gray-300'} text-white font-semibold`}>
-            2
-          </div>
-          <span className="text-sm font-medium">リンクを発行</span>
-        </div>
-        <div className="w-12 h-0.5 bg-gray-300" />
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-300 text-white font-semibold">
-            3
-          </div>
-          <span className="text-sm font-medium">チェックバック開始</span>
-        </div>
-      </div>
+        {/* タイトル */}
+        <h1 className="text-center text-4xl font-bold mb-3">クイックチェックを始めましょう</h1>
+        <p className="text-center text-gray-600 mb-12">ファイルをアップロードして共有リンクを発行</p>
 
-      {/* アップロード枠 */}
-      <Card className="mb-8">
-        <CardContent className="p-12">
-          <label
-            htmlFor="file-upload"
-            onDrop={handleDrop}
-            onDragOver={(e) => e.preventDefault()}
-            className="border-2 border-dashed border-gray-300 rounded-lg p-12 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-colors"
-          >
-            <Upload className="w-16 h-16 text-gray-400 mb-4" />
-            <p className="text-lg font-medium mb-2">ファイルをドラッグ＆ドロップ</p>
-            <p className="text-sm text-gray-500 mb-4">または</p>
-            <Button type="button" className="bg-blue-600 hover:bg-blue-700">
-              ファイルを選択
-            </Button>
-            <input
-              id="file-upload"
-              type="file"
-              className="hidden"
-              onChange={handleFileSelect}
-              disabled={uploadMutation.isPending}
-            />
-          </label>
-          {uploadMutation.isPending && (
-            <div className="mt-4 text-center text-sm text-gray-600">
-              アップロード中...
+        {/* アップロード枠 */}
+        <Card className="mb-16 shadow-xl border-0">
+          <CardContent className="p-16">
+            <label
+              htmlFor="file-upload"
+              onDrop={handleDrop}
+              onDragOver={(e) => e.preventDefault()}
+              className="border-2 border-dashed border-gray-300 rounded-2xl p-16 flex flex-col items-center justify-center cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-all"
+            >
+              <div className="w-20 h-20 rounded-full bg-blue-100 flex items-center justify-center mb-6">
+                <FileText className="w-10 h-10 text-blue-600" />
+              </div>
+              <h3 className="text-xl font-semibold mb-2">ここにアップロードしてみましょう</h3>
+              <p className="text-sm text-gray-500 mb-6">クリックまたはドラッグ＆ドロップでアップロード</p>
+              <p className="text-xs text-gray-400 mb-8">
+                .mp4 / .mov / .pdf / .jpeg / .png / .ai / .psd / .pptx / .docx / .xlsx
+              </p>
+              <input
+                id="file-upload"
+                type="file"
+                className="hidden"
+                onChange={handleFileSelect}
+                disabled={uploadMutation.isPending}
+              />
+            </label>
+            {uploadMutation.isPending && (
+              <div className="mt-6 text-center">
+                <div className="inline-block w-6 h-6 border-4 border-gray-300 border-t-blue-600 rounded-full animate-spin mb-2"></div>
+                <p className="text-sm text-gray-600">アップロード中...</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* 最近使用したファイル */}
+        {recentQuickFiles.length > 0 && (
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold">最近使用したファイル</h2>
+              <Button variant="link" className="text-sm text-blue-600">
+                全て見る →
+              </Button>
             </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* 最近使用したファイル */}
-      <div>
-        <h2 className="text-xl font-bold mb-4">最近使用したファイル</h2>
-        {recentQuickFiles.length === 0 ? (
-          <Card>
-            <CardContent className="p-8 text-center text-gray-500">
-              最近使用したファイルはありません
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {recentQuickFiles.map((file) => {
-              const remainingDays = getRemainingDays(file.expires_at);
-              const fileId = file.id;
-              return (
-                <Card key={file.id} className="hover:shadow-lg transition-shadow">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1 min-w-0">
-                        <Link 
-                          to={`${createPageUrl('FileView')}?fileId=${encodeURIComponent(fileId)}`}
-                          className="font-medium truncate hover:text-blue-600 block"
-                        >
-                          {file.title}
-                        </Link>
-                        <div className="flex items-center gap-2 mt-1">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {recentQuickFiles.slice(0, 6).map((file) => {
+                const remainingDays = getRemainingDays(file.expires_at);
+                const fileId = file.id;
+                return (
+                  <Link 
+                    key={file.id}
+                    to={`${createPageUrl('FileView')}?fileId=${encodeURIComponent(fileId)}`}
+                    className="group"
+                  >
+                    <Card className="h-full hover:shadow-lg transition-all border border-gray-200 overflow-hidden">
+                      <div className="aspect-[4/3] bg-gray-100 flex items-center justify-center border-b">
+                        <FileText className="w-16 h-16 text-gray-300 group-hover:text-gray-400 transition-colors" />
+                      </div>
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <h3 className="font-medium text-sm truncate group-hover:text-blue-600 transition-colors">
+                            {file.title}
+                          </h3>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild onClick={(e) => e.preventDefault()}>
+                              <Button variant="ghost" size="icon" className="h-6 w-6 -mt-1">
+                                <MoreVertical className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  handleCopyShareLink(file, showToast, (err) => showToast(err, 'error'));
+                                }}
+                              >
+                                リンクをコピー
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  handleDownloadFile(file, showToast, (err) => showToast(err, 'error'));
+                                }}
+                              >
+                                ダウンロード
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
                           {file.comment_count > 0 && (
                             <Badge variant="secondary" className="text-xs">
                               <MessageSquare className="w-3 h-3 mr-1" />
@@ -228,43 +257,16 @@ export default function QuickCheck() {
                             </Badge>
                           )}
                         </div>
-                      </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" onClick={(e) => e.stopPropagation()}>
-                            <MoreVertical className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleCopyShareLink(file, showToast, (err) => showToast(err, 'error'));
-                            }}
-                          >
-                            リンクをコピー
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDownloadFile(file, showToast, (err) => showToast(err, 'error'));
-                            }}
-                          >
-                            ダウンロード
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {format(new Date(file.uploaded_at), 'yyyy/MM/dd HH:mm', { locale: ja })}
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+                      </CardContent>
+                    </Card>
+                  </Link>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
+    </div>
 
       {/* アップロード完了モーダル */}
       <Dialog open={showCompleteModal} onOpenChange={setShowCompleteModal}>
