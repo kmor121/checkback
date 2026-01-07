@@ -32,10 +32,11 @@ const ViewerCanvas = forwardRef(({
   onShapesChange,
   onSaveShape,
   paintMode = false,
-  tool = 'pen',
+  tool = 'select',
   strokeColor = '#ff0000',
   strokeWidth = 2,
   zoom = 100,
+  onToolChange,
 }, ref) => {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
@@ -64,35 +65,55 @@ const ViewerCanvas = forwardRef(({
   const [lastError, setLastError] = useState(null);
   
   const isImage = mimeType?.startsWith('image/');
+  const isEditMode = tool === 'select';
+  const isDrawMode = !isEditMode && paintMode;
   
-  // Transformer selection
+  // 描画モード開始時は選択解除
   useEffect(() => {
-    if (selectedId && transformerRef.current && shapeRefs.current[selectedId]) {
+    if (!isEditMode) {
+      setSelectedId(null);
+    }
+  }, [isEditMode]);
+
+  // Transformer selection（編集モード時のみ）
+  useEffect(() => {
+    if (!transformerRef.current) return;
+    
+    if (isEditMode && selectedId && shapeRefs.current[selectedId]) {
       transformerRef.current.nodes([shapeRefs.current[selectedId]]);
       transformerRef.current.getLayer().batchDraw();
-    } else if (transformerRef.current) {
+    } else {
       transformerRef.current.nodes([]);
       transformerRef.current.getLayer().batchDraw();
     }
-  }, [selectedId]);
+  }, [selectedId, isEditMode]);
 
-  // キーボードショートカット
+  // キーボードショートカット（入力欄フォーカス中は無効）
   useEffect(() => {
     const handleKeyDown = (e) => {
+      // 入力欄フォーカス中はショートカット無効
+      const target = e.target;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return;
+      }
+      
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selectedId) {
+        if (isEditMode && selectedId) {
           e.preventDefault();
           handleDelete();
         }
       } else if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
         e.preventDefault();
         performUndo();
+      } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'z') {
+        e.preventDefault();
+        performRedo();
       }
     };
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedId, localShapes, undoStack]);
+  }, [selectedId, localShapes, undoStack, redoStack, isEditMode]);
 
   // ResizeObserver
   useEffect(() => {
@@ -208,7 +229,7 @@ const ViewerCanvas = forwardRef(({
 
   // 削除
   const handleDelete = async () => {
-    if (!selectedId) return;
+    if (!isEditMode || !selectedId) return;
     
     const index = localShapes.findIndex(s => s.id === selectedId);
     if (index === -1) return;
@@ -219,21 +240,22 @@ const ViewerCanvas = forwardRef(({
     setLocalShapes(prev => prev.filter(s => s.id !== selectedId));
     setSelectedId(null);
     
-    // DB削除（existingShapesに含まれる場合）
-    if (existingShapes.find(s => s.id === selectedId) && onSaveShape) {
-      // ここではDB削除は省略（削除APIが必要）
+    // Transformer解除
+    if (transformerRef.current) {
+      transformerRef.current.nodes([]);
     }
   };
 
-  // PointerDown: 描画開始
-  const handlePointerDown = (e) => {
-    // 空白クリックで選択解除
-    if (e.target === e.target.getStage()) {
+  // 空白クリックで選択解除（編集モード時）
+  const handleStageClick = (e) => {
+    if (isEditMode && e.target === e.target.getStage()) {
       setSelectedId(null);
-      return;
     }
-    
-    if (!paintMode) return;
+  };
+
+  // PointerDown: 描画開始（描画モード時のみ）
+  const handlePointerDown = (e) => {
+    if (!isDrawMode) return;
     
     try {
       const stage = e.target.getStage();
@@ -267,7 +289,7 @@ const ViewerCanvas = forwardRef(({
     }
   };
   
-  // PointerMove: 描画中
+  // PointerMove: 描画中（描画モード時のみ）
   const handlePointerMove = (e) => {
     try {
       const stage = e.target.getStage();
@@ -279,7 +301,7 @@ const ViewerCanvas = forwardRef(({
       setPointerPos(stage.getPointerPosition());
       setImgPos(imgCoords);
       
-      if (!paintMode || !isDrawing || !currentShape) return;
+      if (!isDrawMode || !isDrawing || !currentShape) return;
       
       setLastEvent('move');
       
@@ -308,9 +330,9 @@ const ViewerCanvas = forwardRef(({
     }
   };
   
-  // PointerUp: 描画終了
+  // PointerUp: 描画終了（描画モード時のみ）
   const handlePointerUp = async () => {
-    if (!paintMode || !isDrawing || !currentShape) return;
+    if (!isDrawMode || !isDrawing || !currentShape) return;
     
     try {
       setLastEvent('up');
@@ -354,8 +376,15 @@ const ViewerCanvas = forwardRef(({
       addToUndoStack({ type: 'add', shapeId: normalizedShape.id });
       
       // ローカルに追加
-      setLocalShapes([...localShapes, normalizedShape]);
+      const newShapes = [...localShapes, normalizedShape];
+      setLocalShapes(newShapes);
       setCurrentShape(null);
+      
+      // 描画完了後、自動で選択ツールに切り替え＆新図形を選択
+      setSelectedId(normalizedShape.id);
+      if (onToolChange) {
+        onToolChange('select');
+      }
       
       // 親コンポーネントに保存を依頼
       if (onSaveShape) {
@@ -442,8 +471,8 @@ const ViewerCanvas = forwardRef(({
     
     if (shape.tool === 'rect') {
       const { x, y } = node.position();
-      const width = node.width() * scaleX;
-      const height = node.height() * scaleY;
+      const width = Math.max(5, node.width() * scaleX); // 最小サイズ
+      const height = Math.max(5, node.height() * scaleY);
       
       const { nx: nx1, ny: ny1 } = normalizeCoords(x, y);
       const { nx: nx2, ny: ny2 } = normalizeCoords(x + width, y + height);
@@ -458,7 +487,7 @@ const ViewerCanvas = forwardRef(({
       node.position({ x: 0, y: 0 });
     } else if (shape.tool === 'circle') {
       const { x, y } = node.position();
-      const radius = node.radius() * Math.max(scaleX, scaleY);
+      const radius = Math.max(3, node.radius() * Math.max(scaleX, scaleY));
       
       const { nx, ny } = normalizeCoords(x, y);
       updatedShape.nx = nx;
@@ -476,8 +505,11 @@ const ViewerCanvas = forwardRef(({
     if (onSaveShape) {
       try {
         await onSaveShape(updatedShape);
+        setLastSaveStatus('success');
       } catch (err) {
         console.error('Update shape error:', err);
+        setLastSaveStatus('error');
+        setLastError(err.message);
       }
     }
   };
@@ -505,18 +537,22 @@ const ViewerCanvas = forwardRef(({
       key: shape.id,
       stroke: shape.stroke,
       strokeWidth: shape.strokeWidth,
-      onClick: (e) => {
+      onClick: isEditMode ? (e) => {
         e.cancelBubble = true;
         setSelectedId(shape.id);
-      },
+      } : undefined,
+      onTap: isEditMode ? (e) => {
+        e.cancelBubble = true;
+        setSelectedId(shape.id);
+      } : undefined,
       ref: (node) => {
         if (node) {
           shapeRefs.current[shape.id] = node;
         }
       },
-      draggable: !paintMode && !isExisting,
-      onDragEnd: (e) => handleDragEnd(shape, e),
-      onTransformEnd: (e) => handleTransformEnd(shape, e),
+      draggable: isEditMode && !isExisting,
+      onDragEnd: isEditMode ? (e) => handleDragEnd(shape, e) : undefined,
+      onTransformEnd: isEditMode ? (e) => handleTransformEnd(shape, e) : undefined,
     };
     
     if (shape.tool === 'pen') {
@@ -601,10 +637,12 @@ const ViewerCanvas = forwardRef(({
         ref={stageRef}
         width={containerSize.width}
         height={containerSize.height}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        style={{ cursor: paintMode ? 'crosshair' : 'default' }}
+        onPointerDown={isDrawMode ? handlePointerDown : undefined}
+        onPointerMove={isDrawMode ? handlePointerMove : undefined}
+        onPointerUp={isDrawMode ? handlePointerUp : undefined}
+        onClick={isEditMode ? handleStageClick : undefined}
+        onTap={isEditMode ? handleStageClick : undefined}
+        style={{ cursor: isDrawMode ? 'crosshair' : isEditMode ? 'default' : 'default' }}
       >
         {/* 背景Layer（非インタラクティブ） */}
         <Layer listening={false}>

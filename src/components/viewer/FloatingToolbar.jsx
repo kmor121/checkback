@@ -10,7 +10,8 @@ import {
   Redo2,
   Trash2,
   Check,
-  Paintbrush
+  Paintbrush,
+  MousePointer2
 } from 'lucide-react';
 import {
   Select,
@@ -71,6 +72,14 @@ export default function FloatingToolbar({
             <div className="w-px h-6 bg-gray-300" />
             
             {/* ツール選択 */}
+            <Button
+              variant={tool === 'select' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => onToolChange('select')}
+              title="選択・移動"
+            >
+              <MousePointer2 className="w-4 h-4" />
+            </Button>
             <Button
               variant={tool === 'pen' ? 'default' : 'outline'}
               size="sm"

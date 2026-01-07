@@ -393,6 +393,7 @@ function ShareViewContent() {
             onSaveShape={handleSaveShape}
             paintMode={paintMode}
             tool={tool}
+            onToolChange={setTool}
             strokeColor={strokeColor}
             strokeWidth={strokeWidth}
             zoom={zoom}
