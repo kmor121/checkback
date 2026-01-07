@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { Stage, Layer, Line, Rect, Circle, Arrow, Image as KonvaImage, Group, Transformer } from 'react-konva';
 import useImage from 'use-image';
+import CommentPin from './CommentPin';
 
 const DEBUG_MODE = import.meta.env.VITE_DEBUG === 'true';
 
@@ -29,6 +30,9 @@ const ViewerCanvas = forwardRef(({
   mimeType,
   pageNumber = 1,
   existingShapes = [],
+  comments = [],
+  activeCommentId = null,
+  onCommentClick,
   onShapesChange,
   onSaveShape,
   onDeleteShape,
@@ -39,6 +43,8 @@ const ViewerCanvas = forwardRef(({
   zoom = 100,
   onToolChange,
   showBoundingBoxes = false,
+  isCreatingComment = false,
+  onCanvasClick,
   debugInfo = null,
 }, ref) => {
   const containerRef = useRef(null);
@@ -318,8 +324,22 @@ const ViewerCanvas = forwardRef(({
     }
   };
 
-  // PointerDown: 描画開始（描画モード時のみ）
+  // PointerDown: 描画開始（描画モード時のみ）または コメント作成クリック
   const handlePointerDown = (e) => {
+    // コメント作成モード時
+    if (isCreatingComment) {
+      const stage = e.target.getStage();
+      if (!stage) return;
+      
+      const imgCoords = pointerToImageCoords(stage);
+      if (!imgCoords) return;
+      
+      if (onCanvasClick) {
+        onCanvasClick(imgCoords.x, imgCoords.y, bgSize.width, bgSize.height);
+      }
+      return;
+    }
+    
     if (!isDrawMode) return;
     
     try {
@@ -878,6 +898,28 @@ const ViewerCanvas = forwardRef(({
             )}
           </Group>
         </Layer>
+
+        {/* コメントピンLayer */}
+        <Layer>
+          <Group
+            x={offsetX}
+            y={offsetY}
+            scaleX={contentScale}
+            scaleY={contentScale}
+          >
+            {comments.map(comment => (
+              <CommentPin
+                key={comment.id}
+                comment={comment}
+                bgWidth={bgSize.width}
+                bgHeight={bgSize.height}
+                isActive={activeCommentId === comment.id}
+                onClick={() => onCommentClick && onCommentClick(comment.id)}
+                seqNo={comment.seq_no}
+              />
+            ))}
+          </Group>
+        </Layer>
         
         {/* 注釈Layer（contentGroup内に配置） */}
         <Layer>
@@ -975,6 +1017,8 @@ const ViewerCanvas = forwardRef(({
             </div>
             {lastMutation && <div style={{ fontSize: '9px' }}>mutation: {lastMutation}</div>}
             {lastError && <div style={{ color: '#f00', fontSize: '9px' }}>error: {lastError}</div>}
+            <div style={{ fontSize: '9px' }}>activeCommentId: {debugInfo?.activeCommentId || 'null'}</div>
+            <div style={{ fontSize: '9px' }}>filteredCount: {debugInfo?.filteredCount || 0}</div>
           </div>
         </div>
       )}

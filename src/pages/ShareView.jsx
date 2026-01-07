@@ -53,12 +53,14 @@ function ShareViewContent() {
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const [showBoundingBoxes, setShowBoundingBoxes] = useState(false);
   const [isReady, setIsReady] = useState(false);
+  const [activeCommentId, setActiveCommentId] = useState(null);
+  const [isCreatingComment, setIsCreatingComment] = useState(false);
   const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
 
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
-    setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3000);
+    setTimeout(() => setToast({ show: false, message: '', type: 'success' }), type === 'info' ? 5000 : 3000);
   };
   
   // token取得：URLパラメータから
@@ -183,23 +185,42 @@ function ShareViewContent() {
       return;
     }
     
+    // CRITICAL: comment_idが無い場合は保存しない
+    if (!activeCommentId) {
+      showToast('先にコメントを作成してください', 'error');
+      setPaintMode(false);
+      return;
+    }
+    
     try {
-      const payload = {
-        token: token,
-        fileId: shareLink.file_id,
-        pageNo: currentPage,
-        clientShapeId: shape.id,
-        shapeType: shape.tool,
-        dataJson: JSON.stringify(shape),
-        authorName: guestName || 'Guest',
-        authorKey: guestId,
-        mode: mode || 'upsert',
+      const shapeData = {
+        file_id: shareLink.file_id,
+        share_token: token,
+        comment_id: activeCommentId,
+        page_no: currentPage,
+        client_shape_id: shape.id,
+        shape_type: shape.tool,
+        data_json: JSON.stringify(shape),
+        author_key: guestId,
+        author_name: guestName || 'Guest',
       };
       
-      const result = await base44.functions.invoke('savePaintShape', payload);
-
-      if (result.data.error) {
-        throw new Error(result.data.error);
+      if (DEBUG_MODE) {
+        console.log('[DEBUG] Saving shape with payload:', shapeData);
+      }
+      
+      let result;
+      if (mode === 'create') {
+        result = await base44.entities.PaintShape.create(shapeData);
+      } else if (mode === 'update') {
+        // 既存のshapeを更新（shape.dbIdがある場合）
+        if (shape.dbId) {
+          result = await base44.entities.PaintShape.update(shape.dbId, shapeData);
+        } else {
+          result = await base44.entities.PaintShape.create(shapeData);
+        }
+      } else {
+        result = await base44.entities.PaintShape.create(shapeData);
       }
 
       await queryClient.invalidateQueries(['paintShapes', token, shareLink?.file_id, currentPage]);
@@ -210,11 +231,9 @@ function ShareViewContent() {
         showToast('保存完了', 'success');
       }
 
-      return result.data;
+      return { ...result, dbId: result.id };
     } catch (error) {
-      console.error('Save shape error:', error, 'payload:', {
-        token, fileId: shareLink?.file_id, pageNo: currentPage, shapeId: shape.id
-      });
+      console.error('Save shape error:', error);
       const errorMsg = error.response?.data?.error || error.message || String(error);
       showToast(`保存失敗: ${errorMsg}`, 'error');
       throw new Error(errorMsg);
@@ -228,14 +247,18 @@ function ShareViewContent() {
     }
     
     try {
-      await base44.functions.invoke('savePaintShape', {
-        token: token,
-        fileId: shareLink.file_id,
-        pageNo: currentPage,
-        clientShapeId: shape.id,
-        authorKey: guestId,
-        mode: 'delete',
-      });
+      // dbIdがある場合はそれで削除、無い場合はclient_shape_idで検索して削除
+      if (shape.dbId) {
+        await base44.entities.PaintShape.delete(shape.dbId);
+      } else if (shape.id) {
+        const existing = await base44.entities.PaintShape.filter({
+          client_shape_id: shape.id,
+          file_id: shareLink.file_id,
+        });
+        if (existing.length > 0) {
+          await base44.entities.PaintShape.delete(existing[0].id);
+        }
+      }
 
       await queryClient.invalidateQueries(['paintShapes', token, shareLink?.file_id, currentPage]);
       showToast('削除完了', 'success');
@@ -248,22 +271,23 @@ function ShareViewContent() {
   };
 
   const handleClearAll = async () => {
-    if (!isReady) return;
+    if (!isReady || !activeCommentId) return;
     
-    if (!window.confirm('このページの自分の描画を全て削除しますか？')) {
+    if (!window.confirm('このコメントの自分の描画を全て削除しますか？')) {
       return;
     }
     
     try {
-      await base44.functions.invoke('savePaintShape', {
-        token: token,
-        fileId: shareLink.file_id,
-        pageNo: currentPage,
-        authorKey: guestId,
-        mode: 'deleteAll',
-        shapeType: 'dummy',
-        dataJson: '{}',
+      // activeCommentIdに紐づく自分のshapesを全削除
+      const shapes = await base44.entities.PaintShape.filter({
+        file_id: shareLink.file_id,
+        comment_id: activeCommentId,
+        author_key: guestId,
       });
+      
+      for (const shape of shapes) {
+        await base44.entities.PaintShape.delete(shape.id);
+      }
 
       await queryClient.invalidateQueries(['paintShapes', token, shareLink?.file_id, currentPage]);
       showToast('全削除完了', 'success');
@@ -281,25 +305,31 @@ function ShareViewContent() {
       
       const comment = await base44.entities.ReviewComment.create({
         file_id: shareLink.file_id,
+        share_token: token,
         page_no: currentPage,
         seq_no: maxSeqNo + 1,
+        anchor_nx: data.anchor_nx,
+        anchor_ny: data.anchor_ny,
         author_type: 'guest',
+        author_key: guestId,
         author_name: guestName,
-        body: data.body,
+        body: data.body || '',
         resolved: false,
         has_paint: false,
       });
 
       return comment;
     },
-    onSuccess: () => {
+    onSuccess: (comment) => {
       queryClient.invalidateQueries(['sharedComments']);
       setCommentBody('');
-      setPaintMode(false);
-      showToast('コメントを送信しました', 'success');
+      setActiveCommentId(comment.id);
+      setIsCreatingComment(false);
+      showToast('コメントを作成しました', 'success');
     },
     onError: (error) => {
       showToast(`送信失敗: ${error.message}`, 'error');
+      setIsCreatingComment(false);
     },
   });
 
@@ -309,30 +339,73 @@ function ShareViewContent() {
       return;
     }
     if (!commentBody.trim()) return;
-    createCommentMutation.mutate({ body: commentBody });
+    
+    if (activeCommentId) {
+      // 既存コメントを更新
+      base44.entities.ReviewComment.update(activeCommentId, { body: commentBody })
+        .then(() => {
+          queryClient.invalidateQueries(['sharedComments']);
+          setCommentBody('');
+          showToast('コメントを更新しました', 'success');
+        })
+        .catch((error) => {
+          showToast(`更新失敗: ${error.message}`, 'error');
+        });
+    } else {
+      showToast('先にピンを配置してください', 'error');
+    }
   };
 
-  // PaintShapeをViewerCanvas用の形式に変換
+  // 「＋コメント」ボタンで新規コメント作成モード開始
+  const handleStartCreateComment = () => {
+    if (!guestName.trim()) {
+      setShowNameDialog(true);
+      return;
+    }
+    setIsCreatingComment(true);
+    showToast('画像上をクリックしてピンを配置してください', 'info');
+  };
+
+  // キャンバスクリックでアンカー設定＆コメント作成
+  const handleCanvasClick = (anchorX, anchorY, bgWidth, bgHeight) => {
+    if (!isCreatingComment) return;
+    
+    const anchor_nx = anchorX / bgWidth;
+    const anchor_ny = anchorY / bgHeight;
+    
+    createCommentMutation.mutate({
+      anchor_nx,
+      anchor_ny,
+      body: '',
+    });
+  };
+
+  // PaintShapeをViewerCanvas用の形式に変換（activeCommentIdのみ）
   const existingShapes = React.useMemo(() => {
     // ready状態でないなら空配列を返さない（前回データを保持）
-    if (!isReady || !paintShapes) {
+    if (!isReady || !paintShapes || !activeCommentId) {
       return [];
     }
     
-    return paintShapes.map(ps => {
-      try {
-        const data = JSON.parse(ps.data_json);
-        return {
-          id: ps.id,
-          tool: ps.shape_type,
-          ...data,
-        };
-      } catch (e) {
-        console.error('Failed to parse shape:', e);
-        return null;
-      }
-    }).filter(Boolean);
-  }, [paintShapes, isReady]);
+    // activeCommentIdに紐づくshapesのみ表示
+    return paintShapes
+      .filter(ps => ps.comment_id === activeCommentId)
+      .map(ps => {
+        try {
+          const data = JSON.parse(ps.data_json);
+          return {
+            id: ps.client_shape_id || ps.id,
+            dbId: ps.id,
+            tool: ps.shape_type,
+            ...data,
+          };
+        } catch (e) {
+          console.error('Failed to parse shape:', e);
+          return null;
+        }
+      })
+      .filter(Boolean);
+  }, [paintShapes, isReady, activeCommentId]);
 
   const handleSaveName = () => {
     if (!guestName.trim()) return;
@@ -548,20 +621,27 @@ function ShareViewContent() {
               mimeType={file?.mime_type}
               pageNumber={currentPage}
               existingShapes={existingShapes}
+              comments={comments}
+              activeCommentId={activeCommentId}
+              onCommentClick={setActiveCommentId}
               onSaveShape={handleSaveShape}
               onDeleteShape={handleDeleteShape}
-              paintMode={isReady && paintMode}
+              paintMode={isReady && paintMode && !!activeCommentId}
               tool={tool}
               onToolChange={setTool}
               strokeColor={strokeColor}
               strokeWidth={strokeWidth}
               zoom={zoom}
               showBoundingBoxes={showBoundingBoxes}
+              isCreatingComment={isCreatingComment}
+              onCanvasClick={handleCanvasClick}
               debugInfo={{
                 isReady: isReady,
                 readyDetails: readyDetails,
+                activeCommentId: activeCommentId,
                 queryKey: ['paintShapes', token, shareLink?.file_id, currentPage],
                 fetchedCount: paintShapes?.length || 0,
+                filteredCount: existingShapes?.length || 0,
                 token: token,
                 fileId: shareLink?.file_id,
                 pageNo: currentPage,
@@ -586,6 +666,14 @@ function ShareViewContent() {
         {shareLink.can_view_comments && (
           <div className="w-96 border-l bg-white flex flex-col">
             <div className="p-4 border-b space-y-2">
+              <Button
+                onClick={handleStartCreateComment}
+                className="w-full bg-blue-600 hover:bg-blue-700"
+                disabled={isCreatingComment}
+              >
+                <MessageSquare className="w-4 h-4 mr-2" />
+                {isCreatingComment ? 'クリックしてピン配置' : '＋コメント'}
+              </Button>
               <Select value={commentFilter} onValueChange={setCommentFilter}>
                 <SelectTrigger>
                   <SelectValue />
@@ -614,33 +702,45 @@ function ShareViewContent() {
                   コメントはありません
                 </div>
               ) : (
-                sortedComments.map((comment) => (
-                  <Card 
-                    key={comment.id} 
-                    className="hover:shadow-md transition-shadow"
-                  >
-                    <CardContent className="p-3">
-                      <div className="flex items-start gap-2 mb-2">
-                        <Badge variant="secondary" className="text-xs">#{comment.seq_no}</Badge>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-sm font-medium">{comment.author_name}</span>
-                            {comment.author_type === 'guest' && (
-                              <Badge variant="outline" className="text-xs">ゲスト</Badge>
-                            )}
-                            {comment.has_paint && <Paintbrush className="w-3 h-3 text-blue-600" />}
-                          </div>
-                          <p className="text-sm text-gray-700">{comment.body}</p>
-                          <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
-                            <span>{comment.page_no}枚目</span>
-                            <span>•</span>
-                            <span>{format(new Date(comment.created_date), 'yyyy/MM/dd HH:mm', { locale: ja })}</span>
+                sortedComments.map((comment) => {
+                  const shapesCount = paintShapes.filter(s => s.comment_id === comment.id).length;
+                  const isActive = activeCommentId === comment.id;
+                  
+                  return (
+                    <Card 
+                      key={comment.id} 
+                      className={`hover:shadow-md transition-shadow cursor-pointer ${isActive ? 'border-2 border-blue-600 bg-blue-50' : ''}`}
+                      onClick={() => setActiveCommentId(isActive ? null : comment.id)}
+                    >
+                      <CardContent className="p-3">
+                        <div className="flex items-start gap-2 mb-2">
+                          <Badge variant="secondary" className="text-xs">#{comment.seq_no}</Badge>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-sm font-medium">{comment.author_name}</span>
+                              {comment.author_type === 'guest' && (
+                                <Badge variant="outline" className="text-xs">ゲスト</Badge>
+                              )}
+                              {shapesCount > 0 && (
+                                <Badge variant="outline" className="text-xs flex items-center gap-1">
+                                  <Paintbrush className="w-3 h-3" />
+                                  {shapesCount}
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-sm text-gray-700">{comment.body || '（本文なし）'}</p>
+                            <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
+                              <span>{comment.page_no}枚目</span>
+                              <span>•</span>
+                              <span>{format(new Date(comment.created_date), 'yyyy/MM/dd HH:mm', { locale: ja })}</span>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
+                      </CardContent>
+                    </Card>
+                  );
+                })
+              
               )}
             </div>
 
@@ -678,7 +778,13 @@ function ShareViewContent() {
       {shareLink.can_post_comments && isReady && (
         <FloatingToolbar
           paintMode={paintMode}
-          onPaintModeChange={setPaintMode}
+          onPaintModeChange={(mode) => {
+            if (mode && !activeCommentId) {
+              showToast('先にコメントを選択/作成してください', 'error');
+              return;
+            }
+            setPaintMode(mode);
+          }}
           tool={tool}
           onToolChange={setTool}
           strokeColor={strokeColor}
@@ -690,7 +796,7 @@ function ShareViewContent() {
           onUndo={() => viewerCanvasRef.current?.undo()}
           onRedo={() => viewerCanvasRef.current?.redo()}
           onClear={() => viewerCanvasRef.current?.clear()}
-          onClearAll={handleClearAll}
+          onClearAll={activeCommentId ? handleClearAll : undefined}
           onDelete={() => viewerCanvasRef.current?.delete()}
           onComplete={() => setPaintMode(false)}
           onResetView={() => setZoom(100)}
@@ -726,7 +832,9 @@ function ShareViewContent() {
       {toast.show && (
         <div className="fixed bottom-4 right-4 z-50">
           <div className={`px-6 py-3 rounded-lg shadow-lg ${
-            toast.type === 'error' ? 'bg-red-600 text-white' : 'bg-green-600 text-white'
+            toast.type === 'error' ? 'bg-red-600 text-white' : 
+            toast.type === 'info' ? 'bg-blue-600 text-white' : 
+            'bg-green-600 text-white'
           }`}>
             {toast.message}
           </div>
