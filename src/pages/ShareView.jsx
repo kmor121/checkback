@@ -69,6 +69,8 @@ function ShareViewContent() {
   const [editingCommentText, setEditingCommentText] = useState('');
   const [composerText, setComposerText] = useState('');
   const [draftAnchor, setDraftAnchor] = useState(null);
+  const [pendingPaintStart, setPendingPaintStart] = useState(false);
+  const [draftCommentId, setDraftCommentId] = useState(null);
   const [showAllPaint, setShowAllPaint] = useState(false);
   const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
@@ -413,7 +415,7 @@ function ShareViewContent() {
     },
   });
 
-  const handleSendComment = () => {
+  const handleSendComment = async () => {
     if (!guestName.trim()) {
       setShowNameDialog(true);
       return;
@@ -423,7 +425,22 @@ function ShareViewContent() {
       return;
     }
 
-    // 常に新規コメント作成
+    // draftCommentId がある場合は既存コメントを更新
+    if (draftCommentId) {
+      try {
+        await base44.entities.ReviewComment.update(draftCommentId, { body: composerText });
+        queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id] });
+        setComposerText('');
+        setDraftCommentId(null);
+        setDraftAnchor(null);
+        showToast('コメントを更新しました', 'success');
+      } catch (error) {
+        showToast(`更新失敗: ${error.message}`, 'error');
+      }
+      return;
+    }
+
+    // 通常の新規コメント作成
     let anchor_nx, anchor_ny;
 
     if (draftAnchor) {
@@ -512,12 +529,55 @@ function ShareViewContent() {
     });
   };
 
-  // キャンバスクリックでドラフトアンカー設定（ペイントモード外のみ）
-  const handleCanvasClick = (anchorX, anchorY, bgWidth, bgHeight) => {
+  // キャンバスクリックでドラフトアンカー設定 or 自動コメント作成
+  const handleCanvasClick = async (anchorX, anchorY, bgWidth, bgHeight) => {
     if (paintMode) return;
 
     const anchor_nx = anchorX / bgWidth;
     const anchor_ny = anchorY / bgHeight;
+
+    // ペイント開始待機中の場合: 自動でコメント作成してペイントモードに入る
+    if (pendingPaintStart) {
+      if (!guestName.trim()) {
+        setShowNameDialog(true);
+        setPendingPaintStart(false);
+        return;
+      }
+
+      try {
+        const existingComments = await base44.entities.ReviewComment.filter({ file_id: shareLink.file_id });
+        const maxSeqNo = existingComments.reduce((max, c) => Math.max(max, c.seq_no || 0), 0);
+
+        const comment = await base44.entities.ReviewComment.create({
+          file_id: shareLink.file_id,
+          share_token: token,
+          page_no: currentPage,
+          seq_no: maxSeqNo + 1,
+          anchor_nx,
+          anchor_ny,
+          author_type: 'guest',
+          author_key: guestId,
+          author_name: guestName,
+          body: '',
+          resolved: false,
+          has_paint: false,
+        });
+
+        queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id] });
+        setActiveCommentId(comment.id);
+        setDraftCommentId(comment.id);
+        setDraftAnchor({ nx: anchor_nx, ny: anchor_ny });
+        setPaintMode(true);
+        setPendingPaintStart(false);
+        showToast('コメントを作成しました。描画してください', 'success');
+      } catch (error) {
+        showToast(`コメント作成失敗: ${error.message}`, 'error');
+        setPendingPaintStart(false);
+      }
+      return;
+    }
+
+    // 通常時: ピン配置のみ
     setDraftAnchor({ nx: anchor_nx, ny: anchor_ny });
     showToast('ピンを配置しました。コメントを入力してください', 'info');
   };
@@ -775,7 +835,7 @@ function ShareViewContent() {
               draftAnchor={draftAnchor}
               onSaveShape={handleSaveShape}
               onDeleteShape={handleDeleteShape}
-              paintMode={isReady && paintMode && !!activeCommentId}
+              paintMode={isReady && paintMode && !!activeCommentId && !pendingPaintStart}
               tool={tool}
               onToolChange={setTool}
               strokeColor={strokeColor}
@@ -954,37 +1014,43 @@ function ShareViewContent() {
               )}
             </div>
 
-            {/* 入力ドック（常に新規投稿専用） */}
+            {/* 入力ドック（新規投稿 or 下書き更新） */}
             {shareLink.can_post_comments ? (
-              <div className="border-t p-3 bg-gray-50">
-                <div className="flex gap-2">
-                  <Textarea
-                    placeholder="コメントを入力"
-                    value={composerText}
-                    onChange={(e) => setComposerText(e.target.value)}
-                    rows={2}
-                    className="flex-1 text-sm"
-                  />
-                  <Button
-                    onClick={handleSendComment}
-                    disabled={!composerText.trim()}
-                    size="icon"
-                    className="bg-blue-600 hover:bg-blue-700 h-auto"
-                  >
-                    <Send className="w-4 h-4" />
-                  </Button>
+            <div className="border-t p-3 bg-gray-50">
+              {draftCommentId && (
+                <div className="mb-2 text-xs text-gray-600 flex items-center gap-1">
+                  <Paintbrush className="w-3 h-3" />
+                  <span>描画済みコメントに本文を追加</span>
                 </div>
-                {draftAnchor && (
-                  <div className="mt-2 text-xs text-gray-600 flex items-center gap-1">
-                    <div className="w-2 h-2 bg-blue-600 rounded-full" />
-                    ピン配置済み（{(draftAnchor.nx * 100).toFixed(0)}%, {(draftAnchor.ny * 100).toFixed(0)}%）
-                  </div>
-                )}
+              )}
+              <div className="flex gap-2">
+                <Textarea
+                  placeholder={draftCommentId ? "コメント本文を入力（任意）" : "コメントを入力"}
+                  value={composerText}
+                  onChange={(e) => setComposerText(e.target.value)}
+                  rows={2}
+                  className="flex-1 text-sm"
+                />
+                <Button
+                  onClick={handleSendComment}
+                  disabled={!composerText.trim()}
+                  size="icon"
+                  className="bg-blue-600 hover:bg-blue-700 h-auto"
+                >
+                  <Send className="w-4 h-4" />
+                </Button>
               </div>
+              {draftAnchor && !draftCommentId && (
+                <div className="mt-2 text-xs text-gray-600 flex items-center gap-1">
+                  <div className="w-2 h-2 bg-blue-600 rounded-full" />
+                  ピン配置済み（{(draftAnchor.nx * 100).toFixed(0)}%, {(draftAnchor.ny * 100).toFixed(0)}%）
+                </div>
+              )}
+            </div>
             ) : (
-              <div className="border-t p-4 text-center text-sm text-gray-500">
-                コメント機能は無効です
-              </div>
+            <div className="border-t p-4 text-center text-sm text-gray-500">
+              コメント機能は無効です
+            </div>
             )}
           </div>
         )}
@@ -996,10 +1062,14 @@ function ShareViewContent() {
           paintMode={paintMode}
           onPaintModeChange={(mode) => {
             if (mode && !activeCommentId) {
-              showToast('先にコメントを選択または作成してください', 'error');
+              setPendingPaintStart(true);
+              showToast('画像上をクリックしてピンを置いてください', 'info');
               return;
             }
             setPaintMode(mode);
+            if (!mode) {
+              setPendingPaintStart(false);
+            }
           }}
           tool={tool}
           onToolChange={setTool}
