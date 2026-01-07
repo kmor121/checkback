@@ -45,6 +45,7 @@ const ViewerCanvas = forwardRef(({
   onShapesChange,
   onSaveShape,
   onDeleteShape,
+  onBeginPaint,
   paintMode = false,
   tool = 'select',
   strokeColor = '#ff0000',
@@ -53,8 +54,6 @@ const ViewerCanvas = forwardRef(({
   onToolChange,
   showBoundingBoxes = false,
   showAllPaint = false,
-  onCanvasClick,
-  draftAnchor = null,
   debugInfo = null,
 }, ref) => {
   const containerRef = useRef(null);
@@ -335,21 +334,9 @@ const ViewerCanvas = forwardRef(({
     }
   };
 
-  // PointerDown: 描画開始（描画モード時のみ）または アンカークリック
+  // PointerDown: 描画開始（描画モード時のみ）
   const handlePointerDown = (e) => {
-    if (!isDrawMode) {
-      // ペイントモード外でのクリック → アンカー設定
-      const stage = e.target.getStage();
-      if (!stage) return;
-      
-      const imgCoords = pointerToImageCoords(stage);
-      if (!imgCoords) return;
-      
-      if (onCanvasClick) {
-        onCanvasClick(imgCoords.x, imgCoords.y, bgSize.width, bgSize.height);
-      }
-      return;
-    }
+    if (!isDrawMode) return;
     
     try {
       const stage = e.target.getStage();
@@ -361,6 +348,12 @@ const ViewerCanvas = forwardRef(({
       setLastEvent('down');
       setPointerPos(stage.getPointerPosition());
       setImgPos(imgCoords);
+      
+      // 描画開始時にコメント自動作成を通知（初回のみ）
+      if (onBeginPaint && !isDrawing) {
+        onBeginPaint(imgCoords.x, imgCoords.y, bgSize.width, bgSize.height);
+      }
+      
       setIsDrawing(true);
 
       // CRITICAL: clientShapeId は1回だけ発行して固定（移動・編集で絶対に再生成しない）
@@ -949,27 +942,7 @@ const ViewerCanvas = forwardRef(({
           </Group>
         </Layer>
 
-        {/* ドラフトアンカー表示Layer（コメント番号バッジは非表示） */}
-        {draftAnchor && (
-          <Layer>
-            <Group
-              x={offsetX}
-              y={offsetY}
-              scaleX={contentScale}
-              scaleY={contentScale}
-            >
-              <Circle
-                x={draftAnchor.nx * bgSize.width}
-                y={draftAnchor.ny * bgSize.height}
-                radius={6}
-                fill="rgba(59, 130, 246, 0.8)"
-                stroke="white"
-                strokeWidth={2}
-              />
-            </Group>
-          </Layer>
-        )}
-        
+
         {/* 注釈Layer（contentGroup内に配置） */}
         <Layer>
           <Group
