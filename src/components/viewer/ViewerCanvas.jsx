@@ -48,10 +48,11 @@ const ViewerCanvas = forwardRef(({
   // 描画状態
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentShape, setCurrentShape] = useState(null);
-  const [localShapes, setLocalShapes] = useState([]);
+  const [shapes, setShapes] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const transformerRef = useRef(null);
   const shapeRefs = useRef({});
+  const hydratedRef = useRef(false);
   
   // Undo/Redo
   const [undoStack, setUndoStack] = useState([]);
@@ -68,6 +69,22 @@ const ViewerCanvas = forwardRef(({
   const isEditMode = tool === 'select';
   const isDrawMode = !isEditMode && paintMode;
   
+  // existingShapesからの初回hydrate（上書き防止）
+  useEffect(() => {
+    if (!hydratedRef.current && existingShapes) {
+      setShapes(existingShapes);
+      hydratedRef.current = true;
+    }
+  }, [existingShapes]);
+
+  // fileUrl/pageNumber変更時にリセット
+  useEffect(() => {
+    hydratedRef.current = false;
+    setShapes([]);
+    setSelectedId(null);
+    setCurrentShape(null);
+  }, [fileUrl, pageNumber]);
+
   // 描画モード開始時は選択解除
   useEffect(() => {
     if (!isEditMode) {
@@ -113,7 +130,7 @@ const ViewerCanvas = forwardRef(({
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedId, localShapes, undoStack, redoStack, isEditMode]);
+  }, [selectedId, shapes, undoStack, redoStack, isEditMode]);
 
   // ResizeObserver
   useEffect(() => {
@@ -198,11 +215,11 @@ const ViewerCanvas = forwardRef(({
     setRedoStack(prev => [...prev, action]);
     
     if (action.type === 'add') {
-      setLocalShapes(prev => prev.filter(s => s.id !== action.shapeId));
+      setShapes(prev => prev.filter(s => s.id !== action.shapeId));
     } else if (action.type === 'update') {
-      setLocalShapes(prev => prev.map(s => s.id === action.shapeId ? action.before : s));
+      setShapes(prev => prev.map(s => s.id === action.shapeId ? action.before : s));
     } else if (action.type === 'delete') {
-      setLocalShapes(prev => {
+      setShapes(prev => {
         const newShapes = [...prev];
         newShapes.splice(action.index, 0, action.shape);
         return newShapes;
@@ -221,9 +238,9 @@ const ViewerCanvas = forwardRef(({
     if (action.type === 'add') {
       // 再追加は困難なので省略
     } else if (action.type === 'update') {
-      setLocalShapes(prev => prev.map(s => s.id === action.shapeId ? action.after : s));
+      setShapes(prev => prev.map(s => s.id === action.shapeId ? action.after : s));
     } else if (action.type === 'delete') {
-      setLocalShapes(prev => prev.filter(s => s.id !== action.shape.id));
+      setShapes(prev => prev.filter(s => s.id !== action.shape.id));
     }
   };
 
@@ -231,13 +248,14 @@ const ViewerCanvas = forwardRef(({
   const handleDelete = async () => {
     if (!isEditMode || !selectedId) return;
     
-    const index = localShapes.findIndex(s => s.id === selectedId);
+    const index = shapes.findIndex(s => s.id === selectedId);
     if (index === -1) return;
     
-    const shape = localShapes[index];
+    const shape = shapes[index];
     addToUndoStack({ type: 'delete', shape, index });
     
-    setLocalShapes(prev => prev.filter(s => s.id !== selectedId));
+    // Optimistic update
+    setShapes(prev => prev.filter(s => s.id !== selectedId));
     setSelectedId(null);
     
     // Transformer解除
@@ -378,9 +396,8 @@ const ViewerCanvas = forwardRef(({
       // Undo履歴に追加
       addToUndoStack({ type: 'add', shapeId: normalizedShape.id });
       
-      // ローカルに追加
-      const newShapes = [...localShapes, normalizedShape];
-      setLocalShapes(newShapes);
+      // Optimistic update
+      setShapes(prev => [...prev, normalizedShape]);
       setCurrentShape(null);
       
       // 描画完了後、自動で選択ツールに切り替え＆新図形を選択
@@ -410,7 +427,7 @@ const ViewerCanvas = forwardRef(({
     }
   };
   
-  // ドラッグ終了時の更新
+  // ドラッグ終了時の更新（Optimistic update）
   const handleDragEnd = async (shape, e) => {
     const node = e.target;
     const x = node.x();
@@ -419,7 +436,6 @@ const ViewerCanvas = forwardRef(({
     const updatedShape = { ...shape };
     
     if (shape.tool === 'pen' && shape.normalizedPoints) {
-      // ペンは全ポイントを移動
       const newPoints = [];
       for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
         const { x: px, y: py } = denormalizeCoords(shape.normalizedPoints[i], shape.normalizedPoints[i + 1]);
@@ -427,22 +443,16 @@ const ViewerCanvas = forwardRef(({
         newPoints.push(nx, ny);
       }
       updatedShape.normalizedPoints = newPoints;
-      node.x(0);
-      node.y(0);
     } else if (shape.tool === 'rect') {
       const { x: origX, y: origY } = denormalizeCoords(shape.nx, shape.ny);
       const { nx, ny } = normalizeCoords(origX + x, origY + y);
       updatedShape.nx = nx;
       updatedShape.ny = ny;
-      node.x(0);
-      node.y(0);
     } else if (shape.tool === 'circle') {
       const { x: origX, y: origY } = denormalizeCoords(shape.nx, shape.ny);
       const { nx, ny } = normalizeCoords(origX + x, origY + y);
       updatedShape.nx = nx;
       updatedShape.ny = ny;
-      node.x(0);
-      node.y(0);
     } else if (shape.tool === 'arrow') {
       const newPoints = [];
       for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
@@ -451,13 +461,18 @@ const ViewerCanvas = forwardRef(({
         newPoints.push(nx, ny);
       }
       updatedShape.normalizedPoints = newPoints;
-      node.x(0);
-      node.y(0);
     }
     
-    addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: updatedShape });
-    setLocalShapes(prev => prev.map(s => s.id === shape.id ? updatedShape : s));
+    // ノードをリセット（ここで一度だけ）
+    node.x(0);
+    node.y(0);
     
+    addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: updatedShape });
+    
+    // Optimistic update（即座にUI反映）
+    setShapes(prev => prev.map(s => s.id === shape.id ? updatedShape : s));
+    
+    // DB更新（後で）
     if (onSaveShape) {
       try {
         await onSaveShape(updatedShape);
@@ -466,11 +481,13 @@ const ViewerCanvas = forwardRef(({
         console.error('Update shape error:', err);
         setLastSaveStatus('error');
         setLastError(err.message);
+        // 失敗時はrevert
+        setShapes(prev => prev.map(s => s.id === shape.id ? shape : s));
       }
     }
   };
 
-  // Transform終了時の更新
+  // Transform終了時の更新（Optimistic update）
   const handleTransformEnd = async (shape, e) => {
     const node = e.target;
     const scaleX = node.scaleX();
@@ -496,12 +513,6 @@ const ViewerCanvas = forwardRef(({
       updatedShape.ny = ny1;
       updatedShape.nw = nx2 - nx1;
       updatedShape.nh = ny2 - ny1;
-      
-      // ノードをリセット
-      node.scaleX(1);
-      node.scaleY(1);
-      node.x(0);
-      node.y(0);
     } else if (shape.tool === 'circle') {
       const x = node.x();
       const y = node.y();
@@ -515,17 +526,20 @@ const ViewerCanvas = forwardRef(({
       updatedShape.nx = nx;
       updatedShape.ny = ny;
       updatedShape.nr = radius / bgSize.width;
-      
-      // ノードをリセット
-      node.scaleX(1);
-      node.scaleY(1);
-      node.x(0);
-      node.y(0);
     }
     
-    addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: updatedShape });
-    setLocalShapes(prev => prev.map(s => s.id === shape.id ? updatedShape : s));
+    // ノードをリセット（ここで一度だけ）
+    node.scaleX(1);
+    node.scaleY(1);
+    node.x(0);
+    node.y(0);
     
+    addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: updatedShape });
+    
+    // Optimistic update（即座にUI反映）
+    setShapes(prev => prev.map(s => s.id === shape.id ? updatedShape : s));
+    
+    // DB更新（後で）
     if (onSaveShape) {
       try {
         await onSaveShape(updatedShape);
@@ -534,6 +548,8 @@ const ViewerCanvas = forwardRef(({
         console.error('Update shape error:', err);
         setLastSaveStatus('error');
         setLastError(err.message);
+        // 失敗時はrevert
+        setShapes(prev => prev.map(s => s.id === shape.id ? shape : s));
       }
     }
   };
@@ -543,7 +559,7 @@ const ViewerCanvas = forwardRef(({
     undo: performUndo,
     redo: performRedo,
     clear: () => {
-      setLocalShapes([]);
+      setShapes([]);
       setCurrentShape(null);
       setUndoStack([]);
       setRedoStack([]);
@@ -694,8 +710,7 @@ const ViewerCanvas = forwardRef(({
             scaleX={contentScale}
             scaleY={contentScale}
           >
-            {existingShapes.map(s => renderShape(s, true))}
-            {localShapes.map(s => renderShape(s, false))}
+            {shapes.map(s => renderShape(s, false))}
             {currentShape && renderShape(currentShape, false)}
             <Transformer ref={transformerRef} />
           </Group>
@@ -717,8 +732,8 @@ const ViewerCanvas = forwardRef(({
           <div>paintMode: {paintMode ? 'ON' : 'OFF'}</div>
           <div>tool: {tool}</div>
           <div>isDrawing: {isDrawing ? 'YES' : 'NO'}</div>
-          <div>existingShapes: {existingShapes.length}</div>
-          <div>localShapes: {localShapes.length}</div>
+          <div>shapes: {shapes.length}</div>
+          <div>hydrated: {hydratedRef.current ? 'YES' : 'NO'}</div>
           <div style={{ color: lastSaveStatus === 'success' ? '#0f0' : lastSaveStatus === 'error' ? '#f00' : '#ff0' }}>
             saveStatus: {lastSaveStatus}
           </div>
