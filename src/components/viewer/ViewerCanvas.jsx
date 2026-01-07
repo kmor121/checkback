@@ -122,15 +122,15 @@ const ViewerCanvas = forwardRef(({
     }
   }, [isEditMode]);
 
-  // Transformer selection（編集モード時のみ、Rect/Circleのみ）
+  // Transformer selection（編集モード時のみ、Rect/Circle/Textに対応）
   useEffect(() => {
     if (!transformerRef.current) return;
     
     if (isEditMode && selectedId && shapeRefs.current[selectedId]) {
       const selectedShape = shapes.find(s => s.id === selectedId);
-      const canResize = selectedShape && (selectedShape.tool === 'rect' || selectedShape.tool === 'circle');
+      const canTransform = selectedShape && (selectedShape.tool === 'rect' || selectedShape.tool === 'circle' || selectedShape.tool === 'text');
       
-      if (canResize) {
+      if (canTransform) {
         transformerRef.current.nodes([shapeRefs.current[selectedId]]);
         transformerRef.current.getLayer().batchDraw();
       } else {
@@ -750,7 +750,7 @@ const ViewerCanvas = forwardRef(({
   // Shape描画（正規化座標から復元）
   const renderShape = (shape, isExisting = false) => {
     const isSelected = selectedId === shape.id;
-    const canTransform = shape.tool === 'rect' || shape.tool === 'circle';
+    const canTransform = shape.tool === 'rect' || shape.tool === 'circle' || shape.tool === 'text';
     
     const commonProps = {
       key: shape.id,
@@ -907,6 +907,31 @@ const ViewerCanvas = forwardRef(({
           {boundingBox && <Rect x={boundingBox.x} y={boundingBox.y} width={boundingBox.width} height={boundingBox.height} stroke="rgba(255,0,0,0.3)" strokeWidth={1} dash={[5,5]} fill={undefined} listening={false} />}
         </React.Fragment>
       );
+      } else if (shape.tool === 'text') {
+        // Text描画
+        let x = 0, y = 0;
+        
+        // 正規化座標を優先
+        if (shape.nx !== undefined) {
+          const pos = denormalizeCoords(shape.nx, shape.ny);
+          x = pos.x;
+          y = pos.y;
+        } else if (shape.x !== undefined) {
+          x = shape.x;
+          y = shape.y;
+        }
+        
+        return (
+          <Text
+            {...commonProps}
+            x={x}
+            y={y}
+            text={shape.text || 'テキスト'}
+            fontSize={shape.fontSize || 16}
+            fill={shape.stroke}
+            fontFamily="Arial"
+          />
+        );
       }
       return null;
       };
