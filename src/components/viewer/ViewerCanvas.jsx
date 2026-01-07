@@ -628,8 +628,14 @@ const ViewerCanvas = forwardRef(({
     }
   };
 
-  // Transform終了時の更新（Optimistic update、Rect/Circleのみ）
+  // Transform終了時の更新（CRITICAL: 増殖防止のため置換処理、Rect/Circleのみ）
   const handleTransformEnd = async (shape, e) => {
+    // 多重保存防止
+    if (isSaving[shape.id]) {
+      console.log('[ViewerCanvas] Already saving:', shape.id);
+      return;
+    }
+    
     const node = e.target;
     const scaleX = node.scaleX();
     const scaleY = node.scaleY();
@@ -679,24 +685,34 @@ const ViewerCanvas = forwardRef(({
     
     addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: updatedShape });
     
-    // Optimistic update（即座にUI反映）
-    setShapes(prev => prev.map(s => s.id === shape.id ? updatedShape : s));
+    // CRITICAL: Optimistic update は「同じidを置換」（追加ではない）
+    setShapes(prev => prev.map(s => s.id === updatedShape.id ? updatedShape : s));
     
-    // DB更新（後で）
+    // DB更新（upsertモード）
     if (onSaveShape) {
+      setIsSaving(prev => ({ ...prev, [shape.id]: true }));
       setLastMutation('update-transform');
       setLastPayload(JSON.stringify(updatedShape));
+      setLastSaveStatus('saving');
+      
       try {
-        const result = await onSaveShape(updatedShape, 'update');
+        const result = await onSaveShape(updatedShape, 'upsert');
         setLastSaveStatus('success');
         setLastSuccessId(result?.dbId || updatedShape.id);
         setLastError(null);
+        
+        // CRITICAL: DBから返ってきた_idを既存shapeに上書き（新規追加しない）
+        if (result?.dbId) {
+          setShapes(prev => prev.map(s => s.id === updatedShape.id ? { ...s, dbId: result.dbId } : s));
+        }
       } catch (err) {
         console.error('Update shape error:', err);
         setLastSaveStatus('error');
         setLastError(err.message);
         // 失敗時はrevert
-        setShapes(prev => prev.map(s => s.id === shape.id ? shape : s));
+        setShapes(prev => prev.map(s => s.id === updatedShape.id ? shape : s));
+      } finally {
+        setIsSaving(prev => ({ ...prev, [shape.id]: false }));
       }
     }
   };
