@@ -113,6 +113,8 @@ function ShareViewContent() {
       page_no: currentPage
     }),
     enabled: !!shareLink?.file_id,
+    refetchOnWindowFocus: false,
+    staleTime: 30000,
   });
 
 

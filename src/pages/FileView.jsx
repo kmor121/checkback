@@ -99,6 +99,8 @@ function FileViewContent() {
     queryKey: ['paintShapes', fileId],
     queryFn: () => base44.entities.PaintShape.filter({ file_id: fileId, page_no: 1 }),
     enabled: !!fileId,
+    refetchOnWindowFocus: false,
+    staleTime: 30000,
   });
 
   // UserRecent記録（エラーを出さない）
