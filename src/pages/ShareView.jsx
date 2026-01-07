@@ -831,7 +831,6 @@ function ShareViewContent() {
               zoom={zoom}
               showBoundingBoxes={showBoundingBoxes}
               showAllPaint={showAllPaint}
-              onCanvasClick={!paintMode ? handleCanvasClick : undefined}
               debugInfo={{
                 isReady: isReady,
                 readyDetails: readyDetails,
