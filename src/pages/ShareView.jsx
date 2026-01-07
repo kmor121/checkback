@@ -65,10 +65,10 @@ function ShareViewContent() {
   const [showBoundingBoxes, setShowBoundingBoxes] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [activeCommentId, setActiveCommentId] = useState(null);
-  const [composerMode, setComposerMode] = useState(null); // 'new' | 'edit' | null
   const [composerText, setComposerText] = useState('');
   const [autoCommentCreating, setAutoCommentCreating] = useState(false);
   const [showAllPaint, setShowAllPaint] = useState(false);
+  const [isDockOpen, setIsDockOpen] = useState(false);
   const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
   const didInitActiveRef = useRef(false);
@@ -190,8 +190,19 @@ function ShareViewContent() {
     localStorage.setItem(key, String(showAllPaint));
   }, [showAllPaint, token, shareLink?.file_id, currentPage]);
 
-  // 新規コメント開始（下書き即作成方式）
-  const handleNewComment = async () => {
+  // ペイントモードON時に下書きコメント自動作成
+  const handlePaintModeChange = async (mode) => {
+    if (!mode) {
+      setPaintMode(false);
+      return;
+    }
+
+    // 既にロック済みなら即座にON
+    if (lockedCommentIdRef.current) {
+      setPaintMode(true);
+      return;
+    }
+
     if (!guestName.trim()) {
       setShowNameDialog(true);
       return;
@@ -228,9 +239,10 @@ function ShareViewContent() {
       queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id, token] });
       setActiveCommentId(comment.id);
       lockedCommentIdRef.current = comment.id;
-      setComposerMode('new');
       setComposerText('');
       setAutoCommentCreating(false);
+      setPaintMode(true);
+      setIsDockOpen(true);
       
       if (DEBUG_MODE) {
         console.log('[ShareView] Created draft comment:', comment.id);
@@ -548,36 +560,31 @@ function ShareViewContent() {
       setShowNameDialog(true);
       return;
     }
-    if (!composerText.trim()) {
-      showToast('コメントを入力してください', 'error');
+
+    // 本文と描画の両方が無い場合のみエラー
+    const hasText = composerText.trim().length > 0;
+    const hasShapes = lockedCommentIdRef.current 
+      ? paintShapes.filter(s => s.comment_id === lockedCommentIdRef.current).length > 0
+      : false;
+
+    if (!hasText && !hasShapes) {
+      showToast('本文か描画を追加してください', 'error');
       return;
     }
 
-    if (composerMode === 'new' && lockedCommentIdRef.current) {
-      // 新規モード：下書きコメントを更新
+    if (lockedCommentIdRef.current) {
+      // 下書きコメントを更新
       try {
         await base44.entities.ReviewComment.update(lockedCommentIdRef.current, { body: composerText });
         queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id, token] });
         setComposerText('');
-        setComposerMode(null);
         lockedCommentIdRef.current = null;
+        setActiveCommentId(null);
         setPaintMode(false);
+        setIsDockOpen(false);
         showToast('コメントを送信しました', 'success');
       } catch (error) {
         showToast(`送信失敗: ${error.message}`, 'error');
-      }
-    } else if (composerMode === 'edit' && lockedCommentIdRef.current) {
-      // 編集モード：既存コメントを更新
-      try {
-        await base44.entities.ReviewComment.update(lockedCommentIdRef.current, { body: composerText });
-        queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id, token] });
-        setComposerText('');
-        setComposerMode(null);
-        lockedCommentIdRef.current = null;
-        setPaintMode(false);
-        showToast('コメントを更新しました', 'success');
-      } catch (error) {
-        showToast(`更新失敗: ${error.message}`, 'error');
       }
     } else {
       // フォールバック：新規作成
@@ -976,38 +983,22 @@ function ShareViewContent() {
           </div>
         </div>
 
-        {/* 右：コメント一覧・コンポーザー */}
+        {/* 右：コメント一覧 */}
         {shareLink.can_view_comments && (
           <div className="w-96 border-l bg-white flex flex-col">
-            {!composerMode ? (
-              <>
-                {/* コメント一覧 */}
-                <div className="p-4 border-b space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-semibold text-sm">コメント</h3>
-                    <div className="flex gap-2">
-                      <Button
-                        variant={showAllPaint ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => setShowAllPaint(!showAllPaint)}
-                        className="text-xs"
-                      >
-                        <Paintbrush className="w-3 h-3 mr-1" />
-                        全表示
-                      </Button>
-                      {shareLink.can_post_comments && (
-                        <Button
-                          size="sm"
-                          onClick={handleNewComment}
-                          disabled={paintMode || autoCommentCreating}
-                          className="text-xs bg-blue-600 hover:bg-blue-700"
-                        >
-                          <MessageSquare className="w-3 h-3 mr-1" />
-                          新規
-                        </Button>
-                      )}
-                    </div>
-                  </div>
+            <div className="p-4 border-b space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-sm">コメント</h3>
+                <Button
+                  variant={showAllPaint ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setShowAllPaint(!showAllPaint)}
+                  className="text-xs"
+                >
+                  <Paintbrush className="w-3 h-3 mr-1" />
+                  全表示
+                </Button>
+              </div>
 
               <Tabs value={commentFilter} onValueChange={setCommentFilter} className="w-full">
                 <TabsList className="grid w-full grid-cols-3">
@@ -1050,7 +1041,7 @@ function ShareViewContent() {
                           <div 
                             className="flex-1 cursor-pointer" 
                             onClick={() => {
-                              if (paintMode || composerMode) {
+                              if (paintMode || isDockOpen) {
                                 showToast('編集中は他のコメントを選択できません', 'info');
                                 return;
                               }
@@ -1118,87 +1109,6 @@ function ShareViewContent() {
                 })
               )}
             </div>
-            </>
-            ) : (
-            <>
-            {/* コンポーザー */}
-            <div className="p-4 border-b">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-semibold text-sm">
-                  {composerMode === 'new' ? '新規コメント' : 'コメント編集'}
-                </h3>
-                <Button variant="ghost" size="sm" onClick={handleCloseComposer}>
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {/* 本文入力 */}
-              <div>
-                <label className="text-xs text-gray-600 mb-1 block">コメント本文</label>
-                <Textarea
-                  placeholder="コメントを入力"
-                  value={composerText}
-                  onChange={(e) => setComposerText(e.target.value)}
-                  rows={4}
-                  className="text-sm"
-                />
-              </div>
-
-              {/* ペイントコントロール */}
-              <div className="border-t pt-4">
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs text-gray-600">描画</label>
-                  <Button
-                    variant={paintMode ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setPaintMode(!paintMode)}
-                  >
-                    <Paintbrush className="w-4 h-4 mr-1" />
-                    {paintMode ? '描画中' : '描画開始'}
-                  </Button>
-                </div>
-
-                {paintMode && (
-                  <div className="text-xs text-gray-500 bg-blue-50 p-2 rounded">
-                    キャンバス上でクリック・ドラッグして描画できます
-                  </div>
-                )}
-
-                {lockedCommentIdRef.current && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleClearAll}
-                    className="w-full mt-2 text-red-600"
-                  >
-                    <Trash2 className="w-4 h-4 mr-1" />
-                    描画を全削除
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            <div className="border-t p-4 space-y-2">
-              <Button
-                onClick={handleSendComment}
-                disabled={!composerText.trim()}
-                className="w-full bg-blue-600 hover:bg-blue-700"
-              >
-                <Send className="w-4 h-4 mr-2" />
-                {composerMode === 'new' ? '送信' : '更新'}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={handleCloseComposer}
-                className="w-full"
-              >
-                {composerMode === 'new' ? '下書きを保存して閉じる' : '閉じる'}
-              </Button>
-            </div>
-            </>
-            )}
 
             {/* 入力ドック（新規コメント投稿専用） */}
             {shareLink.can_post_comments ? (
@@ -1230,38 +1140,93 @@ function ShareViewContent() {
         )}
       </div>
 
-      {/* フローティングツールバー */}
-      {shareLink.can_post_comments && isReady && (
-        <FloatingToolbar
-          paintMode={paintMode}
-          onPaintModeChange={(mode) => {
-            if (mode && !lockedCommentIdRef.current) {
-              showToast('先にコメントを開いてください', 'info');
-              return;
-            }
-            setPaintMode(mode);
-          }}
-          tool={tool}
-          onToolChange={setTool}
-          strokeColor={strokeColor}
-          onStrokeColorChange={setStrokeColor}
-          strokeWidth={strokeWidth}
-          onStrokeWidthChange={setStrokeWidth}
-          canUndo={viewerCanvasRef.current?.canUndo || false}
-          canRedo={viewerCanvasRef.current?.canRedo || false}
-          onUndo={() => viewerCanvasRef.current?.undo()}
-          onRedo={() => viewerCanvasRef.current?.redo()}
-          onClear={() => viewerCanvasRef.current?.clear()}
-          onClearAll={handleClearAll}
-          onDelete={() => viewerCanvasRef.current?.delete()}
-          onComplete={() => setPaintMode(false)}
-          onResetView={() => setZoom(100)}
-          showBoundingBoxes={showBoundingBoxes}
-          onToggleBoundingBoxes={DEBUG_MODE ? () => setShowBoundingBoxes(!showBoundingBoxes) : undefined}
-          showAllPaint={showAllPaint}
-          onToggleShowAllPaint={() => setShowAllPaint(!showAllPaint)}
-          hasActiveComment={!!lockedCommentIdRef.current}
-        />
+      {/* ツールバー（ペイントモード時のみ、ドック直上） */}
+      {paintMode && shareLink.can_post_comments && isReady && (
+        <div className="fixed bottom-32 left-1/2 transform -translate-x-1/2 z-40">
+          <FloatingToolbar
+            paintMode={paintMode}
+            onPaintModeChange={handlePaintModeChange}
+            tool={tool}
+            onToolChange={setTool}
+            strokeColor={strokeColor}
+            onStrokeColorChange={setStrokeColor}
+            strokeWidth={strokeWidth}
+            onStrokeWidthChange={setStrokeWidth}
+            canUndo={viewerCanvasRef.current?.canUndo || false}
+            canRedo={viewerCanvasRef.current?.canRedo || false}
+            onUndo={() => viewerCanvasRef.current?.undo()}
+            onRedo={() => viewerCanvasRef.current?.redo()}
+            onClear={() => viewerCanvasRef.current?.clear()}
+            onClearAll={handleClearAll}
+            onDelete={() => viewerCanvasRef.current?.delete()}
+            onComplete={() => setPaintMode(false)}
+            onResetView={() => setZoom(100)}
+            showBoundingBoxes={showBoundingBoxes}
+            onToggleBoundingBoxes={DEBUG_MODE ? () => setShowBoundingBoxes(!showBoundingBoxes) : undefined}
+            showAllPaint={showAllPaint}
+            onToggleShowAllPaint={() => setShowAllPaint(!showAllPaint)}
+            hasActiveComment={!!lockedCommentIdRef.current}
+          />
+        </div>
+      )}
+
+      {/* 中央下ドック（コメント入力） */}
+      {shareLink.can_post_comments && (
+        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-2xl px-4">
+          <div className="bg-white rounded-xl shadow-2xl border-2 border-gray-200 p-4">
+            <div className="flex gap-3 items-start">
+              {/* ペイントボタン */}
+              <Button
+                variant={paintMode ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handlePaintModeChange(!paintMode)}
+                className="mt-1"
+                disabled={autoCommentCreating}
+              >
+                <Paintbrush className="w-4 h-4 mr-1" />
+                {paintMode ? 'ペイント中' : 'ペイント'}
+              </Button>
+
+              {/* 本文入力 */}
+              <Textarea
+                placeholder="コメントを入力（描画のみでもOK）"
+                value={composerText}
+                onChange={(e) => setComposerText(e.target.value)}
+                onFocus={() => setIsDockOpen(true)}
+                rows={2}
+                className="flex-1 text-sm resize-none"
+              />
+
+              {/* 送信ボタン */}
+              <Button
+                onClick={handleSendComment}
+                className="bg-blue-600 hover:bg-blue-700 mt-1"
+                size="sm"
+              >
+                <Send className="w-4 h-4" />
+              </Button>
+
+              {/* 閉じるボタン（編集中のみ） */}
+              {(isDockOpen || lockedCommentIdRef.current) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCloseDock}
+                  className="mt-1"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
+
+            {lockedCommentIdRef.current && (
+              <div className="mt-2 text-xs text-gray-500 flex items-center gap-2">
+                <Badge className="bg-green-600 text-white">編集中</Badge>
+                <span>本文または描画を追加して送信できます</span>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* 名前入力ダイアログ */}
