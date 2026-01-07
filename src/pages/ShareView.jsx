@@ -91,22 +91,6 @@ function ShareViewContent() {
     setIsPasswordVerified(isVerified);
   }, [token]);
 
-  // showAllPaint の復元と保存
-  useEffect(() => {
-    if (!token || !shareLink?.file_id) return;
-    const key = `showAllPaint:${token}:${shareLink.file_id}:${currentPage}`;
-    const saved = localStorage.getItem(key);
-    if (saved !== null) {
-      setShowAllPaint(saved === 'true');
-    }
-  }, [token, shareLink?.file_id, currentPage]);
-
-  useEffect(() => {
-    if (!token || !shareLink?.file_id) return;
-    const key = `showAllPaint:${token}:${shareLink.file_id}:${currentPage}`;
-    localStorage.setItem(key, String(showAllPaint));
-  }, [showAllPaint, token, shareLink?.file_id, currentPage]);
-
   const { data: shareLink, isLoading: linkLoading } = useQuery({
     queryKey: ['shareLink', token],
     queryFn: async () => {
