@@ -238,6 +238,8 @@ function ShareViewContent() {
         pageNo: currentPage,
         authorKey: guestId,
         mode: 'deleteAll',
+        shapeType: 'dummy',
+        dataJson: '{}',
       });
 
       await queryClient.invalidateQueries(['paintShapes', token, shareLink?.file_id, currentPage]);

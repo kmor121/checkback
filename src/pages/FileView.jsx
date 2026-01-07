@@ -194,20 +194,21 @@ function FileViewContent() {
     }
 
     try {
-      const allShapes = await base44.entities.PaintShape.filter({ 
-        file_id: fileId, 
-        page_no: 1 
+      await base44.functions.invoke('savePaintShape', {
+        token: null,
+        fileId: fileId,
+        pageNo: 1,
+        authorKey: 'admin_all',
+        mode: 'deleteAll',
+        shapeType: 'dummy',
+        dataJson: '{}',
       });
-
-      for (const shape of allShapes) {
-        await base44.entities.PaintShape.delete(shape.id);
-      }
 
       await queryClient.invalidateQueries(['paintShapes', fileId, 1]);
       showToast('全削除完了', 'success');
     } catch (error) {
       console.error('Clear all error:', error);
-      const errorMsg = error.message || String(error);
+      const errorMsg = error.response?.data?.error || error.message || String(error);
       showToast(`全削除失敗: ${errorMsg}`, 'error');
     }
   };
