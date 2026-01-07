@@ -6,6 +6,7 @@ import {
   Circle, 
   Square, 
   ArrowRight,
+  Type,
   Undo2,
   Redo2,
   Trash2,
