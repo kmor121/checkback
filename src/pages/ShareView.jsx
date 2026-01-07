@@ -51,9 +51,19 @@ function ShareViewContent() {
   const [strokeWidth, setStrokeWidth] = useState(2);
   const [shapes, setShapes] = useState([]);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const [showBoundingBoxes, setShowBoundingBoxes] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
+  
+  // Ready状態の詳細判定
+  const readyDetails = {
+    tokenOk: !!token,
+    shareLinkOk: !!shareLink,
+    fileOk: !!shareLink?.file_id,
+    pageOk: currentPage >= 0,
+    passOk: !shareLink?.password_enabled || isPasswordVerified,
+  };
 
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
@@ -548,6 +558,17 @@ function ShareViewContent() {
               strokeColor={strokeColor}
               strokeWidth={strokeWidth}
               zoom={zoom}
+              showBoundingBoxes={showBoundingBoxes}
+              debugInfo={{
+                isReady: isReady,
+                readyDetails: readyDetails,
+                queryKey: ['paintShapes', token, shareLink?.file_id, currentPage],
+                fetchedCount: paintShapes?.length || 0,
+                token: token,
+                fileId: shareLink?.file_id,
+                pageNo: currentPage,
+                guestId: guestId,
+              }}
             />
           )}
 
