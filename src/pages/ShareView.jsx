@@ -9,6 +9,12 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { 
   Download, 
   ZoomIn, 
@@ -18,7 +24,11 @@ import {
   MessageSquare,
   Send,
   Paintbrush,
-  User
+  User,
+  MoreVertical,
+  Edit,
+  Trash,
+  Link as LinkIcon
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
@@ -229,16 +239,16 @@ function ShareViewContent() {
 
 
 
-  // CRITICAL: upsert保存で増殖・not found対策
+  // CRITICAL: _idベース保存で増殖・not found対策
   const handleSaveShape = async (shape, mode) => {
     if (!isReady) {
       console.warn('[ShareView] Not ready yet, save aborted');
       return;
     }
     
-    // CRITICAL: comment_idが無い場合は保存しない
+    // CRITICAL: comment_idが無い場合は保存しない（描画開始ガード）
     if (!activeCommentId) {
-      const msg = 'comment_id が必要です。先にコメントを選択/作成してください';
+      const msg = '先にコメントを選択または作成してください';
       showToast(msg, 'error');
       setPaintMode(false);
       throw new Error(msg);
@@ -258,60 +268,34 @@ function ShareViewContent() {
       };
       
       if (DEBUG_MODE) {
-        console.log('[ShareView] Saving shape (upsert):', { clientShapeId: shape.id, dbId: shape.dbId });
+        console.log('[ShareView] Saving shape:', { mode, clientShapeId: shape.id, dbId: shape.dbId });
       }
       
       let result;
       
-      // ALWAYS upsert to prevent duplication
+      // CRITICAL: dbIdがあれば必ずupdate、無ければcreate（増殖防止）
       if (shape.dbId) {
-        // dbId有り → update試行
         try {
           result = await base44.entities.PaintShape.update(shape.dbId, shapeData);
+          if (DEBUG_MODE) console.log('[ShareView] Updated existing shape:', shape.dbId);
         } catch (err) {
-          // update失敗（not found等）なら検索して再試行
+          // update失敗時のみcreate（極めて稀）
           if (err.message?.includes('not found') || err.message?.includes('Not Found')) {
-            console.warn('[ShareView] Update failed (not found), searching for existing:', shape.dbId);
-            const existing = await base44.entities.PaintShape.filter({
-              share_token: token,
-              file_id: shareLink.file_id,
-              page_no: currentPage,
-              comment_id: activeCommentId,
-              client_shape_id: shape.id,
-            });
-            
-            if (existing.length > 0) {
-              result = await base44.entities.PaintShape.update(existing[0].id, shapeData);
-            } else {
-              result = await base44.entities.PaintShape.create(shapeData);
-            }
+            console.warn('[ShareView] Update failed (not found), creating:', shape.dbId);
+            result = await base44.entities.PaintShape.create(shapeData);
           } else {
             throw err;
           }
         }
       } else {
-        // dbId無し → client_shape_idで検索
-        const existing = await base44.entities.PaintShape.filter({
-          share_token: token,
-          file_id: shareLink.file_id,
-          page_no: currentPage,
-          comment_id: activeCommentId,
-          client_shape_id: shape.id,
-        });
-        
-        if (existing.length > 0) {
-          result = await base44.entities.PaintShape.update(existing[0].id, shapeData);
-        } else {
-          result = await base44.entities.PaintShape.create(shapeData);
-        }
+        // dbId無し → 新規作成
+        result = await base44.entities.PaintShape.create(shapeData);
+        if (DEBUG_MODE) console.log('[ShareView] Created new shape:', result.id);
       }
 
       await queryClient.invalidateQueries(['paintShapes', token, shareLink?.file_id, currentPage]);
 
-      if (DEBUG_MODE) {
-        console.log('[ShareView] Save success:', { resultId: result.id });
-      }
-
+      // CRITICAL: dbIdを返して呼び出し側で保存させる
       return { ...result, dbId: result.id };
     } catch (error) {
       console.error('[ShareView] Save shape error:', error);
@@ -323,28 +307,25 @@ function ShareViewContent() {
 
   const handleDeleteShape = async (shape) => {
     if (!isReady) {
-      console.warn('Not ready yet, delete aborted');
+      console.warn('[ShareView] Not ready yet, delete aborted');
       return;
     }
     
     try {
-      // dbIdがある場合はそれで削除、無い場合はclient_shape_idで検索して削除
+      // CRITICAL: 必ずdbId(_id)で削除（client_shape_idは使わない）
       if (shape.dbId) {
         await base44.entities.PaintShape.delete(shape.dbId);
-      } else if (shape.id) {
-        const existing = await base44.entities.PaintShape.filter({
-          client_shape_id: shape.id,
-          file_id: shareLink.file_id,
-        });
-        if (existing.length > 0) {
-          await base44.entities.PaintShape.delete(existing[0].id);
-        }
+        if (DEBUG_MODE) console.log('[ShareView] Deleted shape by dbId:', shape.dbId);
+      } else {
+        console.warn('[ShareView] No dbId for shape, cannot delete:', shape.id);
+        showToast('削除できませんでした（IDが見つかりません）', 'error');
+        return;
       }
 
       await queryClient.invalidateQueries(['paintShapes', token, shareLink?.file_id, currentPage]);
       showToast('削除完了', 'success');
     } catch (error) {
-      console.error('Delete shape error:', error);
+      console.error('[ShareView] Delete shape error:', error);
       const errorMsg = error.response?.data?.error || error.message || String(error);
       showToast(`削除失敗: ${errorMsg}`, 'error');
       throw new Error(errorMsg);
@@ -466,9 +447,50 @@ function ShareViewContent() {
   };
 
   // コメント編集キャンセル
+  // コメント編集キャンセル
   const handleCancelEditComment = () => {
     setEditingCommentId(null);
     setEditingCommentText('');
+  };
+
+  // コメント削除（関連PaintShapeも削除）
+  const handleDeleteComment = async (comment) => {
+    if (!window.confirm('このコメントと関連する描画を削除しますか？')) {
+      return;
+    }
+
+    try {
+      // 関連するPaintShapeを全削除
+      const relatedShapes = paintShapes.filter(s => s.comment_id === comment.id);
+      for (const shape of relatedShapes) {
+        await base44.entities.PaintShape.delete(shape.id);
+      }
+
+      // コメント削除
+      await base44.entities.ReviewComment.delete(comment.id);
+      
+      queryClient.invalidateQueries(['sharedComments']);
+      queryClient.invalidateQueries(['paintShapes', token, shareLink?.file_id, currentPage]);
+      
+      // 削除したコメントが選択中だったらクリア
+      if (activeCommentId === comment.id) {
+        setActiveCommentId(null);
+      }
+      
+      showToast('コメントと描画を削除しました', 'success');
+    } catch (error) {
+      showToast(`削除失敗: ${error.message}`, 'error');
+    }
+  };
+
+  // コメントURLをコピー
+  const handleCopyCommentUrl = (comment) => {
+    const url = `${window.location.origin}${window.location.pathname}?token=${token}&comment=${comment.id}`;
+    navigator.clipboard.writeText(url).then(() => {
+      showToast('URLをコピーしました', 'success');
+    }).catch(() => {
+      showToast('コピーに失敗しました', 'error');
+    });
   };
 
   // キャンバスクリックでドラフトアンカー設定（ペイントモード外のみ）
@@ -825,34 +847,26 @@ function ShareViewContent() {
                       className={`hover:shadow-md transition-shadow ${isActive ? 'border-2 border-blue-600 bg-blue-50' : ''}`}
                     >
                       <CardContent className="p-3">
-                        <div className="flex items-start gap-2 mb-2">
-                          <Badge variant="secondary" className="text-xs cursor-pointer" onClick={() => setActiveCommentId(isActive ? null : comment.id)}>#{comment.seq_no}</Badge>
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between mb-1">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium">{comment.author_name}</span>
-                                {comment.author_type === 'guest' && (
-                                  <Badge variant="outline" className="text-xs">ゲスト</Badge>
-                                )}
-                                {shapesCount > 0 && (
-                                  <Badge variant="outline" className="text-xs flex items-center gap-1">
-                                    <Paintbrush className="w-3 h-3" />
-                                    {shapesCount}
-                                  </Badge>
-                                )}
-                              </div>
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                onClick={() => handleStartEditComment(comment)}
-                                className="h-auto p-1"
-                              >
-                                <span className="text-xs">編集</span>
-                              </Button>
+                        <div className="flex items-start gap-2">
+                          <div 
+                            className="flex-1 cursor-pointer" 
+                            onClick={() => !isEditing && setActiveCommentId(isActive ? null : comment.id)}
+                          >
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-sm font-medium">{comment.author_name}</span>
+                              {comment.author_type === 'guest' && (
+                                <Badge variant="outline" className="text-xs">ゲスト</Badge>
+                              )}
+                              {shapesCount > 0 && (
+                                <Badge variant="outline" className="text-xs flex items-center gap-1">
+                                  <Paintbrush className="w-3 h-3" />
+                                  {shapesCount}
+                                </Badge>
+                              )}
                             </div>
                             
                             {isEditing ? (
-                              <div className="space-y-2">
+                              <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
                                 <Textarea
                                   value={editingCommentText}
                                   onChange={(e) => setEditingCommentText(e.target.value)}
@@ -870,7 +884,7 @@ function ShareViewContent() {
                               </div>
                             ) : (
                               <>
-                                <p className="text-sm text-gray-700 cursor-pointer" onClick={() => setActiveCommentId(isActive ? null : comment.id)}>{comment.body || '（本文なし）'}</p>
+                                <p className="text-sm text-gray-700">{comment.body || '（本文なし）'}</p>
                                 <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
                                   <span>{comment.page_no}枚目</span>
                                   <span>•</span>
@@ -879,6 +893,31 @@ function ShareViewContent() {
                               </>
                             )}
                           </div>
+                          
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-auto p-1">
+                                <MoreVertical className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleStartEditComment(comment)}>
+                                <Edit className="w-4 h-4 mr-2" />
+                                編集
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleCopyCommentUrl(comment)}>
+                                <LinkIcon className="w-4 h-4 mr-2" />
+                                URLをコピー
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => handleDeleteComment(comment)}
+                                className="text-red-600"
+                              >
+                                <Trash className="w-4 h-4 mr-2" />
+                                削除
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </CardContent>
                     </Card>
@@ -930,7 +969,7 @@ function ShareViewContent() {
           paintMode={paintMode}
           onPaintModeChange={(mode) => {
             if (mode && !activeCommentId) {
-              showToast('先にコメントを選択/作成してください', 'error');
+              showToast('先にコメントを選択または作成してください', 'error');
               return;
             }
             setPaintMode(mode);
