@@ -311,7 +311,7 @@ function ShareViewContent() {
         if (DEBUG_MODE) console.log('[ShareView] Created new shape:', result.id);
       }
 
-      await queryClient.invalidateQueries(['paintShapes', token, shareLink?.file_id, currentPage]);
+      await queryClient.invalidateQueries({ queryKey: ['paintShapes', token, shareLink?.file_id, currentPage] });
 
       // CRITICAL: dbIdを返して呼び出し側で保存させる
       return { ...result, dbId: result.id };
@@ -340,7 +340,7 @@ function ShareViewContent() {
         return;
       }
 
-      await queryClient.invalidateQueries(['paintShapes', token, shareLink?.file_id, currentPage]);
+      await queryClient.invalidateQueries({ queryKey: ['paintShapes', token, shareLink?.file_id, currentPage] });
       showToast('削除完了', 'success');
     } catch (error) {
       console.error('[ShareView] Delete shape error:', error);
@@ -369,7 +369,7 @@ function ShareViewContent() {
         await base44.entities.PaintShape.delete(shape.id);
       }
 
-      await queryClient.invalidateQueries(['paintShapes', token, shareLink?.file_id, currentPage]);
+      await queryClient.invalidateQueries({ queryKey: ['paintShapes', token, shareLink?.file_id, currentPage] });
       showToast('全削除完了', 'success');
     } catch (error) {
       console.error('Clear all error:', error);
