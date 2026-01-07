@@ -247,9 +247,12 @@ const ViewerCanvas = forwardRef(({
   };
 
   // 空白クリックで選択解除（編集モード時）
-  const handleStageClick = (e) => {
-    if (isEditMode && e.target === e.target.getStage()) {
-      setSelectedId(null);
+  const handleStageMouseDown = (e) => {
+    if (isEditMode) {
+      const clickedOnEmpty = e.target === e.target.getStage();
+      if (clickedOnEmpty) {
+        setSelectedId(null);
+      }
     }
   };
 
@@ -410,43 +413,46 @@ const ViewerCanvas = forwardRef(({
   // ドラッグ終了時の更新
   const handleDragEnd = async (shape, e) => {
     const node = e.target;
-    const { x, y } = node.position();
+    const x = node.x();
+    const y = node.y();
     
     const updatedShape = { ...shape };
     
     if (shape.tool === 'pen' && shape.normalizedPoints) {
       // ペンは全ポイントを移動
-      const dx = x;
-      const dy = y;
       const newPoints = [];
       for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
         const { x: px, y: py } = denormalizeCoords(shape.normalizedPoints[i], shape.normalizedPoints[i + 1]);
-        const { nx, ny } = normalizeCoords(px + dx, py + dy);
+        const { nx, ny } = normalizeCoords(px + x, py + y);
         newPoints.push(nx, ny);
       }
       updatedShape.normalizedPoints = newPoints;
-      node.position({ x: 0, y: 0 }); // リセット
+      node.x(0);
+      node.y(0);
     } else if (shape.tool === 'rect') {
-      const { nx, ny } = normalizeCoords(x, y);
+      const { x: origX, y: origY } = denormalizeCoords(shape.nx, shape.ny);
+      const { nx, ny } = normalizeCoords(origX + x, origY + y);
       updatedShape.nx = nx;
       updatedShape.ny = ny;
-      node.position({ x: 0, y: 0 });
+      node.x(0);
+      node.y(0);
     } else if (shape.tool === 'circle') {
-      const { nx, ny } = normalizeCoords(x, y);
+      const { x: origX, y: origY } = denormalizeCoords(shape.nx, shape.ny);
+      const { nx, ny } = normalizeCoords(origX + x, origY + y);
       updatedShape.nx = nx;
       updatedShape.ny = ny;
-      node.position({ x: 0, y: 0 });
+      node.x(0);
+      node.y(0);
     } else if (shape.tool === 'arrow') {
-      const dx = x;
-      const dy = y;
       const newPoints = [];
       for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
         const { x: px, y: py } = denormalizeCoords(shape.normalizedPoints[i], shape.normalizedPoints[i + 1]);
-        const { nx, ny } = normalizeCoords(px + dx, py + dy);
+        const { nx, ny } = normalizeCoords(px + x, py + y);
         newPoints.push(nx, ny);
       }
       updatedShape.normalizedPoints = newPoints;
-      node.position({ x: 0, y: 0 });
+      node.x(0);
+      node.y(0);
     }
     
     addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: updatedShape });
@@ -455,8 +461,11 @@ const ViewerCanvas = forwardRef(({
     if (onSaveShape) {
       try {
         await onSaveShape(updatedShape);
+        setLastSaveStatus('success');
       } catch (err) {
         console.error('Update shape error:', err);
+        setLastSaveStatus('error');
+        setLastError(err.message);
       }
     }
   };
@@ -470,33 +479,48 @@ const ViewerCanvas = forwardRef(({
     const updatedShape = { ...shape };
     
     if (shape.tool === 'rect') {
-      const { x, y } = node.position();
-      const width = Math.max(5, node.width() * scaleX); // 最小サイズ
+      const x = node.x();
+      const y = node.y();
+      const width = Math.max(5, node.width() * scaleX);
       const height = Math.max(5, node.height() * scaleY);
       
-      const { nx: nx1, ny: ny1 } = normalizeCoords(x, y);
-      const { nx: nx2, ny: ny2 } = normalizeCoords(x + width, y + height);
+      // 元の位置からの変換を計算
+      const { x: origX, y: origY } = denormalizeCoords(shape.nx, shape.ny);
+      const finalX = origX + x;
+      const finalY = origY + y;
+      
+      const { nx: nx1, ny: ny1 } = normalizeCoords(finalX, finalY);
+      const { nx: nx2, ny: ny2 } = normalizeCoords(finalX + width, finalY + height);
       
       updatedShape.nx = nx1;
       updatedShape.ny = ny1;
       updatedShape.nw = nx2 - nx1;
       updatedShape.nh = ny2 - ny1;
       
+      // ノードをリセット
       node.scaleX(1);
       node.scaleY(1);
-      node.position({ x: 0, y: 0 });
+      node.x(0);
+      node.y(0);
     } else if (shape.tool === 'circle') {
-      const { x, y } = node.position();
+      const x = node.x();
+      const y = node.y();
       const radius = Math.max(3, node.radius() * Math.max(scaleX, scaleY));
       
-      const { nx, ny } = normalizeCoords(x, y);
+      const { x: origX, y: origY } = denormalizeCoords(shape.nx, shape.ny);
+      const finalX = origX + x;
+      const finalY = origY + y;
+      
+      const { nx, ny } = normalizeCoords(finalX, finalY);
       updatedShape.nx = nx;
       updatedShape.ny = ny;
       updatedShape.nr = radius / bgSize.width;
       
+      // ノードをリセット
       node.scaleX(1);
       node.scaleY(1);
-      node.position({ x: 0, y: 0 });
+      node.x(0);
+      node.y(0);
     }
     
     addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: updatedShape });
@@ -537,11 +561,11 @@ const ViewerCanvas = forwardRef(({
       key: shape.id,
       stroke: shape.stroke,
       strokeWidth: shape.strokeWidth,
-      onClick: isEditMode ? (e) => {
+      onMouseDown: isEditMode ? (e) => {
         e.cancelBubble = true;
         setSelectedId(shape.id);
       } : undefined,
-      onTap: isEditMode ? (e) => {
+      onTouchStart: isEditMode ? (e) => {
         e.cancelBubble = true;
         setSelectedId(shape.id);
       } : undefined,
@@ -551,6 +575,9 @@ const ViewerCanvas = forwardRef(({
         }
       },
       draggable: isEditMode && !isExisting,
+      onDragStart: isEditMode ? (e) => {
+        e.cancelBubble = true;
+      } : undefined,
       onDragEnd: isEditMode ? (e) => handleDragEnd(shape, e) : undefined,
       onTransformEnd: isEditMode ? (e) => handleTransformEnd(shape, e) : undefined,
     };
@@ -640,8 +667,8 @@ const ViewerCanvas = forwardRef(({
         onPointerDown={isDrawMode ? handlePointerDown : undefined}
         onPointerMove={isDrawMode ? handlePointerMove : undefined}
         onPointerUp={isDrawMode ? handlePointerUp : undefined}
-        onClick={isEditMode ? handleStageClick : undefined}
-        onTap={isEditMode ? handleStageClick : undefined}
+        onMouseDown={isEditMode ? handleStageMouseDown : undefined}
+        onTouchStart={isEditMode ? handleStageMouseDown : undefined}
         style={{ cursor: isDrawMode ? 'crosshair' : isEditMode ? 'default' : 'default' }}
       >
         {/* 背景Layer（非インタラクティブ） */}

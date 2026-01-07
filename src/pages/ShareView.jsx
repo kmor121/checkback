@@ -519,6 +519,7 @@ function ShareViewContent() {
           onUndo={() => viewerCanvasRef.current?.undo()}
           onRedo={() => viewerCanvasRef.current?.redo()}
           onClear={() => viewerCanvasRef.current?.clear()}
+          onDelete={() => viewerCanvasRef.current?.delete()}
           onComplete={() => setPaintMode(false)}
         />
       )}

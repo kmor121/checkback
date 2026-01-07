@@ -35,6 +35,7 @@ export default function FloatingToolbar({
   onUndo,
   onRedo,
   onClear,
+  onDelete,
   onComplete,
 }) {
   const colors = [
@@ -179,8 +180,9 @@ export default function FloatingToolbar({
             <Button
               variant="outline"
               size="sm"
-              onClick={onClear}
-              title="全削除"
+              onClick={onDelete}
+              disabled={tool !== 'select'}
+              title="削除 (Delete)"
             >
               <Trash2 className="w-4 h-4" />
             </Button>
