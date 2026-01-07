@@ -55,15 +55,6 @@ function ShareViewContent() {
   const [isReady, setIsReady] = useState(false);
   const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
-  
-  // Ready状態の詳細判定
-  const readyDetails = {
-    tokenOk: !!token,
-    shareLinkOk: !!shareLink,
-    fileOk: !!shareLink?.file_id,
-    pageOk: currentPage >= 0,
-    passOk: !shareLink?.password_enabled || isPasswordVerified,
-  };
 
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
@@ -106,6 +97,15 @@ function ShareViewContent() {
     enabled: !!token,
     staleTime: 60000,
   });
+
+  // Ready状態の詳細判定（tokenとshareLinkの取得後）
+  const readyDetails = {
+    tokenOk: !!token,
+    shareLinkOk: !!shareLink,
+    fileOk: !!shareLink?.file_id,
+    pageOk: currentPage >= 0,
+    passOk: !shareLink?.password_enabled || isPasswordVerified,
+  };
 
   // ShareLinkのパスワード検証と有効期限チェック
   useEffect(() => {
@@ -474,9 +474,7 @@ function ShareViewContent() {
         </Card>
       </div>
     );
-    }
-
-    const DEBUG_MODE = import.meta.env.VITE_DEBUG === 'true';
+  }
 
   const filteredComments = comments.filter(c => {
     if (commentFilter === 'resolved' && !c.resolved) return false;
