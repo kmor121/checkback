@@ -632,34 +632,32 @@ const ViewerCanvas = forwardRef(({
       
       return <Line {...commonProps} points={points} tension={0.5} lineCap="round" lineJoin="round" hitStrokeWidth={20} />;
     } else if (shape.tool === 'rect') {
-      let x = shape.x || 0;
-      let y = shape.y || 0;
-      let width = shape.width || 0;
-      let height = shape.height || 0;
+      // 描画中の一時的なshape
+      if (shape.x !== undefined && shape.width !== undefined) {
+        return <Rect {...commonProps} x={shape.x} y={shape.y} width={shape.width} height={shape.height} />;
+      }
       
+      // 保存済みshape（正規化座標から復元）
       if (shape.nx !== undefined) {
         const p1 = denormalizeCoords(shape.nx, shape.ny);
         const p2 = denormalizeCoords(shape.nx + shape.nw, shape.ny + shape.nh);
-        x = p1.x;
-        y = p1.y;
-        width = p2.x - p1.x;
-        height = p2.y - p1.y;
+        return <Rect {...commonProps} x={p1.x} y={p1.y} width={p2.x - p1.x} height={p2.y - p1.y} />;
       }
       
-      return <Rect {...commonProps} x={x} y={y} width={width} height={height} />;
+      return null;
     } else if (shape.tool === 'circle') {
-      let x = shape.x || 0;
-      let y = shape.y || 0;
-      let radius = shape.radius || 0;
+      // 描画中の一時的なshape
+      if (shape.x !== undefined && shape.radius !== undefined) {
+        return <Circle {...commonProps} x={shape.x} y={shape.y} radius={shape.radius} />;
+      }
       
+      // 保存済みshape（正規化座標から復元）
       if (shape.nx !== undefined) {
         const center = denormalizeCoords(shape.nx, shape.ny);
-        x = center.x;
-        y = center.y;
-        radius = shape.nr * bgSize.width;
+        return <Circle {...commonProps} x={center.x} y={center.y} radius={shape.nr * bgSize.width} />;
       }
       
-      return <Circle {...commonProps} x={x} y={y} radius={radius} />;
+      return null;
     } else if (shape.tool === 'arrow') {
       let points = shape.points || [];
       
