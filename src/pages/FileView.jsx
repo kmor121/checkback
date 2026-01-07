@@ -130,16 +130,40 @@ function FileViewContent() {
 
   const handleSaveShape = async (shape) => {
     try {
-      await base44.entities.PaintShape.create({
-        file_id: fileId,
-        page_no: 1,
-        shape_type: shape.tool,
-        data_json: JSON.stringify(shape),
-        author_name: user?.full_name || 'User',
-      });
+      // 削除モード
+      if (shape._deleted) {
+        // DBから削除（PaintShapeのIDがshape.idと一致するものを削除）
+        const existingShapes = await base44.entities.PaintShape.filter({ id: shape.id });
+        if (existingShapes.length > 0) {
+          await base44.entities.PaintShape.delete(existingShapes[0].id);
+        }
+        queryClient.invalidateQueries(['paintShapes']);
+        showToast('削除完了', 'success');
+        return;
+      }
+
+      // 既存のshapeか新規か判定
+      const existingShapes = await base44.entities.PaintShape.filter({ id: shape.id });
+
+      if (existingShapes.length > 0) {
+        // 更新
+        await base44.entities.PaintShape.update(existingShapes[0].id, {
+          data_json: JSON.stringify(shape),
+        });
+        showToast('更新完了', 'success');
+      } else {
+        // 新規作成
+        await base44.entities.PaintShape.create({
+          file_id: fileId,
+          page_no: 1,
+          shape_type: shape.tool,
+          data_json: JSON.stringify(shape),
+          author_name: user?.full_name || 'User',
+        });
+        showToast('保存完了', 'success');
+      }
 
       queryClient.invalidateQueries(['paintShapes']);
-      showToast('保存完了', 'success');
     } catch (error) {
       console.error('Save shape error:', error);
       showToast(`保存失敗: ${error.message}`, 'error');
