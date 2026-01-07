@@ -117,46 +117,57 @@ function ShareViewContent() {
 
 
 
-  const handleSaveShape = async (shape) => {
+  const handleSaveShape = async (shape, mode) => {
     try {
-      // 削除モード
-      if (shape._deleted) {
-        const existingShapes = await base44.entities.PaintShape.filter({ id: shape.id });
-        if (existingShapes.length > 0) {
-          await base44.entities.PaintShape.delete(existingShapes[0].id);
-        }
-        queryClient.invalidateQueries(['sharedPaintShapes']);
-        showToast('削除完了', 'success');
-        return;
-      }
+      const result = await base44.functions.invoke('savePaintShape', {
+        token: token,
+        fileId: shareLink.file_id,
+        pageNo: currentPage,
+        clientShapeId: shape.id,
+        shapeType: shape.tool,
+        dataJson: JSON.stringify(shape),
+        authorName: guestName || 'Guest',
+        mode: mode || 'create',
+      });
 
-      // 既存のshapeか新規か判定
-      const existingShapes = await base44.entities.PaintShape.filter({ id: shape.id });
-
-      if (existingShapes.length > 0) {
-        // 更新
-        await base44.entities.PaintShape.update(existingShapes[0].id, {
-          data_json: JSON.stringify(shape),
-        });
-        showToast('更新完了', 'success');
-      } else {
-        // 新規作成
-        await base44.entities.PaintShape.create({
-          file_id: shareLink.file_id,
-          share_link_id: shareLink.id,
-          page_no: currentPage,
-          shape_type: shape.tool,
-          data_json: JSON.stringify(shape),
-          author_name: guestName || 'Guest',
-        });
-        showToast('保存完了', 'success');
+      if (result.data.error) {
+        throw new Error(result.data.error);
       }
 
       queryClient.invalidateQueries(['sharedPaintShapes']);
+
+      if (mode === 'update') {
+        showToast('更新完了', 'success');
+      } else {
+        showToast('保存完了', 'success');
+      }
+
+      return result.data;
     } catch (error) {
       console.error('Save shape error:', error);
-      showToast(`保存失敗: ${error.message}`, 'error');
-      throw error;
+      const errorMsg = error.response?.data?.error || error.message || String(error);
+      showToast(`保存失敗: ${errorMsg}`, 'error');
+      throw new Error(errorMsg);
+    }
+  };
+
+  const handleDeleteShape = async (shape) => {
+    try {
+      await base44.functions.invoke('savePaintShape', {
+        token: token,
+        fileId: shareLink.file_id,
+        pageNo: currentPage,
+        clientShapeId: shape.id,
+        mode: 'delete',
+      });
+
+      queryClient.invalidateQueries(['sharedPaintShapes']);
+      showToast('削除完了', 'success');
+    } catch (error) {
+      console.error('Delete shape error:', error);
+      const errorMsg = error.response?.data?.error || error.message || String(error);
+      showToast(`削除失敗: ${errorMsg}`, 'error');
+      throw new Error(errorMsg);
     }
   };
 
@@ -414,6 +425,7 @@ function ShareViewContent() {
             pageNumber={currentPage}
             existingShapes={existingShapes}
             onSaveShape={handleSaveShape}
+            onDeleteShape={handleDeleteShape}
             paintMode={paintMode}
             tool={tool}
             onToolChange={setTool}

@@ -31,6 +31,7 @@ const ViewerCanvas = forwardRef(({
   existingShapes = [],
   onShapesChange,
   onSaveShape,
+  onDeleteShape,
   paintMode = false,
   tool = 'select',
   strokeColor = '#ff0000',
@@ -64,6 +65,9 @@ const ViewerCanvas = forwardRef(({
   const [imgPos, setImgPos] = useState(null);
   const [lastSaveStatus, setLastSaveStatus] = useState('idle');
   const [lastError, setLastError] = useState(null);
+  const [lastMutation, setLastMutation] = useState(null);
+  const [lastPayload, setLastPayload] = useState(null);
+  const [lastSuccessId, setLastSuccessId] = useState(null);
   
   const isImage = mimeType?.startsWith('image/');
   const isEditMode = tool === 'select';
@@ -275,10 +279,13 @@ const ViewerCanvas = forwardRef(({
     setSelectedId(null);
     
     // DB削除を実行
-    if (onSaveShape) {
+    if (onDeleteShape) {
+      setLastMutation('delete');
+      setLastPayload(JSON.stringify({ id: shape.id }));
       try {
-        await onSaveShape({ ...shape, _deleted: true });
+        await onDeleteShape(shape);
         setLastSaveStatus('success');
+        setLastError(null);
       } catch (err) {
         console.error('Delete shape error:', err);
         setLastSaveStatus('error');
@@ -320,7 +327,7 @@ const ViewerCanvas = forwardRef(({
       setIsDrawing(true);
       
       const newShape = {
-        id: `shape_${Date.now()}`,
+        id: `shape_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         tool,
         stroke: strokeColor,
         strokeWidth: strokeWidth,
@@ -466,9 +473,12 @@ const ViewerCanvas = forwardRef(({
       // 親コンポーネントに保存を依頼
       if (onSaveShape) {
         setLastSaveStatus('saving');
+        setLastMutation('create');
+        setLastPayload(JSON.stringify(normalizedShape));
         try {
-          await onSaveShape(normalizedShape);
+          const result = await onSaveShape(normalizedShape, 'create');
           setLastSaveStatus('success');
+          setLastSuccessId(result?.dbId || normalizedShape.id);
           setLastError(null);
         } catch (err) {
           setLastSaveStatus('error');
@@ -803,6 +813,9 @@ const ViewerCanvas = forwardRef(({
           <div style={{ color: lastSaveStatus === 'success' ? '#0f0' : lastSaveStatus === 'error' ? '#f00' : '#ff0' }}>
             saveStatus: {lastSaveStatus}
           </div>
+          {lastMutation && <div>lastMutation: {lastMutation}</div>}
+          {lastSuccessId && <div style={{ color: '#0f0' }}>lastSuccessId: {lastSuccessId}</div>}
+          {lastPayload && <div className="text-xs">payload: {lastPayload.substring(0, 100)}...</div>}
           {lastError && <div style={{ color: '#f00' }}>error: {lastError}</div>}
         </div>
       )}
