@@ -122,7 +122,15 @@ export default function FloatingToolbar({
             >
               <ArrowRight className="w-4 h-4" />
             </Button>
-            
+            <Button
+              variant={tool === 'text' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => onToolChange('text')}
+              title="テキスト"
+            >
+              <Type className="w-4 h-4" />
+            </Button>
+
             <div className="w-px h-6 bg-gray-300" />
             
             {/* 色選択 */}

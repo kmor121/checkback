@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { Stage, Layer, Line, Rect, Circle, Arrow, Image as KonvaImage, Group, Transformer } from 'react-konva';
 import useImage from 'use-image';
-import CommentPin from './CommentPin';
+// CommentPin は使用しない（バッジ非表示）
 
 // UUID生成（clientShapeId用、再生成されない保証）
 function generateUUID() {
@@ -54,6 +54,7 @@ const ViewerCanvas = forwardRef(({
   showBoundingBoxes = false,
   showAllPaint = false,
   onCanvasClick,
+  draftAnchor = null,
   debugInfo = null,
 }, ref) => {
   const containerRef = useRef(null);
@@ -948,27 +949,26 @@ const ViewerCanvas = forwardRef(({
           </Group>
         </Layer>
 
-        {/* コメントピンLayer */}
-        <Layer>
-          <Group
-            x={offsetX}
-            y={offsetY}
-            scaleX={contentScale}
-            scaleY={contentScale}
-          >
-            {comments.map(comment => (
-              <CommentPin
-                key={comment.id}
-                comment={comment}
-                bgWidth={bgSize.width}
-                bgHeight={bgSize.height}
-                isActive={activeCommentId === comment.id}
-                onClick={() => onCommentClick && onCommentClick(comment.id)}
-                seqNo={comment.seq_no}
+        {/* ドラフトアンカー表示Layer（コメント番号バッジは非表示） */}
+        {draftAnchor && (
+          <Layer>
+            <Group
+              x={offsetX}
+              y={offsetY}
+              scaleX={contentScale}
+              scaleY={contentScale}
+            >
+              <Circle
+                x={draftAnchor.nx * bgSize.width}
+                y={draftAnchor.ny * bgSize.height}
+                radius={6}
+                fill="rgba(59, 130, 246, 0.8)"
+                stroke="white"
+                strokeWidth={2}
               />
-            ))}
-          </Group>
-        </Layer>
+            </Group>
+          </Layer>
+        )}
         
         {/* 注釈Layer（contentGroup内に配置） */}
         <Layer>

@@ -55,10 +55,16 @@ function ShareViewContent() {
   const [showBoundingBoxes, setShowBoundingBoxes] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [activeCommentId, setActiveCommentId] = useState(null);
+  const [composerMode, setComposerMode] = useState('new');
   const [draftAnchor, setDraftAnchor] = useState(null);
   const [showAllPaint, setShowAllPaint] = useState(false);
   const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
+
+  // composerModeをactiveCommentIdに基づいて自動更新
+  useEffect(() => {
+    setComposerMode(activeCommentId ? 'edit' : 'new');
+  }, [activeCommentId]);
 
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
@@ -201,6 +207,7 @@ function ShareViewContent() {
     localStorage.setItem(key, activeCommentId);
   }, [activeCommentId, token, shareLink?.file_id, currentPage]);
 
+  // CRITICAL: comment_idで絞らず、全shapesをフェッチ（表示フィルタはクライアント側）
   const { data: paintShapes = [], isFetching: shapesFetching } = useQuery({
     queryKey: ['paintShapes', token, shareLink?.file_id, currentPage],
     queryFn: async () => {
@@ -225,6 +232,7 @@ function ShareViewContent() {
 
 
 
+  // CRITICAL: upsert保存で増殖・not found対策
   const handleSaveShape = async (shape, mode) => {
     if (!isReady) {
       console.warn('[ShareView] Not ready yet, save aborted');
@@ -253,54 +261,58 @@ function ShareViewContent() {
       };
       
       if (DEBUG_MODE) {
-        console.log('[ShareView] Saving shape:', { mode, clientShapeId: shape.id, dbId: shape.dbId });
+        console.log('[ShareView] Saving shape (upsert):', { clientShapeId: shape.id, dbId: shape.dbId });
       }
       
       let result;
       
-      if (mode === 'create') {
-        // 新規作成
-        result = await base44.entities.PaintShape.create(shapeData);
-      } else if (mode === 'upsert') {
-        // CRITICAL: upsertモード（増殖防止の要）
-        // shape.dbId があれば update、無ければ検索 → 見つかれば update、無ければ create
-        if (shape.dbId) {
-          try {
-            result = await base44.entities.PaintShape.update(shape.dbId, shapeData);
-          } catch (err) {
-            // update失敗（not found等）なら create
-            if (err.message?.includes('not found') || err.message?.includes('Not Found')) {
-              console.warn('[ShareView] Update failed (not found), creating new:', shape.dbId);
-              result = await base44.entities.PaintShape.create(shapeData);
+      // ALWAYS upsert to prevent duplication
+      if (shape.dbId) {
+        // dbId有り → update試行
+        try {
+          result = await base44.entities.PaintShape.update(shape.dbId, shapeData);
+        } catch (err) {
+          // update失敗（not found等）なら検索して再試行
+          if (err.message?.includes('not found') || err.message?.includes('Not Found')) {
+            console.warn('[ShareView] Update failed (not found), searching for existing:', shape.dbId);
+            const existing = await base44.entities.PaintShape.filter({
+              share_token: token,
+              file_id: shareLink.file_id,
+              page_no: currentPage,
+              comment_id: activeCommentId,
+              client_shape_id: shape.id,
+            });
+            
+            if (existing.length > 0) {
+              result = await base44.entities.PaintShape.update(existing[0].id, shapeData);
             } else {
-              throw err;
+              result = await base44.entities.PaintShape.create(shapeData);
             }
-          }
-        } else {
-          // dbId無し → client_shape_idで検索
-          const existing = await base44.entities.PaintShape.filter({
-            file_id: shareLink.file_id,
-            client_shape_id: shape.id,
-            comment_id: activeCommentId,
-          });
-          
-          if (existing.length > 0) {
-            // 既存レコードがあれば update
-            result = await base44.entities.PaintShape.update(existing[0].id, shapeData);
           } else {
-            // 無ければ create
-            result = await base44.entities.PaintShape.create(shapeData);
+            throw err;
           }
         }
       } else {
-        // その他（後方互換）
-        result = await base44.entities.PaintShape.create(shapeData);
+        // dbId無し → client_shape_idで検索
+        const existing = await base44.entities.PaintShape.filter({
+          share_token: token,
+          file_id: shareLink.file_id,
+          page_no: currentPage,
+          comment_id: activeCommentId,
+          client_shape_id: shape.id,
+        });
+        
+        if (existing.length > 0) {
+          result = await base44.entities.PaintShape.update(existing[0].id, shapeData);
+        } else {
+          result = await base44.entities.PaintShape.create(shapeData);
+        }
       }
 
       await queryClient.invalidateQueries(['paintShapes', token, shareLink?.file_id, currentPage]);
 
       if (DEBUG_MODE) {
-        console.log('[ShareView] Save success:', { mode, resultId: result.id });
+        console.log('[ShareView] Save success:', { resultId: result.id });
       }
 
       return { ...result, dbId: result.id };
@@ -396,6 +408,7 @@ function ShareViewContent() {
       queryClient.invalidateQueries(['sharedComments']);
       setCommentBody('');
       setActiveCommentId(comment.id);
+      setComposerMode('edit');
       setDraftAnchor(null);
       showToast('コメントを作成しました', 'success');
     },
@@ -414,8 +427,8 @@ function ShareViewContent() {
       return;
     }
 
-    if (activeCommentId) {
-      // 既存コメントを更新
+    if (composerMode === 'edit' && activeCommentId) {
+      // EDITモード：既存コメントを更新
       base44.entities.ReviewComment.update(activeCommentId, { body: commentBody })
         .then(() => {
           queryClient.invalidateQueries(['sharedComments']);
@@ -426,15 +439,14 @@ function ShareViewContent() {
           showToast(`更新失敗: ${error.message}`, 'error');
         });
     } else {
-      // 新規コメント作成
+      // NEWモード：新規コメント作成
       let anchor_nx, anchor_ny;
 
       if (draftAnchor) {
-        // ドラフトアンカーがあればそれを使用
         anchor_nx = draftAnchor.nx;
         anchor_ny = draftAnchor.ny;
       } else {
-        // 無ければビューポート中心を使用
+        // 無ければビューポート中心（または要求に応じて位置指定を強制）
         anchor_nx = 0.5;
         anchor_ny = 0.5;
       }
@@ -447,15 +459,24 @@ function ShareViewContent() {
     }
   };
 
-  // キャンバスクリックでドラフトアンカー設定（ペイントモード外のみ）
+  // 編集モードをキャンセルして新規モードに戻る
+  const handleCancelEdit = () => {
+    setActiveCommentId(null);
+    setComposerMode('new');
+    setCommentBody('');
+    setDraftAnchor(null);
+  };
+
+  // キャンバスクリックでドラフトアンカー設定（NEWモード＋ペイントモード外のみ）
   const handleCanvasClick = (anchorX, anchorY, bgWidth, bgHeight) => {
     if (paintMode) return;
 
-    const anchor_nx = anchorX / bgWidth;
-    const anchor_ny = anchorY / bgHeight;
-
-    setDraftAnchor({ nx: anchor_nx, ny: anchor_ny });
-    showToast('ピンを配置しました。コメントを入力してください', 'info');
+    if (composerMode === 'new') {
+      const anchor_nx = anchorX / bgWidth;
+      const anchor_ny = anchorY / bgHeight;
+      setDraftAnchor({ nx: anchor_nx, ny: anchor_ny });
+      showToast('ピンを配置しました。コメントを入力してください', 'info');
+    }
   };
 
   // PaintShapeをViewerCanvas用の形式に変換（全ペイント表示対応）
@@ -705,9 +726,10 @@ function ShareViewContent() {
               mimeType={file?.mime_type}
               pageNumber={currentPage}
               existingShapes={existingShapes}
-              comments={comments}
+              comments={[]}
               activeCommentId={activeCommentId}
               onCommentClick={setActiveCommentId}
+              draftAnchor={composerMode === 'new' ? draftAnchor : null}
               onSaveShape={handleSaveShape}
               onDeleteShape={handleDeleteShape}
               paintMode={isReady && paintMode && !!activeCommentId}
@@ -832,14 +854,30 @@ function ShareViewContent() {
               )}
             </div>
 
-            {/* 入力ドック */}
+            {/* 入力ドック（NEW/EDITモード対応） */}
             {shareLink.can_post_comments ? (
               <div className="border-t p-3 bg-gray-50">
+                {composerMode === 'edit' && activeCommentId && (
+                  <div className="mb-2 flex items-center justify-between text-xs">
+                    <span className="text-gray-600">コメント編集中</span>
+                    <Button variant="ghost" size="sm" onClick={handleCancelEdit} className="h-auto p-1">
+                      <span className="text-xs">✕ キャンセル</span>
+                    </Button>
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <Textarea
-                    placeholder="コメントを入力"
-                    value={commentBody}
+                    placeholder={composerMode === 'new' ? 'コメントを入力' : '編集中...'}
+                    value={composerMode === 'edit' && activeCommentId && !commentBody ? 
+                      comments.find(c => c.id === activeCommentId)?.body || '' : 
+                      commentBody}
                     onChange={(e) => setCommentBody(e.target.value)}
+                    onFocus={() => {
+                      if (composerMode === 'edit' && activeCommentId && !commentBody) {
+                        const comment = comments.find(c => c.id === activeCommentId);
+                        if (comment) setCommentBody(comment.body || '');
+                      }
+                    }}
                     rows={2}
                     className="flex-1 text-sm"
                   />
@@ -852,7 +890,7 @@ function ShareViewContent() {
                     <Send className="w-4 h-4" />
                   </Button>
                 </div>
-                {draftAnchor && (
+                {composerMode === 'new' && draftAnchor && (
                   <div className="mt-2 text-xs text-gray-600 flex items-center gap-1">
                     <div className="w-2 h-2 bg-blue-600 rounded-full" />
                     ピン配置済み（{(draftAnchor.nx * 100).toFixed(0)}%, {(draftAnchor.ny * 100).toFixed(0)}%）
