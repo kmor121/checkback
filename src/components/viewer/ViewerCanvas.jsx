@@ -507,31 +507,40 @@ const ViewerCanvas = forwardRef(({
       
       // Undo履歴に追加
       addToUndoStack({ type: 'add', shapeId: normalizedShape.id });
-      
-      // Optimistic update
+
+      // CRITICAL: Optimistic update は追加（新規描画のみ）
       setShapes(prev => [...prev, normalizedShape]);
       setCurrentShape(null);
-      
+
       // 描画完了後、自動で選択ツールに切り替え＆新図形を選択
       setSelectedId(normalizedShape.id);
       if (onToolChange) {
         onToolChange('select');
       }
-      
-      // 親コンポーネントに保存を依頼
+
+      // 親コンポーネントに保存を依頼（createモード）
       if (onSaveShape) {
+        setIsSaving(prev => ({ ...prev, [normalizedShape.id]: true }));
         setLastSaveStatus('saving');
         setLastMutation('create');
         setLastPayload(JSON.stringify(normalizedShape));
+
         try {
           const result = await onSaveShape(normalizedShape, 'create');
           setLastSaveStatus('success');
           setLastSuccessId(result?.dbId || normalizedShape.id);
           setLastError(null);
+
+          // CRITICAL: DBから返ってきた_idを既存shapeに上書き（新規追加しない）
+          if (result?.dbId) {
+            setShapes(prev => prev.map(s => s.id === normalizedShape.id ? { ...s, dbId: result.dbId } : s));
+          }
         } catch (err) {
           setLastSaveStatus('error');
           setLastError(err.message || String(err));
           console.error('Save Shape Error:', err);
+        } finally {
+          setIsSaving(prev => ({ ...prev, [normalizedShape.id]: false }));
         }
       }
     } catch (err) {
