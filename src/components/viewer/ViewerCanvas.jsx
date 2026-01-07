@@ -436,6 +436,8 @@ const ViewerCanvas = forwardRef(({
           normalizedPoints.push(nx, ny);
         }
         normalizedShape.normalizedPoints = normalizedPoints;
+        // 一時フィールドを削除（正規化データのみ保存）
+        // points, startX, startY は含めない
       } else if (tool === 'rect') {
         const { nx: nx1, ny: ny1 } = normalizeCoords(currentShape.x, currentShape.y);
         const { nx: nx2, ny: ny2 } = normalizeCoords(currentShape.x + currentShape.width, currentShape.y + currentShape.height);
@@ -443,11 +445,15 @@ const ViewerCanvas = forwardRef(({
         normalizedShape.ny = ny1;
         normalizedShape.nw = nx2 - nx1;
         normalizedShape.nh = ny2 - ny1;
+        // 一時フィールドを削除（正規化データのみ保存）
+        // x, y, width, height, startX, startY は含めない
       } else if (tool === 'circle') {
         const { nx, ny } = normalizeCoords(currentShape.x, currentShape.y);
         normalizedShape.nx = nx;
         normalizedShape.ny = ny;
         normalizedShape.nr = currentShape.radius / bgSize.width;
+        // 一時フィールドを削除（正規化データのみ保存）
+        // x, y, radius, startX, startY は含めない
       } else if (tool === 'arrow' && currentShape.points) {
         const normalizedPoints = [];
         for (let i = 0; i < currentShape.points.length; i += 2) {
@@ -455,6 +461,8 @@ const ViewerCanvas = forwardRef(({
           normalizedPoints.push(nx, ny);
         }
         normalizedShape.normalizedPoints = normalizedPoints;
+        // 一時フィールドを削除（正規化データのみ保存）
+        // points, startX, startY は含めない
       }
       
       // Undo履歴に追加
