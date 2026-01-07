@@ -46,6 +46,7 @@ export default function FloatingToolbar({
   onToggleBoundingBoxes,
   showAllPaint,
   onToggleShowAllPaint,
+  hasActiveComment = false,
 }) {
   const DEBUG_MODE = import.meta.env.VITE_DEBUG === 'true';
   const colors = [
@@ -205,12 +206,12 @@ export default function FloatingToolbar({
               <Trash2 className="w-4 h-4" />
             </Button>
 
-            {onClearAll && (
+            {onClearAll && hasActiveComment && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={onClearAll}
-                title="自分の描画を全削除"
+                title="このコメントの自分の描画を全削除"
                 className="text-red-600 hover:text-red-700"
               >
                 <Trash2 className="w-4 h-4 mr-1" />

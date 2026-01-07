@@ -146,7 +146,7 @@ function ShareViewContent() {
   }, [shareLink, isPasswordVerified]);
 
   const { data: comments = [] } = useQuery({
-    queryKey: ['sharedComments', shareLink?.file_id],
+    queryKey: ['sharedComments', shareLink?.file_id, token],
     queryFn: () => base44.entities.ReviewComment.filter({ 
       file_id: shareLink.file_id,
       share_token: token 
@@ -228,7 +228,7 @@ function ShareViewContent() {
         has_paint: false,
       });
 
-      queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id] });
+      queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id, token] });
       setActiveCommentId(comment.id);
       setAutoCommentCreating(false);
       
@@ -429,18 +429,23 @@ function ShareViewContent() {
     
     try {
       // activeCommentIdに紐づく自分のshapesを全削除
-      const shapes = await base44.entities.PaintShape.filter({
-        file_id: shareLink.file_id,
-        comment_id: activeCommentId,
-        author_key: guestId,
-      });
+      const shapesToDelete = paintShapes.filter(s => 
+        s.comment_id === activeCommentId && 
+        s.author_key === guestId
+      );
       
-      for (const shape of shapes) {
+      for (const shape of shapesToDelete) {
         await base44.entities.PaintShape.delete(shape.id);
       }
 
       await queryClient.invalidateQueries({ queryKey: ['paintShapes', token, shareLink?.file_id, currentPage] });
-      showToast('全削除完了', 'success');
+      
+      // ViewerCanvasをクリア
+      if (viewerCanvasRef.current?.clear) {
+        viewerCanvasRef.current.clear();
+      }
+      
+      showToast(`${shapesToDelete.length}個の描画を削除しました`, 'success');
     } catch (error) {
       console.error('Clear all error:', error);
       const errorMsg = error.response?.data?.error || error.message || String(error);
@@ -471,10 +476,10 @@ function ShareViewContent() {
       return comment;
     },
     onSuccess: (comment) => {
-      queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id] });
+      queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id, token] });
       setComposerText('');
-      setActiveCommentId(comment.id);
       setCurrentPage(comment.page_no);
+      setActiveCommentId(comment.id);
       showToast('コメントを作成しました', 'success');
     },
     onError: (error) => {
@@ -515,7 +520,7 @@ function ShareViewContent() {
 
     try {
       await base44.entities.ReviewComment.update(editingCommentId, { body: editingCommentText });
-      queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id] });
+      queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id, token] });
       setEditingCommentId(null);
       setEditingCommentText('');
       showToast('コメントを更新しました', 'success');
@@ -547,7 +552,7 @@ function ShareViewContent() {
       // コメント削除
       await base44.entities.ReviewComment.delete(comment.id);
       
-      queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id] });
+      queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id, token] });
       queryClient.invalidateQueries({ queryKey: ['paintShapes', token, shareLink?.file_id, currentPage] });
       
       // 削除したコメントが選択中だったらクリア
@@ -833,9 +838,19 @@ function ShareViewContent() {
               mimeType={file?.mime_type}
               pageNumber={currentPage}
               existingShapes={existingShapes}
-              comments={[]}
+              comments={comments.filter(c => c.page_no === currentPage)}
               activeCommentId={activeCommentId}
-              onCommentClick={setActiveCommentId}
+              onCommentClick={(id) => {
+                if (id === activeCommentId) {
+                  setActiveCommentId(null);
+                } else {
+                  const comment = comments.find(c => c.id === id);
+                  if (comment) {
+                    setCurrentPage(comment.page_no);
+                    setActiveCommentId(id);
+                  }
+                }
+              }}
               onBeginPaint={handleBeginPaint}
               onSaveShape={handleSaveShape}
               onDeleteShape={handleDeleteShape}
@@ -1070,7 +1085,7 @@ function ShareViewContent() {
           onUndo={() => viewerCanvasRef.current?.undo()}
           onRedo={() => viewerCanvasRef.current?.redo()}
           onClear={() => viewerCanvasRef.current?.clear()}
-          onClearAll={activeCommentId ? handleClearAll : undefined}
+          onClearAll={handleClearAll}
           onDelete={() => viewerCanvasRef.current?.delete()}
           onComplete={() => setPaintMode(false)}
           onResetView={() => setZoom(100)}
@@ -1078,6 +1093,7 @@ function ShareViewContent() {
           onToggleBoundingBoxes={DEBUG_MODE ? () => setShowBoundingBoxes(!showBoundingBoxes) : undefined}
           showAllPaint={showAllPaint}
           onToggleShowAllPaint={() => setShowAllPaint(!showAllPaint)}
+          hasActiveComment={!!activeCommentId}
         />
       )}
 
