@@ -287,7 +287,6 @@ function FileViewContent() {
   // 正常表示
   return (
     <div className="max-w-full mx-auto h-screen flex flex-col">
-      {/* デバッグ情報バナー */}
       <div className="bg-green-100 border-b-2 border-green-600 px-6 py-2">
         <div className="text-xs font-mono">
           <strong>✓ File View Page Loaded</strong> | 
