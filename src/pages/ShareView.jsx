@@ -243,41 +243,44 @@ function ShareViewContent() {
     }
   };
 
-  // lastActiveCommentId の復元（初回のみ）と保存
+  // lastActiveCommentId の復元（初回ロード時のみ、1回だけ実行）
   useEffect(() => {
     if (!token || !shareLink?.file_id || !comments.length) return;
+    
+    // CRITICAL: 初回のみ復元（ユーザー操作で activeCommentId=null にした場合は復元しない）
+    if (didInitActiveRef.current) return;
 
-    // 初回のみ復元を試みる（ユーザー操作を邪魔しない）
-    if (!didInitActiveRef.current && !activeCommentId) {
-      // URL params で comment 指定があれば優先
-      const params = new URLSearchParams(window.location.search);
-      const commentIdFromUrl = params.get('comment');
-      
-      if (commentIdFromUrl && comments.find(c => c.id === commentIdFromUrl)) {
-        const targetComment = comments.find(c => c.id === commentIdFromUrl);
-        setActiveCommentId(commentIdFromUrl);
-        setCurrentPage(targetComment.page_no);
-        didInitActiveRef.current = true;
-        return;
-      }
-
-      // URL指定がない場合は localStorage から復元
-      const key = `lastActiveCommentId:${token}:${shareLink.file_id}:${currentPage}`;
-      const saved = localStorage.getItem(key);
-
-      if (saved && comments.find(c => c.id === saved)) {
-        setActiveCommentId(saved);
-      } else if (comments.length > 0) {
-        // 無ければ最新コメント（seq_no最大）を開く
-        const latest = comments.reduce((max, c) => 
-          (c.seq_no || 0) > (max.seq_no || 0) ? c : max
-        , comments[0]);
-        setActiveCommentId(latest.id);
-      }
-      
+    // URL params で comment 指定があれば優先
+    const params = new URLSearchParams(window.location.search);
+    const commentIdFromUrl = params.get('comment');
+    
+    if (commentIdFromUrl && comments.find(c => c.id === commentIdFromUrl)) {
+      const targetComment = comments.find(c => c.id === commentIdFromUrl);
+      setCurrentPage(targetComment.page_no);
+      setActiveCommentId(commentIdFromUrl);
       didInitActiveRef.current = true;
+      return;
     }
-  }, [token, shareLink?.file_id, currentPage, comments, activeCommentId]);
+
+    // URL指定がない場合は localStorage から復元
+    const key = `lastActiveCommentId:${token}:${shareLink.file_id}:${currentPage}`;
+    const saved = localStorage.getItem(key);
+
+    if (saved && comments.find(c => c.id === saved)) {
+      const savedComment = comments.find(c => c.id === saved);
+      setCurrentPage(savedComment.page_no);
+      setActiveCommentId(saved);
+    } else if (comments.length > 0) {
+      // 無ければ最新コメント（seq_no最大）を開く
+      const latest = comments.reduce((max, c) => 
+        (c.seq_no || 0) > (max.seq_no || 0) ? c : max
+      , comments[0]);
+      setCurrentPage(latest.page_no);
+      setActiveCommentId(latest.id);
+    }
+    
+    didInitActiveRef.current = true;
+  }, [token, shareLink?.file_id, comments]);
 
   useEffect(() => {
     if (!token || !shareLink?.file_id || !activeCommentId) return;
@@ -576,15 +579,16 @@ function ShareViewContent() {
       return [];
     }
 
-    // showAllPaint=true: 全shapes表示
-    // showAllPaint=false: activeCommentIdのshapesのみ表示（activeCommentIdが無いなら空）
+    // CRITICAL: フィルタロジック明確化
+    // - showAllPaint=true: 全shapes表示（currentPageの全コメントのshape）
+    // - showAllPaint=false: activeCommentIdのshapesのみ表示（未選択なら空配列）
     const filtered = showAllPaint 
       ? paintShapes 
       : activeCommentId 
         ? paintShapes.filter(ps => ps.comment_id === activeCommentId)
         : [];
 
-    return filtered
+    const result = filtered
       .map(ps => {
         try {
           const data = JSON.parse(ps.data_json);
@@ -596,11 +600,22 @@ function ShareViewContent() {
             ...data,
           };
         } catch (e) {
-          console.error('Failed to parse shape:', e);
+          console.error('[ShareView] Failed to parse shape:', e);
           return null;
         }
       })
       .filter(Boolean);
+
+    if (DEBUG_MODE) {
+      console.log('[ShareView] existingShapes:', {
+        total: paintShapes.length,
+        filtered: result.length,
+        showAllPaint,
+        activeCommentId,
+      });
+    }
+
+    return result;
   }, [paintShapes, isReady, activeCommentId, showAllPaint]);
 
   const handleSaveName = () => {
@@ -812,6 +827,7 @@ function ShareViewContent() {
             </div>
           ) : (
             <ViewerCanvas
+              key={`${token}:${shareLink?.file_id}:${currentPage}:${showAllPaint ? 'all' : (activeCommentId || 'none')}`}
               ref={viewerCanvasRef}
               fileUrl={file?.file_url}
               mimeType={file?.mime_type}
@@ -919,10 +935,12 @@ function ShareViewContent() {
                             onClick={() => {
                               if (isEditing) return;
                               if (isActive) {
+                                // 解除（ユーザーの意図を尊重）
                                 setActiveCommentId(null);
                               } else {
-                                setActiveCommentId(comment.id);
+                                // 選択（ページ同期を先に実行）
                                 setCurrentPage(comment.page_no);
+                                setActiveCommentId(comment.id);
                               }
                             }}
                           >
