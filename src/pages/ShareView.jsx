@@ -55,6 +55,7 @@ function ShareViewContent() {
   const [isReady, setIsReady] = useState(false);
   const [activeCommentId, setActiveCommentId] = useState(null);
   const [isCreatingComment, setIsCreatingComment] = useState(false);
+  const [showAllPaint, setShowAllPaint] = useState(false);
   const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
 
@@ -89,6 +90,22 @@ function ShareViewContent() {
     const isVerified = sessionStorage.getItem(`passwordVerified_${token}`) === '1';
     setIsPasswordVerified(isVerified);
   }, [token]);
+
+  // showAllPaint の復元と保存
+  useEffect(() => {
+    if (!token || !shareLink?.file_id) return;
+    const key = `showAllPaint:${token}:${shareLink.file_id}:${currentPage}`;
+    const saved = localStorage.getItem(key);
+    if (saved !== null) {
+      setShowAllPaint(saved === 'true');
+    }
+  }, [token, shareLink?.file_id, currentPage]);
+
+  useEffect(() => {
+    if (!token || !shareLink?.file_id) return;
+    const key = `showAllPaint:${token}:${shareLink.file_id}:${currentPage}`;
+    localStorage.setItem(key, String(showAllPaint));
+  }, [showAllPaint, token, shareLink?.file_id, currentPage]);
 
   const { data: shareLink, isLoading: linkLoading } = useQuery({
     queryKey: ['shareLink', token],
@@ -380,16 +397,20 @@ function ShareViewContent() {
     });
   };
 
-  // PaintShapeをViewerCanvas用の形式に変換（activeCommentIdのみ）
+  // PaintShapeをViewerCanvas用の形式に変換
   const existingShapes = React.useMemo(() => {
-    // ready状態でないなら空配列を返さない（前回データを保持）
-    if (!isReady || !paintShapes || !activeCommentId) {
+    // ready状態でないなら空配列
+    if (!isReady || !paintShapes) {
       return [];
     }
     
-    // activeCommentIdに紐づくshapesのみ表示
-    return paintShapes
-      .filter(ps => ps.comment_id === activeCommentId)
+    // showAllPaint=true: 全shapes表示
+    // showAllPaint=false: activeCommentIdのshapesのみ表示
+    const filtered = showAllPaint 
+      ? paintShapes 
+      : paintShapes.filter(ps => ps.comment_id === activeCommentId);
+    
+    return filtered
       .map(ps => {
         try {
           const data = JSON.parse(ps.data_json);
@@ -405,7 +426,7 @@ function ShareViewContent() {
         }
       })
       .filter(Boolean);
-  }, [paintShapes, isReady, activeCommentId]);
+  }, [paintShapes, isReady, activeCommentId, showAllPaint]);
 
   const handleSaveName = () => {
     if (!guestName.trim()) return;
@@ -633,6 +654,7 @@ function ShareViewContent() {
               strokeWidth={strokeWidth}
               zoom={zoom}
               showBoundingBoxes={showBoundingBoxes}
+              showAllPaint={showAllPaint}
               isCreatingComment={isCreatingComment}
               onCanvasClick={handleCanvasClick}
               debugInfo={{
@@ -642,6 +664,7 @@ function ShareViewContent() {
                 queryKey: ['paintShapes', token, shareLink?.file_id, currentPage],
                 fetchedCount: paintShapes?.length || 0,
                 filteredCount: existingShapes?.length || 0,
+                showAllPaint: showAllPaint,
                 token: token,
                 fileId: shareLink?.file_id,
                 pageNo: currentPage,
@@ -802,6 +825,8 @@ function ShareViewContent() {
           onResetView={() => setZoom(100)}
           showBoundingBoxes={showBoundingBoxes}
           onToggleBoundingBoxes={DEBUG_MODE ? () => setShowBoundingBoxes(!showBoundingBoxes) : undefined}
+          showAllPaint={showAllPaint}
+          onToggleShowAllPaint={() => setShowAllPaint(!showAllPaint)}
         />
       )}
 

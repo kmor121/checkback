@@ -43,6 +43,8 @@ export default function FloatingToolbar({
   onResetView,
   showBoundingBoxes,
   onToggleBoundingBoxes,
+  showAllPaint,
+  onToggleShowAllPaint,
 }) {
   const DEBUG_MODE = import.meta.env.VITE_DEBUG === 'true';
   const colors = [
@@ -218,6 +220,20 @@ export default function FloatingToolbar({
                 title="ズーム・パンをリセット"
               >
                 <Maximize className="w-4 h-4" />
+              </Button>
+            )}
+
+            {/* Show All Paint */}
+            {onToggleShowAllPaint && (
+              <Button
+                variant={showAllPaint ? 'default' : 'outline'}
+                size="sm"
+                onClick={onToggleShowAllPaint}
+                title="全コメントの描画を表示"
+                className={showAllPaint ? 'bg-purple-600 hover:bg-purple-700' : ''}
+              >
+                <Eye className="w-4 h-4 mr-1" />
+                全表示
               </Button>
             )}
 

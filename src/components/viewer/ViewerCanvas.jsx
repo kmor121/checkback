@@ -43,6 +43,7 @@ const ViewerCanvas = forwardRef(({
   zoom = 100,
   onToolChange,
   showBoundingBoxes = false,
+  showAllPaint = false,
   isCreatingComment = false,
   onCanvasClick,
   debugInfo = null,
@@ -1019,7 +1020,8 @@ const ViewerCanvas = forwardRef(({
             {lastError && <div style={{ color: '#f00', fontSize: '9px' }}>error: {lastError}</div>}
             <div style={{ fontSize: '9px' }}>activeCommentId: {debugInfo?.activeCommentId || 'null'}</div>
             <div style={{ fontSize: '9px' }}>filteredCount: {debugInfo?.filteredCount || 0}</div>
-          </div>
+            <div style={{ fontSize: '9px' }}>showAllPaint: {showAllPaint ? 'ON' : 'OFF'}</div>
+            </div>
         </div>
       )}
     </div>
