@@ -11,10 +11,11 @@ Deno.serve(async (req) => {
       shapeType, 
       dataJson, 
       authorName,
-      mode // 'create' or 'update' or 'delete'
+      authorKey,
+      mode // 'create' or 'update' or 'delete' or 'upsert' or 'deleteAll'
     } = await req.json();
 
-    console.log('[savePaintShape] Request:', { token, fileId, pageNo, clientShapeId, shapeType, mode });
+    console.log('[savePaintShape] Request:', { token, fileId, pageNo, clientShapeId, shapeType, authorKey, mode });
 
     // tokenがある場合はShareLink検証
     if (token) {
@@ -38,7 +39,49 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 削除モード
+    // DeleteAll mode（全削除）
+    if (mode === 'deleteAll') {
+      if (!authorKey) {
+        return Response.json({ error: 'authorKey is required for deleteAll' }, { status: 400 });
+      }
+
+      const allShapes = await base44.asServiceRole.entities.PaintShape.filter({
+        file_id: fileId,
+        page_no: pageNo,
+      });
+
+      let deletedCount = 0;
+      
+      // admin_all は全削除（管理者権限）
+      if (authorKey === 'admin_all') {
+        for (const shape of allShapes) {
+          try {
+            await base44.asServiceRole.entities.PaintShape.delete(shape.id);
+            deletedCount++;
+          } catch (e) {
+            console.error('Failed to delete shape:', shape.id, e);
+          }
+        }
+      } else {
+        // 自分の描画のみ削除
+        for (const shape of allShapes) {
+          try {
+            const shapeData = JSON.parse(shape.data_json || '{}');
+            if (shapeData.authorKey === authorKey) {
+              await base44.asServiceRole.entities.PaintShape.delete(shape.id);
+              deletedCount++;
+            }
+          } catch (e) {
+            console.error('Failed to parse/delete shape:', shape.id, e);
+          }
+        }
+      }
+
+      console.log('[savePaintShape] DeleteAll completed:', { authorKey, deletedCount });
+      return Response.json({ success: true, deletedCount });
+    }
+
+    // 削除モード（単一）
     if (mode === 'delete') {
       const existing = await base44.asServiceRole.entities.PaintShape.filter({ 
         file_id: fileId,
@@ -55,17 +98,29 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, mode: 'delete', message: 'Shape not found' });
     }
 
-    // create or update モード
+    // create/update/upsert モード
     const existing = await base44.asServiceRole.entities.PaintShape.filter({ 
       file_id: fileId,
       page_no: pageNo,
       data_json: { $regex: `"id":"${clientShapeId}"` }
     });
 
+    // authorKeyをdataJsonに埋め込む
+    let parsedData = {};
+    try {
+      parsedData = JSON.parse(dataJson || '{}');
+    } catch (e) {
+      parsedData = {};
+    }
+    if (authorKey) {
+      parsedData.authorKey = authorKey;
+    }
+    const finalDataJson = JSON.stringify(parsedData);
+
     if (existing.length > 0) {
       // Update
       const updated = await base44.asServiceRole.entities.PaintShape.update(existing[0].id, {
-        data_json: dataJson,
+        data_json: finalDataJson,
       });
       
       console.log('[savePaintShape] Updated:', updated.id);
@@ -83,7 +138,7 @@ Deno.serve(async (req) => {
         share_link_id: token || null,
         page_no: pageNo,
         shape_type: shapeType,
-        data_json: dataJson,
+        data_json: finalDataJson,
         author_name: authorName || 'User',
       });
       
