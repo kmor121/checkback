@@ -132,31 +132,31 @@ export default function QuickCheck() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-5xl mx-auto px-4 py-12">
+      <div className="max-w-6xl mx-auto px-4 py-6">
         {/* ステップ表示 */}
-        <div className="mb-12 flex items-center justify-center gap-3 text-sm">
-          <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-sm">
-            <Upload className="w-4 h-4 text-gray-600" />
+        <div className="mb-6 flex items-center justify-center gap-2 text-xs">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-full shadow-sm">
+            <Upload className="w-3.5 h-3.5 text-gray-600" />
             <span className="font-medium">アップロード</span>
           </div>
-          <div className="w-8 border-t border-gray-300" />
-          <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-sm text-gray-400">
-            <LinkIcon className="w-4 h-4" />
+          <div className="w-6 border-t border-gray-300" />
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-full shadow-sm text-gray-400">
+            <LinkIcon className="w-3.5 h-3.5" />
             <span className="font-medium">リンクを発行</span>
           </div>
-          <div className="w-8 border-t border-gray-300" />
-          <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-sm text-gray-400">
-            <Play className="w-4 h-4" />
+          <div className="w-6 border-t border-gray-300" />
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-full shadow-sm text-gray-400">
+            <Play className="w-3.5 h-3.5" />
             <span className="font-medium">チェックバック開始</span>
           </div>
         </div>
 
         {/* タイトル */}
-        <h1 className="text-center text-4xl font-bold mb-3">クイックチェックを始めましょう</h1>
-        <p className="text-center text-gray-600 mb-12">ファイルをアップロードして共有リンクを発行</p>
+        <h1 className="text-center text-3xl font-bold mb-2">クイックチェックを始めましょう</h1>
+        <p className="text-center text-gray-600 mb-8">ファイルをアップロードして共有リンクを発行</p>
 
         {/* アップロード枠 */}
-        <Card className="mb-16 shadow-xl border-0">
+        <Card className="mb-10 shadow-xl border-0">
           <CardContent className="p-8">
             <label
               htmlFor="file-upload"
@@ -192,13 +192,13 @@ export default function QuickCheck() {
         {/* 最近使用したファイル */}
         {recentQuickFiles.length > 0 && (
           <div>
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold">最近使用したファイル</h2>
-              <Button variant="link" className="text-sm text-blue-600">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold">最近使用したファイル</h2>
+              <Button variant="link" className="text-sm text-blue-600 h-auto p-0">
                 全て見る →
               </Button>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {recentQuickFiles.slice(0, 6).map((file) => {
                 const remainingDays = getRemainingDays(file.expires_at);
                 const fileId = file.id;
@@ -209,10 +209,10 @@ export default function QuickCheck() {
                     className="group"
                   >
                     <Card className="h-full hover:shadow-lg transition-all border border-gray-200 overflow-hidden">
-                      <div className="aspect-[4/3] bg-gray-100 flex items-center justify-center border-b">
-                        <FileText className="w-16 h-16 text-gray-300 group-hover:text-gray-400 transition-colors" />
+                      <div className="aspect-[16/9] bg-gray-100 flex items-center justify-center border-b">
+                        <FileText className="w-12 h-12 text-gray-300 group-hover:text-gray-400 transition-colors" />
                       </div>
-                      <CardContent className="p-4">
+                      <CardContent className="p-3">
                         <div className="flex items-start justify-between gap-2 mb-2">
                           <h3 className="font-medium text-sm truncate group-hover:text-blue-600 transition-colors">
                             {file.title}
