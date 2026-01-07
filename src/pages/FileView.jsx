@@ -12,12 +12,7 @@ import {
   Share2, 
   ZoomIn, 
   ZoomOut, 
-  ChevronLeft, 
-  ChevronRight,
-  Upload,
-  MessageSquare,
   Send,
-  Paintbrush,
   CheckCircle2
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -39,9 +34,14 @@ function FileViewContent() {
   const [tool, setTool] = useState('pen');
   const [strokeColor, setStrokeColor] = useState('#ff0000');
   const [strokeWidth, setStrokeWidth] = useState(2);
-  const [shapes, setShapes] = useState([]);
   const [zoom, setZoom] = useState(100);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  
+  // Draft paint session state
+  const [paintSessionCommentId, setPaintSessionCommentId] = useState(null);
+  const [draftShapes, setDraftShapes] = useState([]);
+  const [activeCommentId, setActiveCommentId] = useState(null);
+  
   const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
 
@@ -53,10 +53,8 @@ function FileViewContent() {
   const [searchParams] = useSearchParams();
   const location = useLocation();
   
-  // URLパラメータから直接fileIdを取得（最もシンプルで確実）
   const fileId = searchParams.get('fileId');
 
-  // デバッグ情報を収集
   useEffect(() => {
     setDebugInfo({
       currentUrl: window.location.href,
@@ -103,7 +101,6 @@ function FileViewContent() {
     staleTime: 60000,
   });
 
-  // UserRecent記録（エラーを出さない）
   useEffect(() => {
     if (file && user) {
       const contextLabel = file.project_id ? 'in: プロジェクト' : 'in: クイックチェック';
@@ -130,11 +127,32 @@ function FileViewContent() {
     }
   }, [file, user, fileId]);
 
+  const handleBeginPaint = () => {
+    setPaintSessionCommentId(activeCommentId ?? null);
+    if (!activeCommentId) {
+      setDraftShapes([]);
+    }
+  };
+
   const handleSaveShape = async (shape, mode) => {
     try {
+      const targetCommentId = paintSessionCommentId;
+      
+      // Draft（新規コメント）の場合はメモリに保存のみ
+      if (!targetCommentId) {
+        if (mode === 'create') {
+          setDraftShapes(prev => [...prev, shape]);
+        } else {
+          setDraftShapes(prev => prev.map(s => s.id === shape.id ? shape : s));
+        }
+        return { dbId: shape.id };
+      }
+
+      // 既存コメントの場合はDBに保存
       const result = await base44.functions.invoke('savePaintShape', {
         token: null,
         fileId: fileId,
+        commentId: targetCommentId,
         pageNo: 1,
         clientShapeId: shape.id,
         shapeType: shape.tool,
@@ -150,17 +168,9 @@ function FileViewContent() {
 
       await queryClient.invalidateQueries(['paintShapes', fileId, 1]);
 
-      if (mode === 'update') {
-        showToast('更新完了', 'success');
-      } else {
-        showToast('保存完了', 'success');
-      }
-
       return result.data;
     } catch (error) {
-      console.error('Save shape error:', error, 'payload:', {
-        fileId, pageNo: 1, shapeId: shape.id
-      });
+      console.error('Save shape error:', error);
       const errorMsg = error.response?.data?.error || error.message || String(error);
       showToast(`保存失敗: ${errorMsg}`, 'error');
       throw new Error(errorMsg);
@@ -169,6 +179,12 @@ function FileViewContent() {
 
   const handleDeleteShape = async (shape) => {
     try {
+      // Draft中の場合はメモリから削除
+      if (!paintSessionCommentId) {
+        setDraftShapes(prev => prev.filter(s => s.id !== shape.id));
+        return;
+      }
+
       await base44.functions.invoke('savePaintShape', {
         token: null,
         fileId: fileId,
@@ -189,59 +205,136 @@ function FileViewContent() {
   };
 
   const handleClearAll = async () => {
-    if (!window.confirm('このページの全ての描画を削除しますか？（管理者権限）')) {
-      return;
-    }
-
     try {
-      await base44.functions.invoke('savePaintShape', {
-        token: null,
-        fileId: fileId,
-        pageNo: 1,
-        authorKey: 'admin_all',
-        mode: 'deleteAll',
-        shapeType: 'dummy',
-        dataJson: '{}',
+      const targetCommentId = paintSessionCommentId || activeCommentId;
+      
+      // Draft中の場合
+      if (!targetCommentId) {
+        setDraftShapes([]);
+        viewerCanvasRef.current?.clear();
+        showToast('描画をクリアしました');
+        return;
+      }
+      
+      // 既存コメントの描画を削除
+      const shapes = await base44.entities.PaintShape.filter({
+        file_id: fileId,
+        comment_id: targetCommentId,
+        page_no: 1,
       });
-
+      
+      for (const shape of shapes) {
+        await base44.entities.PaintShape.delete(shape.id);
+      }
+      
       await queryClient.invalidateQueries(['paintShapes', fileId, 1]);
-      showToast('全削除完了', 'success');
+      viewerCanvasRef.current?.clear();
+      showToast('このコメントの描画を削除しました');
     } catch (error) {
       console.error('Clear all error:', error);
-      const errorMsg = error.response?.data?.error || error.message || String(error);
-      showToast(`全削除失敗: ${errorMsg}`, 'error');
+      const errorMsg = error.message || String(error);
+      showToast(`削除失敗: ${errorMsg}`, 'error');
     }
   };
 
-  const createCommentMutation = useMutation({
-    mutationFn: async (data) => {
+  const handleSendComment = async () => {
+    if (!commentBody.trim() || !user) return;
+    
+    try {
       const existingComments = await base44.entities.ReviewComment.filter({ file_id: fileId });
       const maxSeqNo = existingComments.reduce((max, c) => Math.max(max, c.seq_no || 0), 0);
+
+      // アンカー位置の計算（draftShapesがあればその中心）
+      let anchor_nx = 0.5;
+      let anchor_ny = 0.5;
+      
+      if (draftShapes.length > 0) {
+        const allPoints = [];
+        draftShapes.forEach(shape => {
+          if (shape.nx !== undefined) {
+            allPoints.push({ x: shape.nx, y: shape.ny });
+            if (shape.nw !== undefined) {
+              allPoints.push({ x: shape.nx + shape.nw, y: shape.ny + shape.nh });
+            }
+          }
+          if (shape.normalizedPoints) {
+            for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
+              allPoints.push({ x: shape.normalizedPoints[i], y: shape.normalizedPoints[i + 1] });
+            }
+          }
+        });
+        
+        if (allPoints.length > 0) {
+          const xs = allPoints.map(p => p.x);
+          const ys = allPoints.map(p => p.y);
+          anchor_nx = (Math.min(...xs) + Math.max(...xs)) / 2;
+          anchor_ny = (Math.min(...ys) + Math.max(...ys)) / 2;
+        }
+      }
 
       const comment = await base44.entities.ReviewComment.create({
         file_id: fileId,
         page_no: 1,
         seq_no: maxSeqNo + 1,
+        anchor_nx,
+        anchor_ny,
         author_type: 'user',
         author_user_id: user?.id,
         author_name: user?.full_name,
-        body: data.body,
+        body: commentBody,
         resolved: false,
-        has_paint: false,
+        has_paint: draftShapes.length > 0,
       });
 
-      return comment;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries(['comments']);
+      // DraftShapesをDBに保存
+      if (draftShapes.length > 0) {
+        for (const shape of draftShapes) {
+          await base44.entities.PaintShape.create({
+            file_id: fileId,
+            comment_id: comment.id,
+            page_no: 1,
+            client_shape_id: shape.id,
+            shape_type: shape.tool,
+            data_json: JSON.stringify({
+              stroke: shape.stroke,
+              strokeWidth: shape.strokeWidth,
+              normalizedPoints: shape.normalizedPoints,
+              nx: shape.nx,
+              ny: shape.ny,
+              nw: shape.nw,
+              nh: shape.nh,
+              nr: shape.nr,
+              bgWidth: shape.bgWidth,
+              bgHeight: shape.bgHeight,
+            }),
+            author_key: user.id,
+            author_name: user.full_name,
+          });
+        }
+      }
+
       setCommentBody('');
+      setDraftShapes([]);
+      setActiveCommentId(comment.id);
+      setPaintSessionCommentId(comment.id);
       setPaintMode(false);
+      
+      await queryClient.invalidateQueries(['comments']);
+      await queryClient.invalidateQueries(['paintShapes']);
+      
       showToast('コメントを送信しました', 'success');
-    },
-    onError: (error) => {
+    } catch (error) {
       showToast(`送信失敗: ${error.message}`, 'error');
-    },
-  });
+    }
+  };
+
+  const handleCommentClick = (comment) => {
+    if (paintMode) {
+      showToast('ペイントを終了してからコメントを選択してください', 'error');
+      return;
+    }
+    setActiveCommentId(comment.id);
+  };
 
   const toggleResolveMutation = useMutation({
     mutationFn: ({ id, resolved }) => base44.entities.ReviewComment.update(id, { resolved }),
@@ -249,11 +342,6 @@ function FileViewContent() {
       queryClient.invalidateQueries(['comments']);
     },
   });
-
-  const handleSendComment = () => {
-    if (!commentBody.trim()) return;
-    createCommentMutation.mutate({ body: commentBody });
-  };
 
   // PaintShapeをViewerCanvas用の形式に変換
   const existingShapes = paintShapes.map(ps => {
@@ -270,6 +358,12 @@ function FileViewContent() {
     }
   }).filter(Boolean);
 
+  // ActiveCommentのshapesを表示（draft含む）
+  const activeCommentShapes = [
+    ...existingShapes.filter(s => s.comment_id === (paintSessionCommentId || activeCommentId)),
+    ...draftShapes
+  ];
+
   const filteredComments = comments.filter(c => {
     if (commentFilter === 'resolved' && !c.resolved) return false;
     if (commentFilter === 'unresolved' && c.resolved) return false;
@@ -283,9 +377,6 @@ function FileViewContent() {
     return 0;
   });
 
-
-
-  // デバッグ表示が最優先
   if (!fileId) {
     return (
       <div className="min-h-screen bg-yellow-50 p-8">
@@ -348,14 +439,13 @@ function FileViewContent() {
     );
   }
 
-  // 正常表示
   return (
     <div className="max-w-full mx-auto h-screen flex flex-col">
       <div className="bg-green-100 border-b-2 border-green-600 px-6 py-2">
         <div className="text-xs font-mono">
           <strong>✓ File View Page Loaded</strong> | 
           URL: {debugInfo.currentUrl} | 
-          fileId: {debugInfo.fileId} | 
+          fileId: {debugInfo.fileIdFinal} | 
           file.title: {file?.title}
         </div>
       </div>
@@ -389,9 +479,10 @@ function FileViewContent() {
             fileUrl={file?.file_url}
             mimeType={file?.mime_type}
             pageNumber={1}
-            existingShapes={existingShapes}
+            existingShapes={activeCommentShapes}
             onSaveShape={handleSaveShape}
             onDeleteShape={handleDeleteShape}
+            onBeginPaint={handleBeginPaint}
             paintMode={paintMode}
             tool={tool}
             onToolChange={setTool}
@@ -448,7 +539,13 @@ function FileViewContent() {
               </div>
             ) : (
               sortedComments.map((comment) => (
-                <Card key={comment.id} className="hover:shadow-md transition-shadow">
+                <Card 
+                  key={comment.id} 
+                  className={`hover:shadow-md transition-shadow cursor-pointer ${
+                    activeCommentId === comment.id ? 'ring-2 ring-blue-500' : ''
+                  }`}
+                  onClick={() => handleCommentClick(comment)}
+                >
                   <CardContent className="p-3">
                     <div className="flex items-start gap-2 mb-2">
                       <Badge variant="secondary" className="text-xs">#{comment.seq_no}</Badge>
@@ -492,7 +589,7 @@ function FileViewContent() {
             />
             <Button
               onClick={handleSendComment}
-              disabled={!commentBody.trim() && shapes.length === 0}
+              disabled={!commentBody.trim() && draftShapes.length === 0}
               className="w-full bg-blue-600 hover:bg-blue-700"
             >
               <Send className="w-4 h-4 mr-2" />
@@ -517,25 +614,26 @@ function FileViewContent() {
         onUndo={() => viewerCanvasRef.current?.undo()}
         onRedo={() => viewerCanvasRef.current?.redo()}
         onClear={() => viewerCanvasRef.current?.clear()}
-        onClearAll={user?.role === 'admin' ? handleClearAll : undefined}
+        onClearAll={handleClearAll}
         onDelete={() => viewerCanvasRef.current?.delete()}
         onComplete={() => setPaintMode(false)}
         onResetView={() => setZoom(100)}
+        hasActiveComment={!!(paintSessionCommentId || activeCommentId || draftShapes.length > 0)}
       />
 
       <ShareLinkModal open={shareLinkOpen} onOpenChange={setShareLinkOpen} fileId={fileId} />
 
-        {/* トースト通知 */}
-        {toast.show && (
-          <div className="fixed bottom-4 right-4 z-50">
-            <div className={`px-6 py-3 rounded-lg shadow-lg ${
-              toast.type === 'error' ? 'bg-red-600 text-white' : 'bg-green-600 text-white'
-            }`}>
-              {toast.message}
-            </div>
+      {/* トースト通知 */}
+      {toast.show && (
+        <div className="fixed bottom-4 right-4 z-50">
+          <div className={`px-6 py-3 rounded-lg shadow-lg ${
+            toast.type === 'error' ? 'bg-red-600 text-white' : 'bg-green-600 text-white'
+          }`}>
+            {toast.message}
           </div>
-        )}
-      </div>
+        </div>
+      )}
+    </div>
   );
 }
 
