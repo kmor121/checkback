@@ -101,6 +101,52 @@ function ShareViewContent() {
     staleTime: 60000,
   });
 
+  // ShareLinkのパスワード検証と有効期限チェック
+  useEffect(() => {
+    if (!shareLink) {
+      setIsReady(false);
+      return;
+    }
+    
+    // 有効性チェック
+    if (!shareLink.is_active) {
+      setIsReady(false);
+      return;
+    }
+    
+    if (shareLink.expires_at && new Date(shareLink.expires_at) < new Date()) {
+      setIsReady(false);
+      return;
+    }
+    
+    // パスワード保護チェック
+    if (shareLink.password_enabled && !isPasswordVerified) {
+      setShowPasswordDialog(true);
+      setIsReady(false);
+      return;
+    }
+    
+    // 全て問題なければready
+    setIsReady(true);
+  }, [shareLink, isPasswordVerified]);
+
+  const { data: comments = [] } = useQuery({
+    queryKey: ['sharedComments', shareLink?.file_id],
+    queryFn: () => base44.entities.ReviewComment.filter({ file_id: shareLink.file_id }),
+    enabled: isReady && !!shareLink?.file_id && shareLink?.can_view_comments,
+    staleTime: 30000,
+  });
+
+  const { data: file } = useQuery({
+    queryKey: ['sharedFile', shareLink?.file_id],
+    queryFn: async () => {
+      const files = await base44.entities.FileAsset.filter({ id: shareLink.file_id });
+      return files[0];
+    },
+    enabled: isReady && !!shareLink?.file_id,
+    staleTime: 60000,
+  });
+
   // Ready状態の詳細判定（useMemoで遅延評価）
   const readyDetails = React.useMemo(() => ({
     tokenOk: !!token,
@@ -153,52 +199,6 @@ function ShareViewContent() {
     const key = `lastActiveCommentId:${token}:${shareLink.file_id}:${currentPage}`;
     localStorage.setItem(key, activeCommentId);
   }, [activeCommentId, token, shareLink?.file_id, currentPage]);
-
-  // ShareLinkのパスワード検証と有効期限チェック
-  useEffect(() => {
-    if (!shareLink) {
-      setIsReady(false);
-      return;
-    }
-    
-    // 有効性チェック
-    if (!shareLink.is_active) {
-      setIsReady(false);
-      return;
-    }
-    
-    if (shareLink.expires_at && new Date(shareLink.expires_at) < new Date()) {
-      setIsReady(false);
-      return;
-    }
-    
-    // パスワード保護チェック
-    if (shareLink.password_enabled && !isPasswordVerified) {
-      setShowPasswordDialog(true);
-      setIsReady(false);
-      return;
-    }
-    
-    // 全て問題なければready
-    setIsReady(true);
-  }, [shareLink, isPasswordVerified]);
-
-  const { data: comments = [] } = useQuery({
-    queryKey: ['sharedComments', shareLink?.file_id],
-    queryFn: () => base44.entities.ReviewComment.filter({ file_id: shareLink.file_id }),
-    enabled: isReady && !!shareLink?.file_id && shareLink?.can_view_comments,
-    staleTime: 30000,
-  });
-
-  const { data: file } = useQuery({
-    queryKey: ['sharedFile', shareLink?.file_id],
-    queryFn: async () => {
-      const files = await base44.entities.FileAsset.filter({ id: shareLink.file_id });
-      return files[0];
-    },
-    enabled: isReady && !!shareLink?.file_id,
-    staleTime: 60000,
-  });
 
   const { data: paintShapes = [], isFetching: shapesFetching } = useQuery({
     queryKey: ['paintShapes', token, shareLink?.file_id, currentPage],
