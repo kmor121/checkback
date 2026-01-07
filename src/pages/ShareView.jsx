@@ -183,6 +183,13 @@ function ShareViewContent() {
     setIsReady(true);
   }, [shareLink, isPasswordVerified]);
 
+  const { data: comments = [] } = useQuery({
+    queryKey: ['sharedComments', shareLink?.file_id],
+    queryFn: () => base44.entities.ReviewComment.filter({ file_id: shareLink.file_id }),
+    enabled: isReady && !!shareLink?.file_id && shareLink?.can_view_comments,
+    staleTime: 30000,
+  });
+
   const { data: file } = useQuery({
     queryKey: ['sharedFile', shareLink?.file_id],
     queryFn: async () => {
@@ -191,13 +198,6 @@ function ShareViewContent() {
     },
     enabled: isReady && !!shareLink?.file_id,
     staleTime: 60000,
-  });
-
-  const { data: comments = [] } = useQuery({
-    queryKey: ['sharedComments', shareLink?.file_id],
-    queryFn: () => base44.entities.ReviewComment.filter({ file_id: shareLink.file_id }),
-    enabled: isReady && !!shareLink?.file_id && shareLink?.can_view_comments,
-    staleTime: 30000,
   });
 
   const { data: paintShapes = [], isFetching: shapesFetching } = useQuery({
