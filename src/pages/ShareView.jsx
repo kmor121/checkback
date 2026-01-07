@@ -198,15 +198,16 @@ function ShareViewContent() {
 
   const handleSaveShape = async (shape, mode) => {
     if (!isReady) {
-      console.warn('Not ready yet, save aborted');
+      console.warn('[ShareView] Not ready yet, save aborted');
       return;
     }
     
     // CRITICAL: comment_idが無い場合は保存しない
     if (!activeCommentId) {
-      showToast('先にコメントを作成してください', 'error');
+      const msg = 'comment_id が必要です。先にコメントを選択/作成してください';
+      showToast(msg, 'error');
       setPaintMode(false);
-      return;
+      throw new Error(msg);
     }
     
     try {
@@ -223,34 +224,59 @@ function ShareViewContent() {
       };
       
       if (DEBUG_MODE) {
-        console.log('[DEBUG] Saving shape with payload:', shapeData);
+        console.log('[ShareView] Saving shape:', { mode, clientShapeId: shape.id, dbId: shape.dbId });
       }
       
       let result;
+      
       if (mode === 'create') {
+        // 新規作成
         result = await base44.entities.PaintShape.create(shapeData);
-      } else if (mode === 'update') {
-        // 既存のshapeを更新（shape.dbIdがある場合）
+      } else if (mode === 'upsert') {
+        // CRITICAL: upsertモード（増殖防止の要）
+        // shape.dbId があれば update、無ければ検索 → 見つかれば update、無ければ create
         if (shape.dbId) {
-          result = await base44.entities.PaintShape.update(shape.dbId, shapeData);
+          try {
+            result = await base44.entities.PaintShape.update(shape.dbId, shapeData);
+          } catch (err) {
+            // update失敗（not found等）なら create
+            if (err.message?.includes('not found') || err.message?.includes('Not Found')) {
+              console.warn('[ShareView] Update failed (not found), creating new:', shape.dbId);
+              result = await base44.entities.PaintShape.create(shapeData);
+            } else {
+              throw err;
+            }
+          }
         } else {
-          result = await base44.entities.PaintShape.create(shapeData);
+          // dbId無し → client_shape_idで検索
+          const existing = await base44.entities.PaintShape.filter({
+            file_id: shareLink.file_id,
+            client_shape_id: shape.id,
+            comment_id: activeCommentId,
+          });
+          
+          if (existing.length > 0) {
+            // 既存レコードがあれば update
+            result = await base44.entities.PaintShape.update(existing[0].id, shapeData);
+          } else {
+            // 無ければ create
+            result = await base44.entities.PaintShape.create(shapeData);
+          }
         }
       } else {
+        // その他（後方互換）
         result = await base44.entities.PaintShape.create(shapeData);
       }
 
       await queryClient.invalidateQueries(['paintShapes', token, shareLink?.file_id, currentPage]);
 
-      if (mode === 'update') {
-        showToast('更新完了', 'success');
-      } else {
-        showToast('保存完了', 'success');
+      if (DEBUG_MODE) {
+        console.log('[ShareView] Save success:', { mode, resultId: result.id });
       }
 
       return { ...result, dbId: result.id };
     } catch (error) {
-      console.error('Save shape error:', error);
+      console.error('[ShareView] Save shape error:', error);
       const errorMsg = error.response?.data?.error || error.message || String(error);
       showToast(`保存失敗: ${errorMsg}`, 'error');
       throw new Error(errorMsg);
