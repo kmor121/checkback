@@ -96,11 +96,11 @@ function FileViewContent() {
   });
 
   const { data: paintShapes = [] } = useQuery({
-    queryKey: ['paintShapes', fileId],
+    queryKey: ['paintShapes', fileId, 1],
     queryFn: () => base44.entities.PaintShape.filter({ file_id: fileId, page_no: 1 }),
     enabled: !!fileId,
     refetchOnWindowFocus: false,
-    staleTime: 30000,
+    staleTime: 60000,
   });
 
   // UserRecent記録（エラーを出さない）
@@ -140,14 +140,15 @@ function FileViewContent() {
         shapeType: shape.tool,
         dataJson: JSON.stringify(shape),
         authorName: user?.full_name || 'User',
-        mode: mode || 'create',
+        authorKey: user?.id,
+        mode: mode || 'upsert',
       });
 
       if (result.data.error) {
         throw new Error(result.data.error);
       }
 
-      queryClient.invalidateQueries(['paintShapes']);
+      await queryClient.invalidateQueries(['paintShapes', fileId, 1]);
 
       if (mode === 'update') {
         showToast('更新完了', 'success');
@@ -157,7 +158,9 @@ function FileViewContent() {
 
       return result.data;
     } catch (error) {
-      console.error('Save shape error:', error);
+      console.error('Save shape error:', error, 'payload:', {
+        fileId, pageNo: 1, shapeId: shape.id
+      });
       const errorMsg = error.response?.data?.error || error.message || String(error);
       showToast(`保存失敗: ${errorMsg}`, 'error');
       throw new Error(errorMsg);
@@ -171,16 +174,41 @@ function FileViewContent() {
         fileId: fileId,
         pageNo: 1,
         clientShapeId: shape.id,
+        authorKey: user?.id,
         mode: 'delete',
       });
 
-      queryClient.invalidateQueries(['paintShapes']);
+      await queryClient.invalidateQueries(['paintShapes', fileId, 1]);
       showToast('削除完了', 'success');
     } catch (error) {
       console.error('Delete shape error:', error);
       const errorMsg = error.response?.data?.error || error.message || String(error);
       showToast(`削除失敗: ${errorMsg}`, 'error');
       throw new Error(errorMsg);
+    }
+  };
+
+  const handleClearAll = async () => {
+    if (!window.confirm('このページの全ての描画を削除しますか？（管理者権限）')) {
+      return;
+    }
+
+    try {
+      const allShapes = await base44.entities.PaintShape.filter({ 
+        file_id: fileId, 
+        page_no: 1 
+      });
+
+      for (const shape of allShapes) {
+        await base44.entities.PaintShape.delete(shape.id);
+      }
+
+      await queryClient.invalidateQueries(['paintShapes', fileId, 1]);
+      showToast('全削除完了', 'success');
+    } catch (error) {
+      console.error('Clear all error:', error);
+      const errorMsg = error.message || String(error);
+      showToast(`全削除失敗: ${errorMsg}`, 'error');
     }
   };
 
@@ -488,6 +516,7 @@ function FileViewContent() {
         onUndo={() => viewerCanvasRef.current?.undo()}
         onRedo={() => viewerCanvasRef.current?.redo()}
         onClear={() => viewerCanvasRef.current?.clear()}
+        onClearAll={user?.role === 'admin' ? handleClearAll : undefined}
         onDelete={() => viewerCanvasRef.current?.delete()}
         onComplete={() => setPaintMode(false)}
       />

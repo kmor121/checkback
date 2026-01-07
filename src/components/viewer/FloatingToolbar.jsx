@@ -35,6 +35,7 @@ export default function FloatingToolbar({
   onUndo,
   onRedo,
   onClear,
+  onClearAll,
   onDelete,
   onComplete,
 }) {
@@ -186,7 +187,20 @@ export default function FloatingToolbar({
             >
               <Trash2 className="w-4 h-4" />
             </Button>
-            
+
+            {onClearAll && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onClearAll}
+                title="自分の描画を全削除"
+                className="text-red-600 hover:text-red-700"
+              >
+                <Trash2 className="w-4 h-4 mr-1" />
+                全削除
+              </Button>
+            )}
+
             <div className="w-px h-6 bg-gray-300" />
             
             {/* 完了 */}

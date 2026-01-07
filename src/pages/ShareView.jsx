@@ -32,6 +32,7 @@ import DebugOverlay from '../components/DebugOverlay';
 
 function ShareViewContent() {
   const [guestName, setGuestName] = useState('');
+  const [guestId, setGuestId] = useState('');
   const [showNameDialog, setShowNameDialog] = useState(false);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [password, setPassword] = useState('');
@@ -48,6 +49,7 @@ function ShareViewContent() {
   const [strokeWidth, setStrokeWidth] = useState(2);
   const [shapes, setShapes] = useState([]);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const [isReady, setIsReady] = useState(false);
   const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
 
@@ -62,6 +64,14 @@ function ShareViewContent() {
 
   useEffect(() => {
     if (!token) return;
+    
+    // guestId生成または復元
+    let storedGuestId = localStorage.getItem(`guestId_${token}`);
+    if (!storedGuestId) {
+      storedGuestId = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      localStorage.setItem(`guestId_${token}`, storedGuestId);
+    }
+    setGuestId(storedGuestId);
     
     const storedName = localStorage.getItem(`guestName_${token}`);
     if (storedName) {
@@ -82,13 +92,36 @@ function ShareViewContent() {
       return links[0];
     },
     enabled: !!token,
+    staleTime: 60000,
   });
 
-  // ShareLinkのパスワード検証（shareLinkが取得された後に実行）
+  // ShareLinkのパスワード検証と有効期限チェック
   useEffect(() => {
-    if (shareLink && shareLink.password_enabled && !isPasswordVerified) {
-      setShowPasswordDialog(true);
+    if (!shareLink) {
+      setIsReady(false);
+      return;
     }
+    
+    // 有効性チェック
+    if (!shareLink.is_active) {
+      setIsReady(false);
+      return;
+    }
+    
+    if (shareLink.expires_at && new Date(shareLink.expires_at) < new Date()) {
+      setIsReady(false);
+      return;
+    }
+    
+    // パスワード保護チェック
+    if (shareLink.password_enabled && !isPasswordVerified) {
+      setShowPasswordDialog(true);
+      setIsReady(false);
+      return;
+    }
+    
+    // 全て問題なければready
+    setIsReady(true);
   }, [shareLink, isPasswordVerified]);
 
   const { data: file } = useQuery({
@@ -97,31 +130,38 @@ function ShareViewContent() {
       const files = await base44.entities.FileAsset.filter({ id: shareLink.file_id });
       return files[0];
     },
-    enabled: !!shareLink?.file_id,
+    enabled: isReady && !!shareLink?.file_id,
+    staleTime: 60000,
   });
 
   const { data: comments = [] } = useQuery({
     queryKey: ['sharedComments', shareLink?.file_id],
     queryFn: () => base44.entities.ReviewComment.filter({ file_id: shareLink.file_id }),
-    enabled: !!shareLink?.file_id && shareLink?.can_view_comments,
+    enabled: isReady && !!shareLink?.file_id && shareLink?.can_view_comments,
+    staleTime: 30000,
   });
 
   const { data: paintShapes = [] } = useQuery({
-    queryKey: ['sharedPaintShapes', shareLink?.file_id, shareLink?.id, currentPage],
+    queryKey: ['paintShapes', token, shareLink?.file_id, currentPage],
     queryFn: () => base44.entities.PaintShape.filter({ 
       file_id: shareLink.file_id,
       page_no: currentPage
     }),
-    enabled: !!shareLink?.file_id,
+    enabled: isReady && !!shareLink?.file_id,
     refetchOnWindowFocus: false,
-    staleTime: 30000,
+    staleTime: 60000,
   });
 
 
 
   const handleSaveShape = async (shape, mode) => {
+    if (!isReady) {
+      console.warn('Not ready yet, save aborted');
+      return;
+    }
+    
     try {
-      const result = await base44.functions.invoke('savePaintShape', {
+      const payload = {
         token: token,
         fileId: shareLink.file_id,
         pageNo: currentPage,
@@ -129,14 +169,17 @@ function ShareViewContent() {
         shapeType: shape.tool,
         dataJson: JSON.stringify(shape),
         authorName: guestName || 'Guest',
-        mode: mode || 'create',
-      });
+        authorKey: guestId,
+        mode: mode || 'upsert',
+      };
+      
+      const result = await base44.functions.invoke('savePaintShape', payload);
 
       if (result.data.error) {
         throw new Error(result.data.error);
       }
 
-      queryClient.invalidateQueries(['sharedPaintShapes']);
+      await queryClient.invalidateQueries(['paintShapes', token, shareLink?.file_id, currentPage]);
 
       if (mode === 'update') {
         showToast('更新完了', 'success');
@@ -146,7 +189,9 @@ function ShareViewContent() {
 
       return result.data;
     } catch (error) {
-      console.error('Save shape error:', error);
+      console.error('Save shape error:', error, 'payload:', {
+        token, fileId: shareLink?.file_id, pageNo: currentPage, shapeId: shape.id
+      });
       const errorMsg = error.response?.data?.error || error.message || String(error);
       showToast(`保存失敗: ${errorMsg}`, 'error');
       throw new Error(errorMsg);
@@ -154,22 +199,53 @@ function ShareViewContent() {
   };
 
   const handleDeleteShape = async (shape) => {
+    if (!isReady) {
+      console.warn('Not ready yet, delete aborted');
+      return;
+    }
+    
     try {
       await base44.functions.invoke('savePaintShape', {
         token: token,
         fileId: shareLink.file_id,
         pageNo: currentPage,
         clientShapeId: shape.id,
+        authorKey: guestId,
         mode: 'delete',
       });
 
-      queryClient.invalidateQueries(['sharedPaintShapes']);
+      await queryClient.invalidateQueries(['paintShapes', token, shareLink?.file_id, currentPage]);
       showToast('削除完了', 'success');
     } catch (error) {
       console.error('Delete shape error:', error);
       const errorMsg = error.response?.data?.error || error.message || String(error);
       showToast(`削除失敗: ${errorMsg}`, 'error');
       throw new Error(errorMsg);
+    }
+  };
+
+  const handleClearAll = async () => {
+    if (!isReady) return;
+    
+    if (!window.confirm('このページの自分の描画を全て削除しますか？')) {
+      return;
+    }
+    
+    try {
+      await base44.functions.invoke('savePaintShape', {
+        token: token,
+        fileId: shareLink.file_id,
+        pageNo: currentPage,
+        authorKey: guestId,
+        mode: 'deleteAll',
+      });
+
+      await queryClient.invalidateQueries(['paintShapes', token, shareLink?.file_id, currentPage]);
+      showToast('全削除完了', 'success');
+    } catch (error) {
+      console.error('Clear all error:', error);
+      const errorMsg = error.response?.data?.error || error.message || String(error);
+      showToast(`全削除失敗: ${errorMsg}`, 'error');
     }
   };
 
@@ -420,21 +496,30 @@ function ShareViewContent() {
 
         {/* 中央：プレビュー */}
         <div className="flex-1 bg-gray-100 overflow-auto relative pb-24">
-          <ViewerCanvas
-            ref={viewerCanvasRef}
-            fileUrl={file?.file_url}
-            mimeType={file?.mime_type}
-            pageNumber={currentPage}
-            existingShapes={existingShapes}
-            onSaveShape={handleSaveShape}
-            onDeleteShape={handleDeleteShape}
-            paintMode={paintMode}
-            tool={tool}
-            onToolChange={setTool}
-            strokeColor={strokeColor}
-            strokeWidth={strokeWidth}
-            zoom={zoom}
-          />
+          {!isReady ? (
+            <div className="w-full h-full flex items-center justify-center">
+              <div className="text-center">
+                <div className="animate-spin w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"></div>
+                <div className="text-lg font-medium">準備中...</div>
+              </div>
+            </div>
+          ) : (
+            <ViewerCanvas
+              ref={viewerCanvasRef}
+              fileUrl={file?.file_url}
+              mimeType={file?.mime_type}
+              pageNumber={currentPage}
+              existingShapes={existingShapes}
+              onSaveShape={handleSaveShape}
+              onDeleteShape={handleDeleteShape}
+              paintMode={isReady && paintMode}
+              tool={tool}
+              onToolChange={setTool}
+              strokeColor={strokeColor}
+              strokeWidth={strokeWidth}
+              zoom={zoom}
+            />
+          )}
 
           {/* ズーム制御 */}
           <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-2 flex items-center gap-2">
@@ -541,7 +626,7 @@ function ShareViewContent() {
       </div>
 
       {/* フローティングツールバー */}
-      {shareLink.can_post_comments && (
+      {shareLink.can_post_comments && isReady && (
         <FloatingToolbar
           paintMode={paintMode}
           onPaintModeChange={setPaintMode}
@@ -556,6 +641,7 @@ function ShareViewContent() {
           onUndo={() => viewerCanvasRef.current?.undo()}
           onRedo={() => viewerCanvasRef.current?.redo()}
           onClear={() => viewerCanvasRef.current?.clear()}
+          onClearAll={handleClearAll}
           onDelete={() => viewerCanvasRef.current?.delete()}
           onComplete={() => setPaintMode(false)}
         />
