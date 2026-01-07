@@ -547,9 +547,13 @@ const ViewerCanvas = forwardRef(({
     
     // DB更新（後で）
     if (onSaveShape) {
+      setLastMutation('update-drag');
+      setLastPayload(JSON.stringify(updatedShape));
       try {
-        await onSaveShape(updatedShape);
+        const result = await onSaveShape(updatedShape, 'update');
         setLastSaveStatus('success');
+        setLastSuccessId(result?.dbId || updatedShape.id);
+        setLastError(null);
       } catch (err) {
         console.error('Update shape error:', err);
         setLastSaveStatus('error');
@@ -616,9 +620,13 @@ const ViewerCanvas = forwardRef(({
     
     // DB更新（後で）
     if (onSaveShape) {
+      setLastMutation('update-transform');
+      setLastPayload(JSON.stringify(updatedShape));
       try {
-        await onSaveShape(updatedShape);
+        const result = await onSaveShape(updatedShape, 'update');
         setLastSaveStatus('success');
+        setLastSuccessId(result?.dbId || updatedShape.id);
+        setLastError(null);
       } catch (err) {
         console.error('Update shape error:', err);
         setLastSaveStatus('error');
