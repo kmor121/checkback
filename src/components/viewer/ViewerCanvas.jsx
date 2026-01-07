@@ -3,6 +3,15 @@ import { Stage, Layer, Line, Rect, Circle, Arrow, Image as KonvaImage, Group, Tr
 import useImage from 'use-image';
 import CommentPin from './CommentPin';
 
+// UUID生成（clientShapeId用、再生成されない保証）
+function generateUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
 const DEBUG_MODE = import.meta.env.VITE_DEBUG === 'true';
 
 // 背景画像コンポーネント
