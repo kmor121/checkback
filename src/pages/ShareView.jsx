@@ -227,6 +227,7 @@ function ShareViewContent() {
   const handlePaintModeChange = (mode) => {
     if (!mode) {
       setPaintMode(false);
+      setTool('select');
       return;
     }
 
@@ -241,6 +242,7 @@ function ShareViewContent() {
       setDraftShapes([]);
     }
     setPaintMode(true);
+    setTool('pen');
     setIsDockOpen(true);
   };
 
