@@ -1613,7 +1613,10 @@ function ShareViewContent() {
 
       {/* 中央下ドック（コメント入力） */}
       {shareLink.can_post_comments && (
-        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-2xl px-4">
+        <div 
+          ref={composerRef}
+          className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-2xl px-4"
+        >
           <div className="bg-white rounded-xl shadow-2xl border-2 border-gray-200 p-4">
             <div className="flex gap-3 items-start">
               {/* ペイントボタン */}
