@@ -72,6 +72,7 @@ function ShareViewContent() {
   // Draft paint session state
   const [paintSessionCommentId, setPaintSessionCommentId] = useState(null);
   const [draftShapes, setDraftShapes] = useState([]);
+  const [canvasSessionNonce, setCanvasSessionNonce] = useState(0);
   
   // Composer mode (new or edit or reply)
   const [composerMode, setComposerMode] = useState('new');
@@ -236,11 +237,25 @@ function ShareViewContent() {
       return;
     }
 
-    // ペイント開始時にセッションを固定（コメントは作らない）
-    setPaintSessionCommentId(activeCommentId ?? null);
-    if (!activeCommentId) {
+    // 編集セッションか新規セッションかを判定
+    const isEditSession = composerMode === 'edit' && !!composerTargetCommentId;
+
+    if (isEditSession) {
+      // 既存コメント編集: そのコメントの描画を表示・編集可能
+      setPaintSessionCommentId(composerTargetCommentId);
+      setActiveCommentId(composerTargetCommentId);
+    } else {
+      // 新規作成: 既存コメント描画は非表示・編集不可
+      setActiveCommentId(null);
+      setPaintSessionCommentId(null);
       setDraftShapes([]);
+      setComposerMode('new');
+      setComposerTargetCommentId(null);
+      setShowAllPaint(false);
+      viewerCanvasRef.current?.clear();
+      setCanvasSessionNonce(n => n + 1);
     }
+
     setPaintMode(true);
     setTool('pen');
     setIsDockOpen(true);
@@ -1056,7 +1071,7 @@ function ShareViewContent() {
             </div>
           ) : (
             <ViewerCanvas
-              key={`${token}:${shareLink?.file_id}:${currentPage}:${showAllPaint ? 'all' : (paintSessionCommentId || activeCommentId || 'none')}`}
+              key={`${token}:${shareLink?.file_id}:${currentPage}:${canvasSessionNonce}:${showAllPaint ? 'all' : (paintSessionCommentId || activeCommentId || 'none')}`}
               ref={viewerCanvasRef}
               fileUrl={file?.file_url}
               mimeType={file?.mime_type}
@@ -1536,7 +1551,7 @@ function ShareViewContent() {
             {(composerMode === 'edit' || paintSessionCommentId || draftShapes.length > 0) && (
               <div className="mt-2 text-xs text-gray-500 flex items-center gap-2">
                 <Badge className="bg-green-600 text-white">
-                  {composerMode === 'edit' ? 'コメント編集中' : '新規作成中'}
+                  {composerMode === 'edit' ? 'コメント編集中' : paintSessionCommentId ? 'コメントに追記中' : '新規作成中'}
                 </Badge>
                 <span>
                   {composerMode === 'edit' ? '保存して更新' : '本文または描画を追加して送信'}
