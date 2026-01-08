@@ -83,6 +83,7 @@ const ViewerCanvas = forwardRef(({
     shapeId: null,
     imgX: 0,
     imgY: 0,
+    openedAt: 0,
   });
   const [isComposing, setIsComposing] = useState(false);
   const textInputRef = useRef(null);
@@ -485,11 +486,12 @@ const ViewerCanvas = forwardRef(({
     }
   };
   
-  // テキスト確定
+  // テキスト確定（DOMから直接読む）
   const handleTextConfirm = async () => {
-    const text = textEditor.value.trim();
+    const raw = textInputRef.current?.value ?? textEditor.value;
+    const text = raw.trim();
     if (!text) {
-      setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0 });
+      setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
       if (onToolChange) onToolChange('select');
       return;
     }
@@ -563,14 +565,18 @@ const ViewerCanvas = forwardRef(({
 
   // テキストキャンセル
   const handleTextCancel = () => {
-    setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0 });
+    setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
     setIsComposing(false);
     if (onToolChange) onToolChange('select');
   };
 
-  // テキストBlur確定（空ならキャンセル）
+  // テキストBlur確定（開いた直後の誤作動を防ぐ）
   const handleTextBlur = () => {
-    if (textEditor.value.trim()) {
+    // 開いて250ms以内のblurは無視（誤作動防止）
+    if (textEditor.openedAt && Date.now() - textEditor.openedAt < 250) return;
+    
+    const raw = textInputRef.current?.value ?? textEditor.value;
+    if (raw.trim()) {
       handleTextConfirm();
     } else {
       handleTextCancel();
