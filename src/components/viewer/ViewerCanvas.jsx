@@ -80,6 +80,11 @@ const ViewerCanvas = forwardRef(({
   const shapeRefs = useRef({});
   const hydratedRef = useRef(false);
   
+  // パン状態
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const panStartRef = useRef({ x: 0, y: 0, px: 0, py: 0 });
+  
   // テキスト入力用
   const [textEditor, setTextEditor] = useState({
     visible: false,
@@ -261,13 +266,41 @@ const ViewerCanvas = forwardRef(({
   const offsetX = Math.max(0, (containerSize.width - scaledWidth) / 2);
   const offsetY = Math.max(0, (containerSize.height - scaledHeight) / 2);
   
+  // 実際の表示位置（パンを考慮）
+  const viewX = offsetX + pan.x;
+  const viewY = offsetY + pan.y;
+  
+  // パン可否判定
+  const canPan = isEditMode && tool === 'select' && zoom > 100;
+  
+  // パン範囲のクランプ
+  const clampPan = (nx, ny) => {
+    if (scaledWidth <= containerSize.width) {
+      nx = 0;
+    } else {
+      const minX = containerSize.width - scaledWidth;
+      const maxX = 0;
+      nx = Math.min(maxX, Math.max(minX, nx));
+    }
+    
+    if (scaledHeight <= containerSize.height) {
+      ny = 0;
+    } else {
+      const minY = containerSize.height - scaledHeight;
+      const maxY = 0;
+      ny = Math.min(maxY, Math.max(minY, ny));
+    }
+    
+    return { x: nx, y: ny };
+  };
+  
   // pointer座標 → 画像座標への変換
   const pointerToImageCoords = (stage) => {
     const pos = stage.getPointerPosition();
     if (!pos) return null;
     
-    const imgX = (pos.x - offsetX) / contentScale;
-    const imgY = (pos.y - offsetY) / contentScale;
+    const imgX = (pos.x - viewX) / contentScale;
+    const imgY = (pos.y - viewY) / contentScale;
     
     return { x: imgX, y: imgY };
   };
@@ -369,14 +402,59 @@ const ViewerCanvas = forwardRef(({
     }
   };
 
-  // 空白クリックで選択解除（編集モード時）
-  const handleStageMouseDown = (e) => {
-    if (isEditMode) {
-      const clickedOnEmpty = e.target === e.target.getStage();
-      if (clickedOnEmpty) {
-        setSelectedId(null);
-      }
+  // Stage統合ハンドラ：パン、選択解除、描画開始
+  const handleStagePointerDown = (e) => {
+    const stage = e.target.getStage();
+    if (!stage) return;
+
+    // 描画モードは従来処理
+    if (isDrawMode) {
+      handlePointerDown(e);
+      return;
     }
+
+    const clickedOnEmpty = e.target === stage;
+
+    // パン開始（背景の空白を掴んだ時のみ）
+    if (canPan && clickedOnEmpty && !textEditor.visible) {
+      const p = stage.getPointerPosition();
+      if (!p) return;
+      setIsPanning(true);
+      panStartRef.current = { x: pan.x, y: pan.y, px: p.x, py: p.y };
+      return;
+    }
+
+    // 空白クリックで選択解除
+    if (isEditMode && clickedOnEmpty) {
+      setSelectedId(null);
+    }
+  };
+
+  const handleStagePointerMove = (e) => {
+    const stage = e.target.getStage();
+    if (!stage) return;
+
+    // パン中は他の処理をスキップ
+    if (isPanning) {
+      const p = stage.getPointerPosition();
+      if (!p) return;
+      const dx = p.x - panStartRef.current.px;
+      const dy = p.y - panStartRef.current.py;
+      const next = clampPan(panStartRef.current.x + dx, panStartRef.current.y + dy);
+      setPan(next);
+      return;
+    }
+
+    // 描画モードのみ従来のPointerMove
+    handlePointerMove(e);
+  };
+
+  const handleStagePointerUp = (e) => {
+    if (isPanning) {
+      setIsPanning(false);
+      return;
+    }
+    handlePointerUp(e);
   };
 
   // PointerDown: 描画開始（描画モード時のみ）
@@ -404,7 +482,7 @@ const ViewerCanvas = forwardRef(({
         const container = containerRef.current;
         const scrollX = container ? container.scrollLeft : 0;
         const scrollY = container ? container.scrollTop : 0;
-        
+
         console.log('[ViewerCanvas] ✓ Text tool activated:', { 
           tool, 
           paintMode, 
@@ -412,11 +490,15 @@ const ViewerCanvas = forwardRef(({
           pos: { x: pos.x, y: pos.y },
           img: { x: imgCoords.x, y: imgCoords.y }
         });
-        
+
+        // スクリーン座標計算にviewX/viewYを使用
+        const screenX = viewX + imgCoords.x * contentScale;
+        const screenY = viewY + imgCoords.y * contentScale;
+
         setTextEditor({
           visible: true,
-          x: pos.x + scrollX,
-          y: pos.y + scrollY,
+          x: screenX + scrollX,
+          y: screenY + scrollY,
           value: '',
           shapeId: null,
           imgX: Math.max(0, Math.min(bgSize.width, imgCoords.x)),
@@ -634,8 +716,8 @@ const ViewerCanvas = forwardRef(({
     if (!isEditMode) return;
 
     const { x: imgX, y: imgY } = denormalizeCoords(shape.nx, shape.ny);
-    const screenX = offsetX + imgX * contentScale;
-    const screenY = offsetY + imgY * contentScale;
+    const screenX = viewX + imgX * contentScale;
+    const screenY = viewY + imgY * contentScale;
 
     const container = containerRef.current;
     const scrollX = container ? container.scrollLeft : 0;
@@ -1536,25 +1618,18 @@ const ViewerCanvas = forwardRef(({
         ref={stageRef}
         width={containerSize.width}
         height={containerSize.height}
-        onMouseDown={(e) => {
-          if (isDrawMode) handlePointerDown(e);
-          else if (isEditMode) handleStageMouseDown(e);
+        onPointerDown={handleStagePointerDown}
+        onPointerMove={handleStagePointerMove}
+        onPointerUp={handleStagePointerUp}
+        style={{ 
+          cursor: isDrawMode ? 'crosshair' : canPan ? (isPanning ? 'grabbing' : 'grab') : 'default' 
         }}
-        onTouchStart={(e) => {
-          if (isDrawMode) handlePointerDown(e);
-          else if (isEditMode) handleStageMouseDown(e);
-        }}
-        onMouseMove={isDrawMode ? handlePointerMove : undefined}
-        onTouchMove={isDrawMode ? handlePointerMove : undefined}
-        onMouseUp={isDrawMode ? handlePointerUp : undefined}
-        onTouchEnd={isDrawMode ? handlePointerUp : undefined}
-        style={{ cursor: isDrawMode ? 'crosshair' : 'default' }}
       >
         {/* 背景Layer（非インタラクティブ） */}
         <Layer listening={false}>
           <Group
-            x={offsetX}
-            y={offsetY}
+            x={viewX}
+            y={viewY}
             scaleX={contentScale}
             scaleY={contentScale}
           >
@@ -1569,8 +1644,8 @@ const ViewerCanvas = forwardRef(({
         <Layer>
           <Group
             ref={contentGroupRef}
-            x={offsetX}
-            y={offsetY}
+            x={viewX}
+            y={viewY}
             scaleX={contentScale}
             scaleY={contentScale}
           >
