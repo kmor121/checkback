@@ -720,19 +720,30 @@ function ShareViewContent() {
     enterEdit(comment);
   };
 
-  const handleCloseDock = () => {
-    setComposerText('');
-    setDraftShapes([]);
-    draftShapesRef.current = [];
-    setPendingFiles([]);
+  const resetEditorSession = () => {
+    viewerCanvasRef.current?.clear();
+    setPaintMode(false);
+    setIsDockOpen(false);
+    setPaintSessionCommentId(null);
+    
+    // 編集解除
     setComposerMode('new');
     setComposerTargetCommentId(null);
     setComposerParentCommentId(null);
-    setPaintSessionCommentId(null);
+    
+    // 選択解除
     setActiveCommentId(null);
-    setPaintMode(false);
+    
+    // draftクリア
+    setDraftShapes([]);
+    draftShapesRef.current = [];
+    setComposerText('');
+    setPendingFiles([]);
     setReplyingThreadId(null);
-    setIsDockOpen(false);
+  };
+
+  const handleCloseDock = () => {
+    resetEditorSession();
   };
 
   const handleStartReply = (parentComment) => {
@@ -1182,17 +1193,21 @@ function ShareViewContent() {
                 </div>
               ) : (
                 sortedComments.map((comment) => {
-                  const shapesCount = paintShapes.filter(s => s.comment_id === comment.id).length;
-                  const isActive = activeCommentId === comment.id;
-                  const isLocked = paintSessionCommentId === comment.id;
-                  const replies = repliesByParent.get(comment.id) || [];
-                  const commentAttachments = attachmentsByComment.get(comment.id) || [];
-                  const isThreadOpen = replyingThreadId === comment.id;
+                                  const shapesCount = paintShapes.filter(s => s.comment_id === comment.id).length;
+                                  const isSelected = activeCommentId === comment.id;
+                                  const isEditing = composerMode === 'edit' && composerTargetCommentId === comment.id;
+                                  const isPaintingThis = paintMode && paintSessionCommentId === comment.id;
+                                  const replies = repliesByParent.get(comment.id) || [];
+                                  const commentAttachments = attachmentsByComment.get(comment.id) || [];
+                                  const isThreadOpen = replyingThreadId === comment.id;
 
                   return (
                     <div key={comment.id} className="space-y-2">
                       <Card 
-                        className={`hover:shadow-md transition-shadow ${isActive ? 'border-2 border-blue-600 bg-blue-50' : ''} ${isLocked ? 'ring-2 ring-green-500' : ''}`}
+                        className={`hover:shadow-md transition-shadow ${
+                          isEditing ? 'border-2 border-green-600 bg-green-50' : 
+                          isSelected ? 'border-2 border-blue-600 bg-blue-50' : ''
+                        }`}
                       >
                         <CardContent className="p-3">
                           <div className="flex items-start gap-2">
@@ -1212,9 +1227,14 @@ function ShareViewContent() {
                                     {shapesCount}
                                   </Badge>
                                 )}
-                                {composerMode === 'edit' && composerTargetCommentId === comment.id && (
+                                {isEditing && (
                                   <Badge className="text-xs bg-green-600 text-white">
                                     編集中
+                                  </Badge>
+                                )}
+                                {isPaintingThis && !isEditing && (
+                                  <Badge className="text-xs bg-orange-600 text-white">
+                                    ペイント中
                                   </Badge>
                                 )}
                               </div>
@@ -1459,7 +1479,10 @@ function ShareViewContent() {
             onClear={() => viewerCanvasRef.current?.clear()}
             onClearAll={handleClearAll}
             onDelete={() => viewerCanvasRef.current?.delete()}
-            onComplete={() => setPaintMode(false)}
+            onComplete={() => {
+              setPaintMode(false);
+              setTool('select');
+            }}
             onResetView={() => setZoom(100)}
             showBoundingBoxes={showBoundingBoxes}
             onToggleBoundingBoxes={DEBUG_MODE ? () => setShowBoundingBoxes(!showBoundingBoxes) : undefined}
