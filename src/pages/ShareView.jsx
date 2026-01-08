@@ -1163,7 +1163,12 @@ function ShareViewContent() {
         </div>
 
         {/* 中央：プレビュー */}
-        <div className="flex-1 bg-gray-100 overflow-auto relative pb-24">
+        <div 
+          className="flex-1 bg-gray-100 overflow-auto relative" 
+          style={{ 
+            paddingBottom: `${composerHeight + 24}px` 
+          }}
+        >
           {!isReady ? (
             <div className="w-full h-full flex items-center justify-center">
               <div className="text-center">
