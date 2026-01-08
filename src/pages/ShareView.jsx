@@ -1665,8 +1665,7 @@ function ShareViewContent() {
 
       {/* ツールバー（ペイントモード時のみ） */}
       {paintMode && shareLink.can_post_comments && isReady && (
-        <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-40">
-          <FloatingToolbar
+        <FloatingToolbar
             paintMode={paintMode}
             onPaintModeChange={handlePaintModeChange}
             tool={tool}
@@ -1691,7 +1690,6 @@ function ShareViewContent() {
             onToggleBoundingBoxes={DEBUG_MODE ? () => setShowBoundingBoxes(!showBoundingBoxes) : undefined}
             hasActiveComment={!!(paintSessionCommentId || activeCommentId || draftShapes.length > 0)}
           />
-        </div>
       )}
 
 
