@@ -102,6 +102,7 @@ const ViewerCanvas = forwardRef(({
   const [lastPayload, setLastPayload] = useState(null);
   const [lastSuccessId, setLastSuccessId] = useState(null);
   const [isSaving, setIsSaving] = useState({});
+  const [dragTick, setDragTick] = useState(0);
   
   const isImage = mimeType?.startsWith('image/');
   const isEditMode = tool === 'select';
@@ -1030,8 +1031,8 @@ const ViewerCanvas = forwardRef(({
         e.cancelBubble = true;
       } : undefined,
       onDragMove: isEditMode ? (e) => {
-        // ドラッグ中も選択枠を追従させるために再描画
-        e.target.getLayer()?.batchDraw();
+        // ドラッグ中も選択枠を追従させるために再レンダリング強制
+        setDragTick(prev => prev + 1);
       } : undefined,
       onDragEnd: isEditMode ? (e) => handleDragEnd(shape, e) : undefined,
       // TransformEndはRect/Circleのみ
@@ -1307,8 +1308,8 @@ const ViewerCanvas = forwardRef(({
               e.cancelBubble = true;
             } : undefined}
             onDragMove={isEditMode ? (e) => {
-              // ドラッグ中も選択枠を追従させるために再描画
-              e.target.getLayer()?.batchDraw();
+              // ドラッグ中も選択枠を追従させるために再レンダリング強制
+              setDragTick(prev => prev + 1);
             } : undefined}
             onDragEnd={isEditMode ? (e) => handleDragEnd(shape, e) : undefined}
             onDblClick={isEditMode ? () => handleTextDblClick(shape) : undefined}
