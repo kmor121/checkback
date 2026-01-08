@@ -1353,7 +1353,7 @@ function ShareViewContent() {
                                   <Check className="w-3 h-3 text-white" />
                                 </div>
                               ) : (
-                                <Circle className="w-5 h-5" />
+                                <CircleIcon className="w-5 h-5" />
                               )}
                               </Button>
 
