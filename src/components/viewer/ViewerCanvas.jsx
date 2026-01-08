@@ -556,16 +556,20 @@ const ViewerCanvas = forwardRef(({
   // テキストダブルクリックで再編集
   const handleTextDblClick = (shape) => {
     if (!isEditMode) return;
-    
+
     const { x: imgX, y: imgY } = denormalizeCoords(shape.nx, shape.ny);
     const screenX = offsetX + imgX * contentScale;
     const screenY = offsetY + imgY * contentScale;
-    
+
+    const container = containerRef.current;
+    const scrollX = container ? container.scrollLeft : 0;
+    const scrollY = container ? container.scrollTop : 0;
+
     // 編集時も現在のツールバー設定を使用
     setTextEditor({
       visible: true,
-      x: screenX,
-      y: screenY,
+      x: screenX + scrollX,
+      y: screenY + scrollY,
       value: shape.text || '',
       shapeId: shape.id,
       imgX,
@@ -1210,7 +1214,10 @@ const ViewerCanvas = forwardRef(({
             onCompositionStart={() => setIsComposing(true)}
             onCompositionEnd={() => setIsComposing(false)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
+              // IME変換中はEnterを無視（keyCode 229 または isComposing）
+              const isComposingNow = e.nativeEvent?.isComposing || e.keyCode === 229 || isComposing;
+
+              if (e.key === 'Enter' && !e.shiftKey && !isComposingNow) {
                 e.preventDefault();
                 handleTextConfirm();
               } else if (e.key === 'Escape') {
