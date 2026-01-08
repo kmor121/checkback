@@ -1297,19 +1297,24 @@ function ShareViewContent() {
                   )}
                 </div>
 
-                {(composerMode === 'edit' || paintSessionCommentId || draftShapes.length > 0) && (
-                  <div className="mt-2 text-xs text-gray-500 flex items-center gap-2">
-                    <Badge className="bg-green-600 text-white">
-                      {composerMode === 'edit' ? 'コメント編集中' : paintSessionCommentId ? 'コメントに追記中' : '新規作成中'}
-                    </Badge>
-                    <span>
-                      {composerMode === 'edit' ? '保存して更新' : 'コメントを入力してください。'}
-                    </span>
-                    {draftShapes.length > 0 && (
-                      <Badge variant="secondary">{draftShapes.length}個の描画</Badge>
-                    )}
-                  </div>
-                )}
+                {/* 固定高さのステータス領域（高さ変化でチラつき防止） */}
+                <div className="h-6 mt-2 flex items-center">
+                  {(composerMode === 'edit' || paintSessionCommentId || draftShapes.length > 0) ? (
+                    <div className="text-xs text-gray-500 flex items-center gap-2">
+                      <Badge className="bg-green-600 text-white">
+                        {composerMode === 'edit' ? 'コメント編集中' : paintSessionCommentId ? 'コメントに追記中' : '新規作成中'}
+                      </Badge>
+                      <span>
+                        {composerMode === 'edit' ? '保存して更新' : 'コメントを入力してください。'}
+                      </span>
+                      {draftShapes.length > 0 && (
+                        <Badge variant="secondary">{draftShapes.length}個の描画</Badge>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="opacity-0 pointer-events-none">placeholder</div>
+                  )}
+                </div>
               </div>
             </div>
           )}
