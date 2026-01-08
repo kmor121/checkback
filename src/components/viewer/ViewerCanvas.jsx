@@ -470,7 +470,7 @@ const ViewerCanvas = forwardRef(({
     const fontSize = Math.max(12, strokeWidth * 6);
 
     if (shapeId) {
-      // 既存テキストの編集
+      // 既存テキストの編集（現在のツールバー設定を適用）
       const existingShape = shapes.find(s => s.id === shapeId);
       if (existingShape) {
         const updatedShape = {
@@ -478,6 +478,8 @@ const ViewerCanvas = forwardRef(({
           text,
           nx,
           ny,
+          stroke: strokeColor,
+          strokeWidth: strokeWidth,
           fontSize,
         };
         
@@ -541,6 +543,7 @@ const ViewerCanvas = forwardRef(({
     const screenX = offsetX + imgX * contentScale;
     const screenY = offsetY + imgY * contentScale;
     
+    // 編集時も現在のツールバー設定を使用
     setTextEditor({
       visible: true,
       x: screenX,
