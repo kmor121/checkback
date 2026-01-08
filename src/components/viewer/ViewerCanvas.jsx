@@ -365,9 +365,15 @@ const ViewerCanvas = forwardRef(({
       return;
     }
     
+    // テキスト編集中は処理しない
+    if (textEditor.visible) return;
+    
     try {
       const stage = e.target.getStage();
       if (!stage) return;
+      
+      // 座標を強制更新（pointer取得を確実にする）
+      if (e?.evt) stage.setPointersPositions(e.evt);
       
       const imgCoords = pointerToImageCoords(stage);
       if (!imgCoords) return;
@@ -399,6 +405,12 @@ const ViewerCanvas = forwardRef(({
       } else if (tool === 'text') {
         // テキストツールの場合はエディタを表示（shape作成はしない）
         const pos = stage.getPointerPosition();
+        if (!pos) {
+          console.error('[ViewerCanvas] Cannot get pointer position for text tool');
+          setIsDrawing(false);
+          return;
+        }
+        
         const container = containerRef.current;
         const scrollX = container ? container.scrollLeft : 0;
         const scrollY = container ? container.scrollTop : 0;
@@ -412,8 +424,10 @@ const ViewerCanvas = forwardRef(({
           shapeId: null,
           imgX: Math.max(0, Math.min(bgSize.width, imgCoords.x)),
           imgY: Math.max(0, Math.min(bgSize.height, imgCoords.y)),
+          openedAt: Date.now(),
         });
         setIsDrawing(false);
+        setCurrentShape(null);
         return;
       } else {
         setCurrentShape(newShape);
@@ -426,9 +440,15 @@ const ViewerCanvas = forwardRef(({
   
   // PointerMove: 描画中（描画モード時のみ）
   const handlePointerMove = (e) => {
+    // テキスト編集中は処理しない
+    if (textEditor.visible) return;
+    
     try {
       const stage = e.target.getStage();
       if (!stage) return;
+      
+      // 座標を強制更新
+      if (e?.evt) stage.setPointersPositions(e.evt);
       
       const imgCoords = pointerToImageCoords(stage);
       if (!imgCoords) return;
@@ -578,6 +598,7 @@ const ViewerCanvas = forwardRef(({
       shapeId: shape.id,
       imgX,
       imgY,
+      openedAt: Date.now(),
     });
   };
 
@@ -1230,6 +1251,7 @@ const ViewerCanvas = forwardRef(({
               }
             }}
             onBlur={handleTextBlur}
+            onClick={(e) => e.stopPropagation()}
           />
           <div style={{ marginTop: '4px', fontSize: '11px', color: '#666' }}>
             Enter: 確定 | Esc: キャンセル | Shift+Enter: 改行
@@ -1241,12 +1263,19 @@ const ViewerCanvas = forwardRef(({
         ref={stageRef}
         width={containerSize.width}
         height={containerSize.height}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onMouseDown={isEditMode ? handleStageMouseDown : undefined}
-        onTouchStart={isEditMode ? handleStageMouseDown : undefined}
-        style={{ cursor: isDrawMode ? 'crosshair' : isEditMode ? 'default' : 'default' }}
+        onMouseDown={(e) => {
+          if (isDrawMode) handlePointerDown(e);
+          else if (isEditMode) handleStageMouseDown(e);
+        }}
+        onTouchStart={(e) => {
+          if (isDrawMode) handlePointerDown(e);
+          else if (isEditMode) handleStageMouseDown(e);
+        }}
+        onMouseMove={isDrawMode ? handlePointerMove : undefined}
+        onTouchMove={isDrawMode ? handlePointerMove : undefined}
+        onMouseUp={isDrawMode ? handlePointerUp : undefined}
+        onTouchEnd={isDrawMode ? handlePointerUp : undefined}
+        style={{ cursor: isDrawMode ? 'crosshair' : 'default' }}
       >
         {/* 背景Layer（非インタラクティブ） */}
         <Layer listening={false}>
