@@ -365,14 +365,21 @@ function FileViewContent() {
       showToast('ペイントを終了してからコメントを選択してください', 'error');
       return;
     }
+    
+    // 同じコメントを再クリック → 選択解除＆新規モードに戻す
+    if (activeCommentId === comment.id) {
+      setActiveCommentId(null);
+      setComposerMode('new');
+      setComposerTargetCommentId(null);
+      setCommentBody('');
+      return;
+    }
+    
+    // 別のコメントをクリック → 編集モードに切替
     setActiveCommentId(comment.id);
-  };
-
-  const handleStartEditComment = (comment) => {
     setComposerMode('edit');
     setComposerTargetCommentId(comment.id);
     setCommentBody(comment.body);
-    setActiveCommentId(comment.id);
   };
 
   const handleCancelEdit = () => {
@@ -381,6 +388,7 @@ function FileViewContent() {
     setCommentBody('');
     setDraftShapes([]);
     setPaintSessionCommentId(null);
+    setActiveCommentId(null);
   };
 
   const toggleResolveMutation = useMutation({
@@ -636,7 +644,7 @@ function FileViewContent() {
               )}
             </div>
             <Textarea
-              placeholder="コメントを入力"
+              placeholder={composerMode === 'edit' ? '編集中...' : 'コメントを入力'}
               value={commentBody}
               onChange={(e) => setCommentBody(e.target.value)}
               rows={3}

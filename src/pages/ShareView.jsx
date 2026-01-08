@@ -550,18 +550,14 @@ function ShareViewContent() {
   };
 
   const handleStartEditComment = (comment) => {
-    if (paintMode || isDockOpen) {
-      if (!window.confirm('編集中の内容が失われますが、よろしいですか？')) {
-        return;
-      }
-    }
-    
+    // カードクリックで編集に入るため、このメニュー項目は削除可能
+    // 念のため残す場合も、カードクリックと同じ挙動にする
+    setCurrentPage(comment.page_no);
+    setActiveCommentId(comment.id);
     setComposerMode('edit');
     setComposerTargetCommentId(comment.id);
-    setActiveCommentId(comment.id);
-    setCurrentPage(comment.page_no);
-    setPaintSessionCommentId(comment.id);
     setComposerText(comment.body || '');
+    setPaintSessionCommentId(comment.id);
     setPaintMode(false);
     setIsDockOpen(true);
   };
@@ -978,17 +974,31 @@ function ShareViewContent() {
                           <div 
                             className="flex-1 cursor-pointer" 
                             onClick={() => {
-                              if (paintMode || isDockOpen) {
-                                showToast('編集中は他のコメントを選択できません', 'info');
+                              // 同じコメントを再クリック → 選択解除＆新規モードに戻す
+                              if (isActive) {
+                                setActiveCommentId(null);
+                                setComposerMode('new');
+                                setComposerTargetCommentId(null);
+                                setComposerText('');
+                                setDraftShapes([]);
+                                setPaintSessionCommentId(null);
+                                setIsDockOpen(false);
                                 return;
                               }
 
-                              if (isActive) {
-                                setActiveCommentId(null);
-                              } else {
-                                setCurrentPage(comment.page_no);
-                                setActiveCommentId(comment.id);
+                              // 別のコメントをクリック → 編集モードに切替
+                              if (paintMode) {
+                                showToast('ペイントを終了してから選択してください', 'info');
+                                return;
                               }
+
+                              setCurrentPage(comment.page_no);
+                              setActiveCommentId(comment.id);
+                              setComposerMode('edit');
+                              setComposerTargetCommentId(comment.id);
+                              setComposerText(comment.body || '');
+                              setPaintSessionCommentId(comment.id);
+                              setIsDockOpen(true);
                             }}
                           >
                             <div className="flex items-center gap-2 mb-1">
@@ -1098,7 +1108,7 @@ function ShareViewContent() {
 
               {/* 本文入力 */}
               <Textarea
-                placeholder="コメントを入力（描画のみでもOK）"
+                placeholder={composerMode === 'edit' ? '編集中...' : 'コメントを入力（描画のみでもOK）'}
                 value={composerText}
                 onChange={(e) => setComposerText(e.target.value)}
                 onFocus={() => setIsDockOpen(true)}
