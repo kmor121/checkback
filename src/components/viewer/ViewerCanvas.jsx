@@ -1278,8 +1278,6 @@ const ViewerCanvas = forwardRef(({
               lineCap="round" 
               lineJoin="round" 
               fill={undefined}
-              shadowBlur={isSelected ? 4 : 0}
-              shadowColor={isSelected ? shape.stroke : undefined}
               listening={false}
             />
             <Rect 
@@ -1400,8 +1398,6 @@ const ViewerCanvas = forwardRef(({
                 points={points} 
                 pointerLength={10} 
                 pointerWidth={10} 
-                shadowBlur={isSelected ? 4 : 0}
-                shadowColor={isSelected ? shape.stroke : undefined}
                 listening={false}
               />
               <Rect 
