@@ -1075,6 +1075,8 @@ function ShareViewContent() {
               paintMode={isReady && paintMode}
               tool={tool}
               onToolChange={setTool}
+              onStrokeColorChange={setStrokeColor}
+              onStrokeWidthChange={setStrokeWidth}
               strokeColor={strokeColor}
               strokeWidth={strokeWidth}
               zoom={zoom}
