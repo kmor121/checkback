@@ -44,8 +44,6 @@ export default function FloatingToolbar({
   onResetView,
   showBoundingBoxes,
   onToggleBoundingBoxes,
-  showAllPaint,
-  onToggleShowAllPaint,
   hasActiveComment = false,
 }) {
   const DEBUG_MODE = import.meta.env.VITE_DEBUG === 'true';
@@ -233,27 +231,13 @@ export default function FloatingToolbar({
               </Button>
             )}
 
-            {/* Show All Paint */}
-            {onToggleShowAllPaint && (
-              <Button
-                variant={showAllPaint ? 'default' : 'outline'}
-                size="sm"
-                onClick={onToggleShowAllPaint}
-                title="全コメントの描画を表示"
-                className={showAllPaint ? 'bg-purple-600 hover:bg-purple-700' : ''}
-              >
-                <Eye className="w-4 h-4 mr-1" />
-                全表示
-              </Button>
-            )}
-
             {/* Bounding Boxes (DEBUG only) */}
-            {DEBUG_MODE && onToggleBoundingBoxes && (
+            {onToggleBoundingBoxes && (
               <Button
                 variant={showBoundingBoxes ? 'default' : 'outline'}
                 size="sm"
                 onClick={onToggleBoundingBoxes}
-                title="バウンディングボックス表示切替"
+                title="バウンディングボックス表示（デバッグ）"
               >
                 <Eye className="w-4 h-4" />
               </Button>

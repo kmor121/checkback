@@ -502,8 +502,17 @@ const ViewerCanvas = forwardRef(({
         normalizedShape.normalizedPoints = normalizedPoints;
         // 一時フィールドを削除（正規化データのみ保存）
         // points, startX, startY は含めない
+      } else if (tool === 'text') {
+        const x = currentShape.x ?? currentShape.startX ?? 0;
+        const y = currentShape.y ?? currentShape.startY ?? 0;
+        const { nx, ny } = normalizeCoords(x, y);
+
+        normalizedShape.nx = nx;
+        normalizedShape.ny = ny;
+        normalizedShape.text = currentShape.text ?? 'テキスト';
+        normalizedShape.fontSize = currentShape.fontSize || 16;
       }
-      
+
       // Undo履歴に追加
       addToUndoStack({ type: 'add', shapeId: normalizedShape.id });
 

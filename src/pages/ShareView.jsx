@@ -1073,8 +1073,6 @@ function ShareViewContent() {
             onResetView={() => setZoom(100)}
             showBoundingBoxes={showBoundingBoxes}
             onToggleBoundingBoxes={DEBUG_MODE ? () => setShowBoundingBoxes(!showBoundingBoxes) : undefined}
-            showAllPaint={showAllPaint}
-            onToggleShowAllPaint={() => setShowAllPaint(!showAllPaint)}
             hasActiveComment={!!(paintSessionCommentId || activeCommentId || draftShapes.length > 0)}
           />
         </div>
