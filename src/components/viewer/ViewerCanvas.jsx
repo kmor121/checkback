@@ -144,8 +144,8 @@ const ViewerCanvas = forwardRef(({
     
     if (isEditMode && selectedId && shapeRefs.current[selectedId]) {
       const selectedShape = shapes.find(s => s.id === selectedId);
-      const canTransform = selectedShape && (selectedShape.tool === 'rect' || selectedShape.tool === 'circle' || selectedShape.tool === 'text');
-      
+      const canTransform = selectedShape && (selectedShape.tool === 'rect' || selectedShape.tool === 'circle' || selectedShape.tool === 'text' || selectedShape.tool === 'arrow');
+
       if (canTransform) {
         transformerRef.current.nodes([shapeRefs.current[selectedId]]);
         transformerRef.current.getLayer().batchDraw();
@@ -850,26 +850,26 @@ const ViewerCanvas = forwardRef(({
     }
   };
 
-  // Transform終了時の更新（CRITICAL: 増殖防止のため置換処理、Rect/Circleのみ）
+  // Transform終了時の更新（CRITICAL: 増殖防止のため置換処理、Rect/Circle/Arrowに対応）
   const handleTransformEnd = async (shape, e) => {
     // 多重保存防止
     if (isSaving[shape.id]) {
       console.log('[ViewerCanvas] Already saving:', shape.id);
       return;
     }
-    
+
     const node = e.target;
     const scaleX = node.scaleX();
     const scaleY = node.scaleY();
-    
+
     const updatedShape = { ...shape };
-    
+
     if (shape.tool === 'rect') {
       const finalX = node.x();
       const finalY = node.y();
       const finalW = Math.max(5, node.width() * scaleX);
       const finalH = Math.max(5, node.height() * scaleY);
-      
+
       // ノードを更新（リセットではなく確定）
       node.scaleX(1);
       node.scaleY(1);
@@ -877,11 +877,11 @@ const ViewerCanvas = forwardRef(({
       node.height(finalH);
       node.x(finalX);
       node.y(finalY);
-      
+
       // 正規化座標に変換
       const { nx, ny } = normalizeCoords(finalX, finalY);
       const { nx: nx2, ny: ny2 } = normalizeCoords(finalX + finalW, finalY + finalH);
-      
+
       updatedShape.nx = nx;
       updatedShape.ny = ny;
       updatedShape.nw = nx2 - nx;
@@ -890,19 +890,43 @@ const ViewerCanvas = forwardRef(({
       const finalX = node.x();
       const finalY = node.y();
       const finalR = Math.max(3, node.radius() * Math.max(scaleX, scaleY));
-      
+
       // ノードを更新（リセットではなく確定）
       node.scaleX(1);
       node.scaleY(1);
       node.radius(finalR);
       node.x(finalX);
       node.y(finalY);
-      
+
       // 正規化座標に変換
       const { nx, ny } = normalizeCoords(finalX, finalY);
       updatedShape.nx = nx;
       updatedShape.ny = ny;
       updatedShape.nr = finalR / bgSize.width;
+    } else if (shape.tool === 'arrow' && shape.normalizedPoints) {
+      // Arrowの変形：2点のtransformを適用して新しいnormalizedPointsを作成
+      const transform = node.getAbsoluteTransform();
+
+      // 元の2点を復元（normalizedPoints → ステージ座標）
+      const p1 = denormalizeCoords(shape.normalizedPoints[0], shape.normalizedPoints[1]);
+      const p2 = denormalizeCoords(shape.normalizedPoints[2], shape.normalizedPoints[3]);
+
+      // Transformを適用（回転・スケール・移動を反映）
+      const newP1 = transform.point({ x: p1.x, y: p1.y });
+      const newP2 = transform.point({ x: p2.x, y: p2.y });
+
+      // 正規化座標に変換
+      const { nx: nx1, ny: ny1 } = normalizeCoords(newP1.x, newP1.y);
+      const { nx: nx2, ny: ny2 } = normalizeCoords(newP2.x, newP2.y);
+
+      updatedShape.normalizedPoints = [nx1, ny1, nx2, ny2];
+
+      // Transformをリセット
+      node.scaleX(1);
+      node.scaleY(1);
+      node.rotation(0);
+      node.x(0);
+      node.y(0);
     }
     
     addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: updatedShape });
@@ -1001,7 +1025,7 @@ const ViewerCanvas = forwardRef(({
   // Shape描画（正規化座標から復元）
   const renderShape = (shape, isExisting = false) => {
     const isSelected = selectedId === shape.id;
-    const canTransform = shape.tool === 'rect' || shape.tool === 'circle' || shape.tool === 'text';
+    const canTransform = shape.tool === 'rect' || shape.tool === 'circle' || shape.tool === 'text' || shape.tool === 'arrow';
     
     const commonProps = {
       key: shape.id,
