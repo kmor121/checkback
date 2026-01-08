@@ -244,6 +244,23 @@ function ShareViewContent() {
     // 編集セッションか新規セッションかを判定
     const isEditSession = composerMode === 'edit' && !!composerTargetCommentId;
 
+    // 対応済みコメントのチェック
+    if (isEditSession) {
+      const targetComment = comments.find(c => c.id === composerTargetCommentId);
+      if (targetComment?.resolved) {
+        showToast('対応済みのコメントは編集できません', 'info');
+        return;
+      }
+    }
+    
+    if (activeCommentId) {
+      const activeComment = comments.find(c => c.id === activeCommentId);
+      if (activeComment?.resolved) {
+        showToast('対応済みのコメントは編集できません', 'info');
+        return;
+      }
+    }
+
     if (isEditSession) {
       // 既存コメント編集: そのコメントの描画を表示・編集可能
       setPaintSessionCommentId(composerTargetCommentId);
@@ -480,6 +497,23 @@ function ShareViewContent() {
       return;
     }
 
+    // 対応済みコメントの編集/返信チェック
+    if (composerMode === 'edit' && composerTargetCommentId) {
+      const targetComment = comments.find(c => c.id === composerTargetCommentId);
+      if (targetComment?.resolved) {
+        showToast('対応済みのコメントは編集できません', 'error');
+        return;
+      }
+    }
+    
+    if (composerMode === 'reply' && composerParentCommentId) {
+      const parentComment = comments.find(c => c.id === composerParentCommentId);
+      if (parentComment?.resolved) {
+        showToast('対応済みのコメントには返信できません', 'error');
+        return;
+      }
+    }
+
     const shapesToCommit = draftShapesRef.current || [];
     const hasDraftShapes = shapesToCommit.length > 0;
     const hasFiles = pendingFiles.length > 0;
@@ -673,6 +707,12 @@ function ShareViewContent() {
       return;
     }
 
+    // 対応済みチェック
+    if (comment.resolved) {
+      showToast('対応済みのコメントは編集できません', 'info');
+      return;
+    }
+
     // 同じコメントを再クリック → 選択解除＆新規モードに戻す
     if (activeCommentId === comment.id) {
       setActiveCommentId(null);
@@ -702,6 +742,12 @@ function ShareViewContent() {
   const enterEdit = (comment) => {
     if (paintMode) {
       showToast('ペイントを終了してから編集してください', 'info');
+      return;
+    }
+
+    // 対応済みチェック
+    if (comment.resolved) {
+      showToast('対応済みのコメントは編集できません', 'info');
       return;
     }
 
@@ -766,6 +812,12 @@ function ShareViewContent() {
   const handleStartReply = (parentComment) => {
     if (paintMode) {
       showToast('ペイントを終了してから返信してください', 'info');
+      return;
+    }
+
+    // 対応済みチェック
+    if (parentComment.resolved) {
+      showToast('対応済みのコメントには返信できません', 'info');
       return;
     }
 
@@ -1204,31 +1256,38 @@ function ShareViewContent() {
           </div>
 
           {/* 下段：コメント入力（composer） */}
-          {shareLink.can_post_comments && (
-            <div className="bg-gray-100 p-4 flex justify-center">
-              <div className="w-full max-w-2xl bg-white rounded-xl shadow-2xl border-2 border-gray-200 p-4">
-                <div className="flex gap-3 items-start">
-                  {/* ペイントボタン */}
-                  <Button
-                    variant={paintMode ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => handlePaintModeChange(!paintMode)}
-                    className="mt-1"
-                  >
-                    <Paintbrush className="w-4 h-4 mr-1" />
-                    {paintMode ? 'ペイント中' : 'ペイント'}
-                  </Button>
+          {shareLink.can_post_comments && (() => {
+            // 対応済みチェック
+            const activeComment = comments.find(c => c.id === activeCommentId);
+            const isLocked = activeComment?.resolved || false;
 
-                  {/* 本文入力 */}
-                  <div className="flex-1 space-y-2">
-                    <Textarea
-                      placeholder={composerMode === 'edit' ? '編集中...' : composerMode === 'reply' ? '返信を入力...' : 'コメントを入力...'}
-                      value={composerText}
-                      onChange={(e) => setComposerText(e.target.value)}
-                      onFocus={() => setIsDockOpen(true)}
-                      rows={2}
-                      className="text-sm resize-none"
-                    />
+            return (
+              <div className="bg-gray-100 p-4 flex justify-center">
+                <div className="w-full max-w-2xl bg-white rounded-xl shadow-2xl border-2 border-gray-200 p-4">
+                  <div className="flex gap-3 items-start">
+                    {/* ペイントボタン */}
+                    <Button
+                      variant={paintMode ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => handlePaintModeChange(!paintMode)}
+                      className="mt-1"
+                      disabled={isLocked}
+                    >
+                      <Paintbrush className="w-4 h-4 mr-1" />
+                      {paintMode ? 'ペイント中' : 'ペイント'}
+                    </Button>
+
+                    {/* 本文入力 */}
+                    <div className="flex-1 space-y-2">
+                      <Textarea
+                        placeholder={composerMode === 'edit' ? '編集中...' : composerMode === 'reply' ? '返信を入力...' : 'コメントを入力...'}
+                        value={composerText}
+                        onChange={(e) => setComposerText(e.target.value)}
+                        onFocus={() => setIsDockOpen(true)}
+                        rows={2}
+                        className="text-sm resize-none"
+                        disabled={isLocked}
+                      />
                     
                     {/* 添付ファイル一覧 */}
                     {pendingFiles.length > 0 && (
@@ -1258,6 +1317,7 @@ function ShareViewContent() {
                     className="hidden"
                     id="dock-file-input"
                     onChange={handleFileSelect}
+                    disabled={isLocked}
                   />
                   <label htmlFor="dock-file-input">
                     <Button
@@ -1265,6 +1325,7 @@ function ShareViewContent() {
                       size="sm"
                       className="mt-1"
                       asChild
+                      disabled={isLocked}
                     >
                       <span>
                         <Download className="w-4 h-4" />
@@ -1275,7 +1336,7 @@ function ShareViewContent() {
                   {/* 送信ボタン */}
                   <Button
                     onClick={handleSendComment}
-                    disabled={!composerText.trim()}
+                    disabled={!composerText.trim() || isLocked}
                     className="bg-blue-600 hover:bg-blue-700 mt-1 disabled:opacity-50 disabled:cursor-not-allowed"
                     size="sm"
                     title={composerMode === 'edit' ? '保存' : '送信'}
@@ -1386,7 +1447,7 @@ function ShareViewContent() {
                             <div 
                               className="flex-1 cursor-pointer" 
                               onClick={() => selectComment(comment)}
-                              onDoubleClick={() => enterEdit(comment)}
+                              onDoubleClick={() => !comment.resolved && enterEdit(comment)}
                             >
                               <div className="flex items-center gap-2 mb-1">
                                 <span className="text-sm font-medium">{comment.author_name}</span>
