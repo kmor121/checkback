@@ -239,42 +239,32 @@ function ShareViewContent() {
     }
   };
 
-  // lastActiveCommentId の復元（初回ロード時のみ、1回だけ実行）
+  // 初回ロード時のみ activeCommentId を初期化（URLにcomment指定がある場合のみ選択）
   useEffect(() => {
-    if (!token || !shareLink?.file_id || !comments.length) return;
-    
-    // CRITICAL: 初回のみ復元（ユーザー操作で activeCommentId=null にした場合は復元しない）
+    if (!token || !shareLink?.file_id) return;
     if (didInitActiveRef.current) return;
 
-    // URL params で comment 指定があれば優先
     const params = new URLSearchParams(window.location.search);
     const commentIdFromUrl = params.get('comment');
-    
-    if (commentIdFromUrl && comments.find(c => c.id === commentIdFromUrl)) {
-      const targetComment = comments.find(c => c.id === commentIdFromUrl);
-      setCurrentPage(targetComment.page_no);
-      setActiveCommentId(commentIdFromUrl);
+
+    // comment指定がない共有リンクは「何も選択しない」で確定（後から勝手に選ばれないよう初期化完了にする）
+    if (!commentIdFromUrl) {
+      setActiveCommentId(null);
       didInitActiveRef.current = true;
       return;
     }
 
-    // URL指定がない場合は localStorage から復元
-    const key = `lastActiveCommentId:${token}:${shareLink.file_id}:${currentPage}`;
-    const saved = localStorage.getItem(key);
+    // comment指定がある場合は comments が揃うのを待つ
+    if (!comments || comments.length === 0) return;
 
-    if (saved && comments.find(c => c.id === saved)) {
-      const savedComment = comments.find(c => c.id === saved);
-      setCurrentPage(savedComment.page_no);
-      setActiveCommentId(saved);
-    } else if (comments.length > 0) {
-      // 無ければ最新コメント（seq_no最大）を開く
-      const latest = comments.reduce((max, c) => 
-        (c.seq_no || 0) > (max.seq_no || 0) ? c : max
-      , comments[0]);
-      setCurrentPage(latest.page_no);
-      setActiveCommentId(latest.id);
+    const target = comments.find(c => c.id === commentIdFromUrl);
+    if (target) {
+      setCurrentPage(target.page_no);
+      setActiveCommentId(target.id);
+    } else {
+      setActiveCommentId(null);
     }
-    
+
     didInitActiveRef.current = true;
   }, [token, shareLink?.file_id, comments]);
 
