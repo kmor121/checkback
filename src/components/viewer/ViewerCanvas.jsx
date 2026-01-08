@@ -1100,9 +1100,51 @@ const ViewerCanvas = forwardRef(({
         points = shape.points;
       }
 
+      // 選択表示用のバウンディングボックス計算
+      let selectionBox = null;
+      if (isSelected && points.length >= 2) {
+        const xs = [];
+        const ys = [];
+        for (let i = 0; i < points.length; i += 2) {
+          xs.push(points[i]);
+          ys.push(points[i + 1]);
+        }
+        const pad = Math.max(6, shape.strokeWidth * 2);
+        selectionBox = {
+          x: Math.min(...xs) - pad,
+          y: Math.min(...ys) - pad,
+          width: (Math.max(...xs) - Math.min(...xs)) + pad * 2,
+          height: (Math.max(...ys) - Math.min(...ys)) + pad * 2,
+        };
+      }
+
       return (
         <React.Fragment key={shape.id}>
-          <Line {...commonProps} points={points} tension={0.5} lineCap="round" lineJoin="round" hitStrokeWidth={20} fill={undefined} />
+          <Line 
+            {...commonProps} 
+            points={points} 
+            tension={0.5} 
+            lineCap="round" 
+            lineJoin="round" 
+            hitStrokeWidth={20} 
+            fill={undefined}
+            strokeWidth={isSelected ? shape.strokeWidth + 1 : shape.strokeWidth}
+            shadowBlur={isSelected ? 4 : 0}
+            shadowColor={isSelected ? shape.stroke : undefined}
+          />
+          {selectionBox && (
+            <Rect 
+              x={selectionBox.x} 
+              y={selectionBox.y} 
+              width={selectionBox.width} 
+              height={selectionBox.height} 
+              stroke="#4f46e5" 
+              strokeWidth={2} 
+              dash={[6, 4]} 
+              fill="rgba(79, 70, 229, 0.05)" 
+              listening={false} 
+            />
+          )}
           {boundingBox && <Rect x={boundingBox.x} y={boundingBox.y} width={boundingBox.width} height={boundingBox.height} stroke="rgba(255,0,0,0.3)" strokeWidth={1} dash={[5,5]} fill={undefined} listening={false} />}
         </React.Fragment>
       );
@@ -1157,9 +1199,49 @@ const ViewerCanvas = forwardRef(({
         points = shape.points;
       }
 
+      // 選択表示用のバウンディングボックス計算
+      let selectionBox = null;
+      if (isSelected && points.length >= 2) {
+        const xs = [];
+        const ys = [];
+        for (let i = 0; i < points.length; i += 2) {
+          xs.push(points[i]);
+          ys.push(points[i + 1]);
+        }
+        const pad = Math.max(10, shape.strokeWidth * 2 + 10); // 矢印は先端分も考慮
+        selectionBox = {
+          x: Math.min(...xs) - pad,
+          y: Math.min(...ys) - pad,
+          width: (Math.max(...xs) - Math.min(...xs)) + pad * 2,
+          height: (Math.max(...ys) - Math.min(...ys)) + pad * 2,
+        };
+      }
+
       return (
         <React.Fragment key={shape.id}>
-          <Arrow {...commonProps} points={points} pointerLength={10} pointerWidth={10} hitStrokeWidth={20} />
+          <Arrow 
+            {...commonProps} 
+            points={points} 
+            pointerLength={10} 
+            pointerWidth={10} 
+            hitStrokeWidth={20}
+            strokeWidth={isSelected ? shape.strokeWidth + 1 : shape.strokeWidth}
+            shadowBlur={isSelected ? 4 : 0}
+            shadowColor={isSelected ? shape.stroke : undefined}
+          />
+          {selectionBox && (
+            <Rect 
+              x={selectionBox.x} 
+              y={selectionBox.y} 
+              width={selectionBox.width} 
+              height={selectionBox.height} 
+              stroke="#4f46e5" 
+              strokeWidth={2} 
+              dash={[6, 4]} 
+              fill="rgba(79, 70, 229, 0.05)" 
+              listening={false} 
+            />
+          )}
           {boundingBox && <Rect x={boundingBox.x} y={boundingBox.y} width={boundingBox.width} height={boundingBox.height} stroke="rgba(255,0,0,0.3)" strokeWidth={1} dash={[5,5]} fill={undefined} listening={false} />}
         </React.Fragment>
       );
