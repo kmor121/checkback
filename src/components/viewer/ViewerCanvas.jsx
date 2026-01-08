@@ -465,6 +465,9 @@ const ViewerCanvas = forwardRef(({
 
     const { imgX, imgY, shapeId } = textEditor;
     const { nx, ny } = normalizeCoords(imgX, imgY);
+    
+    // フォントサイズをstrokeWidthベースで計算
+    const fontSize = Math.max(12, strokeWidth * 6);
 
     if (shapeId) {
       // 既存テキストの編集
@@ -475,6 +478,7 @@ const ViewerCanvas = forwardRef(({
           text,
           nx,
           ny,
+          fontSize,
         };
         
         addToUndoStack({ type: 'update', shapeId, before: existingShape, after: updatedShape });
@@ -500,7 +504,7 @@ const ViewerCanvas = forwardRef(({
         nx,
         ny,
         text,
-        fontSize: 16,
+        fontSize,
       };
 
       addToUndoStack({ type: 'add', shapeId: normalizedShape.id });
@@ -1042,15 +1046,18 @@ const ViewerCanvas = forwardRef(({
           y = shape.y;
         }
         
+        const fontSize = shape.fontSize || Math.max(12, (shape.strokeWidth || 2) * 6);
+        
         return (
           <Text
             {...commonProps}
             x={x}
             y={y}
             text={shape.text || ''}
-            fontSize={shape.fontSize || 16}
+            fontSize={fontSize}
             fill={shape.stroke}
-            fontFamily="Arial"
+            fontFamily="Arial, sans-serif"
+            fontStyle="bold"
             onDblClick={isEditMode ? () => handleTextDblClick(shape) : undefined}
           />
         );
