@@ -1013,6 +1013,11 @@ function ShareViewContent() {
                               {isLocked && (
                                 <Badge className="text-xs bg-green-600">編集中</Badge>
                               )}
+                              {composerMode === 'edit' && composerTargetCommentId === comment.id && (
+                                <Badge className="text-xs bg-green-600 text-white">
+                                  編集中
+                                </Badge>
+                              )}
                             </div>
 
                             <p className="text-sm text-gray-700">{comment.body || '（本文なし）'}</p>
