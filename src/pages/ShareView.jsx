@@ -58,7 +58,7 @@ function ShareViewContent() {
   const [commentFilter, setCommentFilter] = useState('all');
   const [commentSort, setCommentSort] = useState('page');
   const [paintMode, setPaintMode] = useState(false);
-  const [tool, setTool] = useState('pen');
+  const [tool, setTool] = useState('select');
   const [strokeColor, setStrokeColor] = useState('#ff0000');
   const [strokeWidth, setStrokeWidth] = useState(2);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
