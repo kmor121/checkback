@@ -1100,18 +1100,20 @@ const ViewerCanvas = forwardRef(({
             ref={textInputRef}
             value={textEditor.value}
             onChange={(e) => setTextEditor(prev => ({ ...prev, value: e.target.value }))}
-            placeholder="テキストを入力... (Enter: 確定, Esc: キャンセル)"
+            placeholder="入力..."
             style={{
-              padding: '8px',
-              fontSize: '16px',
-              border: '2px solid #4f46e5',
-              borderRadius: '4px',
-              background: 'white',
-              minWidth: '250px',
-              minHeight: '80px',
+              padding: '4px',
+              fontSize: `${Math.max(12, strokeWidth * 6)}px`,
+              fontWeight: 'bold',
+              fontFamily: 'Arial, sans-serif',
+              color: strokeColor,
+              background: 'transparent',
+              border: '1px dashed rgba(79, 70, 229, 0.5)',
+              borderRadius: '2px',
+              minWidth: '150px',
+              minHeight: '30px',
               resize: 'both',
-              fontFamily: 'Arial',
-              boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+              outline: 'none',
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -1123,8 +1125,16 @@ const ViewerCanvas = forwardRef(({
               }
             }}
           />
-          <div style={{ marginTop: '4px', fontSize: '11px', color: '#666' }}>
-            Enter: 確定 | Esc: キャンセル | Shift+Enter: 改行
+          <div style={{ 
+            marginTop: '4px', 
+            fontSize: '10px', 
+            color: '#666',
+            background: 'white',
+            padding: '2px 4px',
+            borderRadius: '2px',
+            display: 'inline-block',
+          }}>
+            Enter: 確定 | Esc: キャンセル
           </div>
         </div>
       )}
