@@ -725,15 +725,15 @@ function ShareViewContent() {
     setPaintMode(false);
     setIsDockOpen(false);
     setPaintSessionCommentId(null);
-    
+
     // 編集解除
     setComposerMode('new');
     setComposerTargetCommentId(null);
     setComposerParentCommentId(null);
-    
+
     // 選択解除
     setActiveCommentId(null);
-    
+
     // draftクリア
     setDraftShapes([]);
     draftShapesRef.current = [];
@@ -742,8 +742,22 @@ function ShareViewContent() {
     setReplyingThreadId(null);
   };
 
-  const handleCloseDock = () => {
-    resetEditorSession();
+  const handleCancelEdit = () => {
+    // 編集中のコメントを取得して本文が変更されているか確認
+    const editingComment = comments.find(c => c.id === composerTargetCommentId);
+    const hasUnsavedChanges = editingComment && composerText.trim() !== (editingComment.body || '').trim();
+
+    if (hasUnsavedChanges && !window.confirm('編集内容を破棄しますか？')) {
+      return;
+    }
+
+    // 編集モードのみ終了（選択は維持）
+    setComposerMode('new');
+    setComposerTargetCommentId(null);
+    setComposerText('');
+    setPendingFiles([]);
+    setPaintMode(false);
+    setPaintSessionCommentId(null);
   };
 
   const handleStartReply = (parentComment) => {
@@ -1571,14 +1585,14 @@ function ShareViewContent() {
                 <Send className="w-4 h-4" />
               </Button>
 
-              {/* 閉じる/キャンセルボタン */}
-              {(isDockOpen || paintSessionCommentId || composerMode === 'edit') && (
+              {/* キャンセルボタン（編集モード時のみ） */}
+              {composerMode === 'edit' && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={handleCloseDock}
+                  onClick={handleCancelEdit}
                   className="mt-1"
-                  title={composerMode === 'edit' ? 'キャンセル' : '閉じる'}
+                  title="編集キャンセル"
                 >
                   <X className="w-4 h-4" />
                 </Button>
