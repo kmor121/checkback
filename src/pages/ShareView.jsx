@@ -1070,7 +1070,6 @@ function ShareViewContent() {
                 size="sm"
                 onClick={() => handlePaintModeChange(!paintMode)}
                 className="mt-1"
-                disabled={autoCommentCreating}
               >
                 <Paintbrush className="w-4 h-4 mr-1" />
                 {paintMode ? 'ペイント中' : 'ペイント'}
