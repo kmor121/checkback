@@ -1204,6 +1204,7 @@ function ShareViewContent() {
               zoom={zoom}
               showBoundingBoxes={showBoundingBoxes}
               showAllPaint={showAllPaint}
+              bottomInsetPx={composerHeight + 24}
               debugInfo={{
                 isReady: isReady,
                 readyDetails: readyDetails,
