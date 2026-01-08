@@ -32,7 +32,7 @@ import {
   X,
   Trash2,
   Check,
-  Circle,
+  Circle as CircleIcon,
   Reply
 } from 'lucide-react';
 import { format } from 'date-fns';
