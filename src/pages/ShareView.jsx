@@ -841,7 +841,7 @@ function ShareViewContent() {
             </div>
           ) : (
             <ViewerCanvas
-              key={`${token}:${shareLink?.file_id}:${currentPage}:${showAllPaint ? 'all' : (lockedCommentIdRef.current || activeCommentId || 'none')}`}
+              key={`${token}:${shareLink?.file_id}:${currentPage}:${showAllPaint ? 'all' : (paintSessionCommentId || activeCommentId || 'none')}`}
               ref={viewerCanvasRef}
               fileUrl={file?.file_url}
               mimeType={file?.mime_type}
@@ -1095,7 +1095,7 @@ function ShareViewContent() {
               </Button>
 
               {/* 閉じるボタン（編集中のみ） */}
-              {(isDockOpen || lockedCommentIdRef.current) && (
+              {(isDockOpen || paintSessionCommentId) && (
                 <Button
                   variant="ghost"
                   size="sm"
