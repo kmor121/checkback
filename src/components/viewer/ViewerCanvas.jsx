@@ -635,7 +635,7 @@ const ViewerCanvas = forwardRef(({
         normalizedShape.normalizedPoints = normalizedPoints;
         // 一時フィールドを削除（正規化データのみ保存）
         // points, startX, startY は含めない
-
+      }
 
       // Undo履歴に追加
       addToUndoStack({ type: 'add', shapeId: normalizedShape.id });
@@ -1058,10 +1058,11 @@ const ViewerCanvas = forwardRef(({
             {...commonProps}
             x={x}
             y={y}
-            text={shape.text || 'テキスト'}
+            text={shape.text || ''}
             fontSize={shape.fontSize || 16}
             fill={shape.stroke}
             fontFamily="Arial"
+            onDblClick={isEditMode ? () => handleTextDblClick(shape) : undefined}
           />
         );
       }
