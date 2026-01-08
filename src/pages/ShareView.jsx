@@ -85,6 +85,10 @@ function ShareViewContent() {
   const [pendingFiles, setPendingFiles] = useState([]);
   const [replyingThreadId, setReplyingThreadId] = useState(null);
   
+  // Composer height tracking for padding-bottom
+  const [composerHeight, setComposerHeight] = useState(0);
+  const composerRef = useRef(null);
+  
   const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
   const didInitActiveRef = useRef(false);
