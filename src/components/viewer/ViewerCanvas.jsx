@@ -1168,7 +1168,7 @@ const ViewerCanvas = forwardRef(({
           >
             <Line 
               stroke={shape.stroke}
-              strokeWidth={isSelected ? shape.strokeWidth + 1 : shape.strokeWidth}
+              strokeWidth={shape.strokeWidth}
               points={points} 
               tension={0.5} 
               lineCap="round" 
@@ -1292,7 +1292,7 @@ const ViewerCanvas = forwardRef(({
             >
               <Arrow 
                 stroke={shape.stroke}
-                strokeWidth={isSelected ? shape.strokeWidth + 1 : shape.strokeWidth}
+                strokeWidth={shape.strokeWidth}
                 points={points} 
                 pointerLength={10} 
                 pointerWidth={10} 
