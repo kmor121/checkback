@@ -119,10 +119,10 @@ const ViewerCanvas = forwardRef(({
   const isEditMode = tool === 'select';
   const isDrawMode = !isEditMode && (paintMode || tool === 'text');
   
-  // fileUrl/pageNumber変更時にリセット（hydrateより先に実行）
+  // fileUrl/pageNumber/zoom変更時にリセット（hydrateより先に実行）
   useEffect(() => {
     if (DEBUG_MODE) {
-      console.log('[ViewerCanvas] fileUrl/pageNumber changed, resetting state');
+      console.log('[ViewerCanvas] fileUrl/pageNumber/zoom changed, resetting state');
     }
     hydratedRef.current = false;
     setShapes([]);
@@ -130,7 +130,8 @@ const ViewerCanvas = forwardRef(({
     setCurrentShape(null);
     setUndoStack([]);
     setRedoStack([]);
-  }, [fileUrl, pageNumber]);
+    setPan({ x: 0, y: 0 });
+  }, [fileUrl, pageNumber, zoom]);
 
   // マウント検知（デバッグ用）
   useEffect(() => {
