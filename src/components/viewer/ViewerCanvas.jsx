@@ -1051,15 +1051,34 @@ const ViewerCanvas = forwardRef(({
         
         const fontSize = shape.fontSize || Math.max(12, (shape.strokeWidth || 2) * 6);
         
+        // テキストの場合は stroke を使わず fill のみ使用
         return (
           <Text
-            {...commonProps}
+            key={shape.id}
             x={x}
             y={y}
             text={shape.text || ''}
             fontSize={fontSize}
             fill={shape.stroke}
             fontFamily="Arial, sans-serif"
+            onMouseDown={isEditMode ? (e) => {
+              e.cancelBubble = true;
+              setSelectedId(shape.id);
+            } : undefined}
+            onTouchStart={isEditMode ? (e) => {
+              e.cancelBubble = true;
+              setSelectedId(shape.id);
+            } : undefined}
+            ref={(node) => {
+              if (node) {
+                shapeRefs.current[shape.id] = node;
+              }
+            }}
+            draggable={isEditMode && !isExisting}
+            onDragStart={isEditMode ? (e) => {
+              e.cancelBubble = true;
+            } : undefined}
+            onDragEnd={isEditMode ? (e) => handleDragEnd(shape, e) : undefined}
             onDblClick={isEditMode ? () => handleTextDblClick(shape) : undefined}
           />
         );
