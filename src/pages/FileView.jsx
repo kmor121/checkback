@@ -42,6 +42,10 @@ function FileViewContent() {
   const [draftShapes, setDraftShapes] = useState([]);
   const [activeCommentId, setActiveCommentId] = useState(null);
   
+  // Composer mode (new or edit)
+  const [composerMode, setComposerMode] = useState('new');
+  const [composerTargetCommentId, setComposerTargetCommentId] = useState(null);
+  
   const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
 
@@ -256,88 +260,101 @@ function FileViewContent() {
     if (!commentBody.trim() || !user) return;
     
     try {
-      const existingComments = await base44.entities.ReviewComment.filter({ file_id: fileId });
-      const maxSeqNo = existingComments.reduce((max, c) => Math.max(max, c.seq_no || 0), 0);
-
-      // アンカー位置の計算（draftShapesがあればその中心）
-      let anchor_nx = 0.5;
-      let anchor_ny = 0.5;
-      
-      if (draftShapes.length > 0) {
-        const allPoints = [];
-        draftShapes.forEach(shape => {
-          if (shape.nx !== undefined) {
-            allPoints.push({ x: shape.nx, y: shape.ny });
-            if (shape.nw !== undefined) {
-              allPoints.push({ x: shape.nx + shape.nw, y: shape.ny + shape.nh });
-            }
-          }
-          if (shape.normalizedPoints) {
-            for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
-              allPoints.push({ x: shape.normalizedPoints[i], y: shape.normalizedPoints[i + 1] });
-            }
-          }
+      if (composerMode === 'edit' && composerTargetCommentId) {
+        // 編集モード: 既存コメントを更新
+        await base44.entities.ReviewComment.update(composerTargetCommentId, {
+          body: commentBody,
         });
         
-        if (allPoints.length > 0) {
-          const xs = allPoints.map(p => p.x);
-          const ys = allPoints.map(p => p.y);
-          anchor_nx = (Math.min(...xs) + Math.max(...xs)) / 2;
-          anchor_ny = (Math.min(...ys) + Math.max(...ys)) / 2;
-        }
-      }
+        showToast('コメントを更新しました', 'success');
+      } else {
+        // 新規モード: 新しいコメントを作成
+        const existingComments = await base44.entities.ReviewComment.filter({ file_id: fileId });
+        const maxSeqNo = existingComments.reduce((max, c) => Math.max(max, c.seq_no || 0), 0);
 
-      const comment = await base44.entities.ReviewComment.create({
-        file_id: fileId,
-        page_no: 1,
-        seq_no: maxSeqNo + 1,
-        anchor_nx,
-        anchor_ny,
-        author_type: 'user',
-        author_user_id: user?.id,
-        author_name: user?.full_name,
-        body: commentBody,
-        resolved: false,
-        has_paint: draftShapes.length > 0,
-      });
-
-      // DraftShapesをDBに保存
-      if (draftShapes.length > 0) {
-        for (const shape of draftShapes) {
-          await base44.entities.PaintShape.create({
-            file_id: fileId,
-            comment_id: comment.id,
-            page_no: 1,
-            client_shape_id: shape.id,
-            shape_type: shape.tool,
-            data_json: JSON.stringify({
-              stroke: shape.stroke,
-              strokeWidth: shape.strokeWidth,
-              normalizedPoints: shape.normalizedPoints,
-              nx: shape.nx,
-              ny: shape.ny,
-              nw: shape.nw,
-              nh: shape.nh,
-              nr: shape.nr,
-              bgWidth: shape.bgWidth,
-              bgHeight: shape.bgHeight,
-            }),
-            author_key: user.id,
-            author_name: user.full_name,
+        // アンカー位置の計算（draftShapesがあればその中心）
+        let anchor_nx = 0.5;
+        let anchor_ny = 0.5;
+        
+        if (draftShapes.length > 0) {
+          const allPoints = [];
+          draftShapes.forEach(shape => {
+            if (shape.nx !== undefined) {
+              allPoints.push({ x: shape.nx, y: shape.ny });
+              if (shape.nw !== undefined) {
+                allPoints.push({ x: shape.nx + shape.nw, y: shape.ny + shape.nh });
+              }
+            }
+            if (shape.normalizedPoints) {
+              for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
+                allPoints.push({ x: shape.normalizedPoints[i], y: shape.normalizedPoints[i + 1] });
+              }
+            }
           });
+          
+          if (allPoints.length > 0) {
+            const xs = allPoints.map(p => p.x);
+            const ys = allPoints.map(p => p.y);
+            anchor_nx = (Math.min(...xs) + Math.max(...xs)) / 2;
+            anchor_ny = (Math.min(...ys) + Math.max(...ys)) / 2;
+          }
         }
+
+        const comment = await base44.entities.ReviewComment.create({
+          file_id: fileId,
+          page_no: 1,
+          seq_no: maxSeqNo + 1,
+          anchor_nx,
+          anchor_ny,
+          author_type: 'user',
+          author_user_id: user?.id,
+          author_name: user?.full_name,
+          body: commentBody,
+          resolved: false,
+          has_paint: draftShapes.length > 0,
+        });
+
+        // DraftShapesをDBに保存
+        if (draftShapes.length > 0) {
+          for (const shape of draftShapes) {
+            await base44.entities.PaintShape.create({
+              file_id: fileId,
+              comment_id: comment.id,
+              page_no: 1,
+              client_shape_id: shape.id,
+              shape_type: shape.tool,
+              data_json: JSON.stringify({
+                stroke: shape.stroke,
+                strokeWidth: shape.strokeWidth,
+                normalizedPoints: shape.normalizedPoints,
+                nx: shape.nx,
+                ny: shape.ny,
+                nw: shape.nw,
+                nh: shape.nh,
+                nr: shape.nr,
+                bgWidth: shape.bgWidth,
+                bgHeight: shape.bgHeight,
+              }),
+              author_key: user.id,
+              author_name: user.full_name,
+            });
+          }
+        }
+        
+        showToast('コメントを送信しました', 'success');
       }
 
+      // CRITICAL: 送信成功後は必ず状態を完全リセット
       setCommentBody('');
       setDraftShapes([]);
-      setActiveCommentId(comment.id);
-      setPaintSessionCommentId(comment.id);
+      setComposerMode('new');
+      setComposerTargetCommentId(null);
+      setPaintSessionCommentId(null);
+      setActiveCommentId(null);
       setPaintMode(false);
       
       await queryClient.invalidateQueries(['comments']);
       await queryClient.invalidateQueries(['paintShapes']);
-      
-      showToast('コメントを送信しました', 'success');
     } catch (error) {
       showToast(`送信失敗: ${error.message}`, 'error');
     }
@@ -349,6 +366,21 @@ function FileViewContent() {
       return;
     }
     setActiveCommentId(comment.id);
+  };
+
+  const handleStartEditComment = (comment) => {
+    setComposerMode('edit');
+    setComposerTargetCommentId(comment.id);
+    setCommentBody(comment.body);
+    setActiveCommentId(comment.id);
+  };
+
+  const handleCancelEdit = () => {
+    setComposerMode('new');
+    setComposerTargetCommentId(null);
+    setCommentBody('');
+    setDraftShapes([]);
+    setPaintSessionCommentId(null);
   };
 
   const toggleResolveMutation = useMutation({
@@ -594,7 +626,14 @@ function FileViewContent() {
           {/* 入力ドック */}
           <div className="border-t p-4 space-y-2">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium">コメント追加</span>
+              <span className="text-sm font-medium">
+                {composerMode === 'edit' ? 'コメント編集' : 'コメント追加'}
+              </span>
+              {composerMode === 'edit' && (
+                <Button variant="ghost" size="sm" onClick={handleCancelEdit}>
+                  キャンセル
+                </Button>
+              )}
             </div>
             <Textarea
               placeholder="コメントを入力"
@@ -608,7 +647,7 @@ function FileViewContent() {
               className="w-full bg-blue-600 hover:bg-blue-700"
             >
               <Send className="w-4 h-4 mr-2" />
-              送信
+              {composerMode === 'edit' ? '保存' : '送信'}
             </Button>
           </div>
         </div>

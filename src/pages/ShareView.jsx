@@ -73,6 +73,10 @@ function ShareViewContent() {
   const [paintSessionCommentId, setPaintSessionCommentId] = useState(null);
   const [draftShapes, setDraftShapes] = useState([]);
   
+  // Composer mode (new or edit)
+  const [composerMode, setComposerMode] = useState('new');
+  const [composerTargetCommentId, setComposerTargetCommentId] = useState(null);
+  
   const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
   const didInitActiveRef = useRef(false);
@@ -450,83 +454,96 @@ function ShareViewContent() {
     }
 
     try {
-      const existingComments = await base44.entities.ReviewComment.filter({ 
-        file_id: shareLink.file_id,
-        share_token: token 
-      });
-      const maxSeqNo = existingComments.reduce((max, c) => Math.max(max, c.seq_no || 0), 0);
-
-      // アンカー位置の計算（draftShapesがあればその中心）
-      let anchor_nx = 0.5;
-      let anchor_ny = 0.5;
-      
-      if (draftShapes.length > 0) {
-        const allPoints = [];
-        draftShapes.forEach(shape => {
-          if (shape.nx !== undefined) {
-            allPoints.push({ x: shape.nx, y: shape.ny });
-            if (shape.nw !== undefined) {
-              allPoints.push({ x: shape.nx + shape.nw, y: shape.ny + shape.nh });
-            }
-          }
-          if (shape.normalizedPoints) {
-            for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
-              allPoints.push({ x: shape.normalizedPoints[i], y: shape.normalizedPoints[i + 1] });
-            }
-          }
+      if (composerMode === 'edit' && composerTargetCommentId) {
+        // 編集モード: 既存コメントを更新
+        await base44.entities.ReviewComment.update(composerTargetCommentId, {
+          body: composerText,
         });
         
-        if (allPoints.length > 0) {
-          const xs = allPoints.map(p => p.x);
-          const ys = allPoints.map(p => p.y);
-          anchor_nx = (Math.min(...xs) + Math.max(...xs)) / 2;
-          anchor_ny = (Math.min(...ys) + Math.max(...ys)) / 2;
-        }
-      }
+        showToast('コメントを更新しました', 'success');
+      } else {
+        // 新規モード: 新しいコメントを作成
+        const existingComments = await base44.entities.ReviewComment.filter({ 
+          file_id: shareLink.file_id,
+          share_token: token 
+        });
+        const maxSeqNo = existingComments.reduce((max, c) => Math.max(max, c.seq_no || 0), 0);
 
-      const comment = await base44.entities.ReviewComment.create({
-        file_id: shareLink.file_id,
-        share_token: token,
-        page_no: currentPage,
-        seq_no: maxSeqNo + 1,
-        anchor_nx,
-        anchor_ny,
-        author_type: 'guest',
-        author_key: guestId,
-        author_name: guestName,
-        body: composerText,
-        resolved: false,
-        has_paint: draftShapes.length > 0,
-      });
-
-      // DraftShapesをDBに保存
-      if (draftShapes.length > 0) {
-        for (const shape of draftShapes) {
-          await base44.entities.PaintShape.create({
-            file_id: shareLink.file_id,
-            share_token: token,
-            comment_id: comment.id,
-            page_no: currentPage,
-            client_shape_id: shape.id,
-            shape_type: shape.tool,
-            data_json: JSON.stringify(shape),
-            author_key: guestId,
-            author_name: guestName,
+        // アンカー位置の計算（draftShapesがあればその中心）
+        let anchor_nx = 0.5;
+        let anchor_ny = 0.5;
+        
+        if (draftShapes.length > 0) {
+          const allPoints = [];
+          draftShapes.forEach(shape => {
+            if (shape.nx !== undefined) {
+              allPoints.push({ x: shape.nx, y: shape.ny });
+              if (shape.nw !== undefined) {
+                allPoints.push({ x: shape.nx + shape.nw, y: shape.ny + shape.nh });
+              }
+            }
+            if (shape.normalizedPoints) {
+              for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
+                allPoints.push({ x: shape.normalizedPoints[i], y: shape.normalizedPoints[i + 1] });
+              }
+            }
           });
+          
+          if (allPoints.length > 0) {
+            const xs = allPoints.map(p => p.x);
+            const ys = allPoints.map(p => p.y);
+            anchor_nx = (Math.min(...xs) + Math.max(...xs)) / 2;
+            anchor_ny = (Math.min(...ys) + Math.max(...ys)) / 2;
+          }
         }
+
+        const comment = await base44.entities.ReviewComment.create({
+          file_id: shareLink.file_id,
+          share_token: token,
+          page_no: currentPage,
+          seq_no: maxSeqNo + 1,
+          anchor_nx,
+          anchor_ny,
+          author_type: 'guest',
+          author_key: guestId,
+          author_name: guestName,
+          body: composerText,
+          resolved: false,
+          has_paint: draftShapes.length > 0,
+        });
+
+        // DraftShapesをDBに保存
+        if (draftShapes.length > 0) {
+          for (const shape of draftShapes) {
+            await base44.entities.PaintShape.create({
+              file_id: shareLink.file_id,
+              share_token: token,
+              comment_id: comment.id,
+              page_no: currentPage,
+              client_shape_id: shape.id,
+              shape_type: shape.tool,
+              data_json: JSON.stringify(shape),
+              author_key: guestId,
+              author_name: guestName,
+            });
+          }
+        }
+        
+        showToast('コメントを送信しました', 'success');
       }
 
+      // CRITICAL: 送信成功後は必ず状態を完全リセット
       setComposerText('');
       setDraftShapes([]);
-      setActiveCommentId(comment.id);
-      setPaintSessionCommentId(comment.id);
+      setComposerMode('new');
+      setComposerTargetCommentId(null);
+      setPaintSessionCommentId(null);
+      setActiveCommentId(null);
       setPaintMode(false);
       setIsDockOpen(false);
       
       await queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id, token] });
       await queryClient.invalidateQueries({ queryKey: ['paintShapes', token, shareLink?.file_id, currentPage] });
-      
-      showToast('コメントを送信しました', 'success');
     } catch (error) {
       showToast(`送信失敗: ${error.message}`, 'error');
     }
@@ -539,6 +556,8 @@ function ShareViewContent() {
       }
     }
     
+    setComposerMode('edit');
+    setComposerTargetCommentId(comment.id);
     setActiveCommentId(comment.id);
     setCurrentPage(comment.page_no);
     setPaintSessionCommentId(comment.id);
@@ -550,6 +569,8 @@ function ShareViewContent() {
   const handleCloseDock = () => {
     setComposerText('');
     setDraftShapes([]);
+    setComposerMode('new');
+    setComposerTargetCommentId(null);
     setPaintSessionCommentId(null);
     setActiveCommentId(null);
     setPaintMode(false);
@@ -1090,27 +1111,33 @@ function ShareViewContent() {
                 onClick={handleSendComment}
                 className="bg-blue-600 hover:bg-blue-700 mt-1"
                 size="sm"
+                title={composerMode === 'edit' ? '保存' : '送信'}
               >
                 <Send className="w-4 h-4" />
               </Button>
 
-              {/* 閉じるボタン（編集中のみ） */}
-              {(isDockOpen || paintSessionCommentId) && (
+              {/* 閉じる/キャンセルボタン */}
+              {(isDockOpen || paintSessionCommentId || composerMode === 'edit') && (
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={handleCloseDock}
                   className="mt-1"
+                  title={composerMode === 'edit' ? 'キャンセル' : '閉じる'}
                 >
                   <X className="w-4 h-4" />
                 </Button>
               )}
             </div>
 
-            {(paintSessionCommentId || draftShapes.length > 0) && (
+            {(composerMode === 'edit' || paintSessionCommentId || draftShapes.length > 0) && (
               <div className="mt-2 text-xs text-gray-500 flex items-center gap-2">
-                <Badge className="bg-green-600 text-white">編集中</Badge>
-                <span>本文または描画を追加して送信できます</span>
+                <Badge className="bg-green-600 text-white">
+                  {composerMode === 'edit' ? 'コメント編集中' : '新規作成中'}
+                </Badge>
+                <span>
+                  {composerMode === 'edit' ? '保存して更新' : '本文または描画を追加して送信'}
+                </span>
                 {draftShapes.length > 0 && (
                   <Badge variant="secondary">{draftShapes.length}個の描画</Badge>
                 )}
