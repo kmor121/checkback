@@ -62,7 +62,6 @@ const ViewerCanvas = forwardRef(({
   onStrokeWidthChange,
   showBoundingBoxes = false,
   showAllPaint = false,
-  bottomInsetPx = 0,
   debugInfo = null,
 }, ref) => {
   const containerRef = useRef(null);
@@ -247,12 +246,9 @@ const ViewerCanvas = forwardRef(({
   }, []);
   
   // スケール計算 - 画面に収めるfitScaleとユーザーズーム
-  // CRITICAL: bottomInsetPx を考慮した有効高さで計算
-  const availableHeight = Math.max(1, containerSize.height - bottomInsetPx);
-  
   const fitScale = Math.min(
     containerSize.width / bgSize.width,
-    availableHeight / bgSize.height
+    containerSize.height / bgSize.height
   ) || 1;
   
   const userScale = zoom / 100;
@@ -261,17 +257,14 @@ const ViewerCanvas = forwardRef(({
   const scaledWidth = bgSize.width * contentScale;
   const scaledHeight = bgSize.height * contentScale;
   
-  // 中央寄せオフセット（availableHeight内で中央配置）
+  // 中央寄せオフセット
   const offsetX = Math.max(0, (containerSize.width - scaledWidth) / 2);
-  const offsetY = Math.max(0, (availableHeight - scaledHeight) / 2);
+  const offsetY = Math.max(0, (containerSize.height - scaledHeight) / 2);
   
   // pointer座標 → 画像座標への変換
   const pointerToImageCoords = (stage) => {
     const pos = stage.getPointerPosition();
     if (!pos) return null;
-    
-    // CRITICAL: composer領域（availableHeight以下）のクリックを無視
-    if (pos.y > availableHeight) return null;
     
     const imgX = (pos.x - offsetX) / contentScale;
     const imgY = (pos.y - offsetY) / contentScale;

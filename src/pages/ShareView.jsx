@@ -85,10 +85,6 @@ function ShareViewContent() {
   const [pendingFiles, setPendingFiles] = useState([]);
   const [replyingThreadId, setReplyingThreadId] = useState(null);
   
-  // Composer height tracking for padding-bottom
-  const [composerHeight, setComposerHeight] = useState(0);
-  const composerRef = useRef(null);
-  
   const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
   const didInitActiveRef = useRef(false);
@@ -312,28 +308,6 @@ function ShareViewContent() {
     const key = `lastActiveCommentId:${token}:${shareLink.file_id}:${currentPage}`;
     localStorage.setItem(key, activeCommentId);
   }, [activeCommentId, token, shareLink?.file_id, currentPage]);
-
-  // ResizeObserver for composer height tracking
-  useEffect(() => {
-    if (!composerRef.current) return;
-    
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const height = entry.contentRect.height;
-        setComposerHeight(height);
-      }
-    });
-    
-    observer.observe(composerRef.current);
-    
-    // Initial measurement
-    const initialHeight = composerRef.current.offsetHeight;
-    if (initialHeight > 0) {
-      setComposerHeight(initialHeight);
-    }
-    
-    return () => observer.disconnect();
-  }, []);
 
   // CRITICAL: comment_idで絞らず、全shapesをフェッチ（表示フィルタはクライアント側）
   const { data: paintShapes = [], isFetching: shapesFetching } = useQuery({
@@ -1162,75 +1136,183 @@ function ShareViewContent() {
           </div>
         </div>
 
-        {/* 中央：プレビュー */}
-        <div 
-          className="flex-1 bg-gray-100 overflow-auto relative" 
-          style={{ 
-            paddingBottom: `${composerHeight + 24}px` 
-          }}
-        >
-          {!isReady ? (
-            <div className="w-full h-full flex items-center justify-center">
-              <div className="text-center">
-                <div className="animate-spin w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"></div>
-                <div className="text-lg font-medium">準備中...</div>
+        {/* 中央：プレビュー（grid: 上段=素材, 下段=composer） */}
+        <div className="flex-1 grid grid-rows-[1fr_auto] min-h-0">
+          {/* 上段：素材表示エリア */}
+          <div className="bg-gray-100 overflow-auto relative min-h-0">
+            {!isReady ? (
+              <div className="w-full h-full flex items-center justify-center">
+                <div className="text-center">
+                  <div className="animate-spin w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"></div>
+                  <div className="text-lg font-medium">準備中...</div>
+                </div>
+              </div>
+            ) : (
+              <ViewerCanvas
+                key={`${token}:${shareLink?.file_id}:${currentPage}:${canvasSessionNonce}`}
+                ref={viewerCanvasRef}
+                fileUrl={file?.file_url}
+                mimeType={file?.mime_type}
+                pageNumber={currentPage}
+                existingShapes={existingShapes}
+                comments={comments.filter(c => c.page_no === currentPage)}
+                activeCommentId={activeCommentId}
+                onCommentClick={(id) => {
+                  const comment = comments.find(c => c.id === id);
+                  if (!comment) return;
+                  selectComment(comment);
+                }}
+                onBeginPaint={handleBeginPaint}
+                onSaveShape={handleSaveShape}
+                onDeleteShape={handleDeleteShape}
+                paintMode={isReady && paintMode}
+                tool={tool}
+                onToolChange={setTool}
+                onStrokeColorChange={setStrokeColor}
+                onStrokeWidthChange={setStrokeWidth}
+                strokeColor={strokeColor}
+                strokeWidth={strokeWidth}
+                zoom={zoom}
+                showBoundingBoxes={showBoundingBoxes}
+                showAllPaint={showAllPaint}
+                debugInfo={{
+                  isReady: isReady,
+                  readyDetails: readyDetails,
+                  activeCommentId: activeCommentId,
+                  queryKey: ['paintShapes', token, shareLink?.file_id, currentPage],
+                  fetchedCount: paintShapes?.length || 0,
+                  filteredCount: existingShapes?.length || 0,
+                  showAllPaint: showAllPaint,
+                  token: token,
+                  fileId: shareLink?.file_id,
+                  pageNo: currentPage,
+                  guestId: guestId,
+                }}
+              />
+            )}
+
+            {/* ズーム制御 */}
+            <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-2 flex items-center gap-2">
+              <Button variant="outline" size="icon" onClick={() => setZoom(Math.max(50, zoom - 25))}>
+                <ZoomOut className="w-4 h-4" />
+              </Button>
+              <span className="text-sm font-medium w-16 text-center">{zoom}%</span>
+              <Button variant="outline" size="icon" onClick={() => setZoom(Math.min(200, zoom + 25))}>
+                <ZoomIn className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* 下段：コメント入力（composer） */}
+          {shareLink.can_post_comments && (
+            <div className="bg-gray-100 p-4 flex justify-center">
+              <div className="w-full max-w-2xl bg-white rounded-xl shadow-2xl border-2 border-gray-200 p-4">
+                <div className="flex gap-3 items-start">
+                  {/* ペイントボタン */}
+                  <Button
+                    variant={paintMode ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => handlePaintModeChange(!paintMode)}
+                    className="mt-1"
+                  >
+                    <Paintbrush className="w-4 h-4 mr-1" />
+                    {paintMode ? 'ペイント中' : 'ペイント'}
+                  </Button>
+
+                  {/* 本文入力 */}
+                  <div className="flex-1 space-y-2">
+                    <Textarea
+                      placeholder={composerMode === 'edit' ? '編集中...' : composerMode === 'reply' ? '返信を入力...' : 'コメントを入力...'}
+                      value={composerText}
+                      onChange={(e) => setComposerText(e.target.value)}
+                      onFocus={() => setIsDockOpen(true)}
+                      rows={2}
+                      className="text-sm resize-none"
+                    />
+                    
+                    {/* 添付ファイル一覧 */}
+                    {pendingFiles.length > 0 && (
+                      <div className="space-y-1">
+                        {pendingFiles.map((file, idx) => (
+                          <div key={idx} className="flex items-center gap-2 text-xs text-gray-600">
+                            <Download className="w-3 h-3" />
+                            <span className="flex-1 truncate">{file.name}</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-auto p-0 text-red-600"
+                              onClick={() => handleRemoveFile(idx)}
+                            >
+                              <X className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 添付ボタン */}
+                  <input
+                    type="file"
+                    multiple
+                    className="hidden"
+                    id="dock-file-input"
+                    onChange={handleFileSelect}
+                  />
+                  <label htmlFor="dock-file-input">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-1"
+                      asChild
+                    >
+                      <span>
+                        <Download className="w-4 h-4" />
+                      </span>
+                    </Button>
+                  </label>
+
+                  {/* 送信ボタン */}
+                  <Button
+                    onClick={handleSendComment}
+                    disabled={!composerText.trim()}
+                    className="bg-blue-600 hover:bg-blue-700 mt-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                    size="sm"
+                    title={composerMode === 'edit' ? '保存' : '送信'}
+                  >
+                    <Send className="w-4 h-4" />
+                  </Button>
+
+                  {/* キャンセルボタン（編集モード時のみ） */}
+                  {composerMode === 'edit' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleCancelEdit}
+                      className="mt-1"
+                      title="編集キャンセル"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+
+                {(composerMode === 'edit' || paintSessionCommentId || draftShapes.length > 0) && (
+                  <div className="mt-2 text-xs text-gray-500 flex items-center gap-2">
+                    <Badge className="bg-green-600 text-white">
+                      {composerMode === 'edit' ? 'コメント編集中' : paintSessionCommentId ? 'コメントに追記中' : '新規作成中'}
+                    </Badge>
+                    <span>
+                      {composerMode === 'edit' ? '保存して更新' : 'コメントを入力してください。'}
+                    </span>
+                    {draftShapes.length > 0 && (
+                      <Badge variant="secondary">{draftShapes.length}個の描画</Badge>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
-          ) : (
-            <ViewerCanvas
-              key={`${token}:${shareLink?.file_id}:${currentPage}:${canvasSessionNonce}`}
-              ref={viewerCanvasRef}
-              fileUrl={file?.file_url}
-              mimeType={file?.mime_type}
-              pageNumber={currentPage}
-              existingShapes={existingShapes}
-              comments={comments.filter(c => c.page_no === currentPage)}
-              activeCommentId={activeCommentId}
-              onCommentClick={(id) => {
-                const comment = comments.find(c => c.id === id);
-                if (!comment) return;
-                selectComment(comment);
-              }}
-              onBeginPaint={handleBeginPaint}
-              onSaveShape={handleSaveShape}
-              onDeleteShape={handleDeleteShape}
-              paintMode={isReady && paintMode}
-              tool={tool}
-              onToolChange={setTool}
-              onStrokeColorChange={setStrokeColor}
-              onStrokeWidthChange={setStrokeWidth}
-              strokeColor={strokeColor}
-              strokeWidth={strokeWidth}
-              zoom={zoom}
-              showBoundingBoxes={showBoundingBoxes}
-              showAllPaint={showAllPaint}
-              bottomInsetPx={composerHeight + 24}
-              debugInfo={{
-                isReady: isReady,
-                readyDetails: readyDetails,
-                activeCommentId: activeCommentId,
-                queryKey: ['paintShapes', token, shareLink?.file_id, currentPage],
-                fetchedCount: paintShapes?.length || 0,
-                filteredCount: existingShapes?.length || 0,
-                showAllPaint: showAllPaint,
-                token: token,
-                fileId: shareLink?.file_id,
-                pageNo: currentPage,
-                guestId: guestId,
-              }}
-            />
           )}
-
-          {/* ズーム制御 */}
-          <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-2 flex items-center gap-2">
-            <Button variant="outline" size="icon" onClick={() => setZoom(Math.max(50, zoom - 25))}>
-              <ZoomOut className="w-4 h-4" />
-            </Button>
-            <span className="text-sm font-medium w-16 text-center">{zoom}%</span>
-            <Button variant="outline" size="icon" onClick={() => setZoom(Math.min(200, zoom + 25))}>
-              <ZoomIn className="w-4 h-4" />
-            </Button>
-          </div>
         </div>
 
         {/* 右：コメント一覧 */}
@@ -1581,9 +1663,9 @@ function ShareViewContent() {
         )}
       </div>
 
-      {/* ツールバー（ペイントモード時のみ、ドック直上） */}
+      {/* ツールバー（ペイントモード時のみ） */}
       {paintMode && shareLink.can_post_comments && isReady && (
-        <div className="fixed bottom-32 left-1/2 transform -translate-x-1/2 z-40">
+        <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-40">
           <FloatingToolbar
             paintMode={paintMode}
             onPaintModeChange={handlePaintModeChange}
@@ -1612,119 +1694,7 @@ function ShareViewContent() {
         </div>
       )}
 
-      {/* 中央下ドック（コメント入力） */}
-      {shareLink.can_post_comments && (
-        <div 
-          ref={composerRef}
-          className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-2xl px-4"
-        >
-          <div className="bg-white rounded-xl shadow-2xl border-2 border-gray-200 p-4">
-            <div className="flex gap-3 items-start">
-              {/* ペイントボタン */}
-              <Button
-                variant={paintMode ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => handlePaintModeChange(!paintMode)}
-                className="mt-1"
-              >
-                <Paintbrush className="w-4 h-4 mr-1" />
-                {paintMode ? 'ペイント中' : 'ペイント'}
-              </Button>
 
-              {/* 本文入力 */}
-              <div className="flex-1 space-y-2">
-                <Textarea
-                  placeholder={composerMode === 'edit' ? '編集中...' : composerMode === 'reply' ? '返信を入力...' : 'コメントを入力...'}
-                  value={composerText}
-                  onChange={(e) => setComposerText(e.target.value)}
-                  onFocus={() => setIsDockOpen(true)}
-                  rows={2}
-                  className="text-sm resize-none"
-                />
-                
-                {/* 添付ファイル一覧 */}
-                {pendingFiles.length > 0 && (
-                  <div className="space-y-1">
-                    {pendingFiles.map((file, idx) => (
-                      <div key={idx} className="flex items-center gap-2 text-xs text-gray-600">
-                        <Download className="w-3 h-3" />
-                        <span className="flex-1 truncate">{file.name}</span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-auto p-0 text-red-600"
-                          onClick={() => handleRemoveFile(idx)}
-                        >
-                          <X className="w-3 h-3" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* 添付ボタン */}
-              <input
-                type="file"
-                multiple
-                className="hidden"
-                id="dock-file-input"
-                onChange={handleFileSelect}
-              />
-              <label htmlFor="dock-file-input">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-1"
-                  asChild
-                >
-                  <span>
-                    <Download className="w-4 h-4" />
-                  </span>
-                </Button>
-              </label>
-
-              {/* 送信ボタン */}
-              <Button
-                onClick={handleSendComment}
-                disabled={!composerText.trim()}
-                className="bg-blue-600 hover:bg-blue-700 mt-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                size="sm"
-                title={composerMode === 'edit' ? '保存' : '送信'}
-              >
-                <Send className="w-4 h-4" />
-              </Button>
-
-              {/* キャンセルボタン（編集モード時のみ） */}
-              {composerMode === 'edit' && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleCancelEdit}
-                  className="mt-1"
-                  title="編集キャンセル"
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-              )}
-            </div>
-
-            {(composerMode === 'edit' || paintSessionCommentId || draftShapes.length > 0) && (
-              <div className="mt-2 text-xs text-gray-500 flex items-center gap-2">
-                <Badge className="bg-green-600 text-white">
-                  {composerMode === 'edit' ? 'コメント編集中' : paintSessionCommentId ? 'コメントに追記中' : '新規作成中'}
-                </Badge>
-                <span>
-                  {composerMode === 'edit' ? '保存して更新' : 'コメントを入力してください。'}
-                </span>
-                {draftShapes.length > 0 && (
-                  <Badge variant="secondary">{draftShapes.length}個の描画</Badge>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* 名前入力ダイアログ */}
       <Dialog open={showNameDialog} onOpenChange={setShowNameDialog}>
