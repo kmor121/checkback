@@ -73,9 +73,12 @@ function ShareViewContent() {
   const [paintSessionCommentId, setPaintSessionCommentId] = useState(null);
   const [draftShapes, setDraftShapes] = useState([]);
   
-  // Composer mode (new or edit)
+  // Composer mode (new or edit or reply)
   const [composerMode, setComposerMode] = useState('new');
   const [composerTargetCommentId, setComposerTargetCommentId] = useState(null);
+  const [composerParentCommentId, setComposerParentCommentId] = useState(null);
+  const [pendingFiles, setPendingFiles] = useState([]);
+  const [replyingThreadId, setReplyingThreadId] = useState(null);
   
   const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
@@ -173,6 +176,16 @@ function ShareViewContent() {
       share_token: token 
     }),
     enabled: isReady && !!shareLink?.file_id && shareLink?.can_view_comments,
+    staleTime: 30000,
+  });
+
+  const { data: attachments = [] } = useQuery({
+    queryKey: ['commentAttachments', shareLink?.file_id, token],
+    queryFn: () => base44.entities.ReviewCommentAttachment.filter({
+      file_id: shareLink.file_id,
+      share_token: token
+    }),
+    enabled: isReady && !!shareLink?.file_id,
     staleTime: 30000,
   });
 
@@ -437,9 +450,10 @@ function ShareViewContent() {
 
     const hasText = composerText.trim().length > 0;
     const hasDraftShapes = draftShapes.length > 0;
+    const hasFiles = pendingFiles.length > 0;
 
-    if (!hasText && !hasDraftShapes) {
-      showToast('本文か描画を追加してください', 'error');
+    if (!hasText && !hasDraftShapes && !hasFiles) {
+      showToast('本文、描画、または添付ファイルを追加してください', 'error');
       return;
     }
 
@@ -450,9 +464,72 @@ function ShareViewContent() {
           body: composerText,
         });
         
+        // 添付ファイルがあれば追加
+        if (pendingFiles.length > 0) {
+          for (const file of pendingFiles) {
+            const { file_url } = await base44.integrations.Core.UploadFile({ file });
+            await base44.entities.ReviewCommentAttachment.create({
+              file_id: shareLink.file_id,
+              share_token: token,
+              comment_id: composerTargetCommentId,
+              uploader_type: 'guest',
+              uploader_key: guestId,
+              uploader_name: guestName,
+              file_url,
+              original_filename: file.name,
+              mime_type: file.type,
+              size_bytes: file.size,
+            });
+          }
+        }
+        
         showToast('コメントを更新しました', 'success');
+      } else if (composerMode === 'reply' && composerParentCommentId) {
+        // 返信モード: 返信コメントを作成
+        const parentComment = comments.find(c => c.id === composerParentCommentId);
+        if (!parentComment) {
+          showToast('親コメントが見つかりません', 'error');
+          return;
+        }
+
+        const comment = await base44.entities.ReviewComment.create({
+          file_id: shareLink.file_id,
+          share_token: token,
+          page_no: parentComment.page_no,
+          seq_no: 0,
+          anchor_nx: parentComment.anchor_nx || 0.5,
+          anchor_ny: parentComment.anchor_ny || 0.5,
+          author_type: 'guest',
+          author_key: guestId,
+          author_name: guestName,
+          body: composerText,
+          resolved: false,
+          parent_comment_id: composerParentCommentId,
+          has_paint: false,
+        });
+
+        // 添付ファイルがあればアップロード＆保存
+        if (pendingFiles.length > 0) {
+          for (const file of pendingFiles) {
+            const { file_url } = await base44.integrations.Core.UploadFile({ file });
+            await base44.entities.ReviewCommentAttachment.create({
+              file_id: shareLink.file_id,
+              share_token: token,
+              comment_id: comment.id,
+              uploader_type: 'guest',
+              uploader_key: guestId,
+              uploader_name: guestName,
+              file_url,
+              original_filename: file.name,
+              mime_type: file.type,
+              size_bytes: file.size,
+            });
+          }
+        }
+
+        showToast('返信を送信しました', 'success');
       } else {
-        // 新規モード: 新しいコメントを作成
+        // 新規モード: 新しい親コメントを作成
         const existingComments = await base44.entities.ReviewComment.filter({ 
           file_id: shareLink.file_id,
           share_token: token 
@@ -518,6 +595,25 @@ function ShareViewContent() {
             });
           }
         }
+
+        // 添付ファイルがあればアップロード＆保存
+        if (pendingFiles.length > 0) {
+          for (const file of pendingFiles) {
+            const { file_url } = await base44.integrations.Core.UploadFile({ file });
+            await base44.entities.ReviewCommentAttachment.create({
+              file_id: shareLink.file_id,
+              share_token: token,
+              comment_id: comment.id,
+              uploader_type: 'guest',
+              uploader_key: guestId,
+              uploader_name: guestName,
+              file_url,
+              original_filename: file.name,
+              mime_type: file.type,
+              size_bytes: file.size,
+            });
+          }
+        }
         
         showToast('コメントを送信しました', 'success');
       }
@@ -525,14 +621,18 @@ function ShareViewContent() {
       // CRITICAL: 送信成功後は必ず状態を完全リセット
       setComposerText('');
       setDraftShapes([]);
+      setPendingFiles([]);
       setComposerMode('new');
       setComposerTargetCommentId(null);
+      setComposerParentCommentId(null);
       setPaintSessionCommentId(null);
       setActiveCommentId(null);
       setPaintMode(false);
+      setReplyingThreadId(null);
       setIsDockOpen(false);
       
       await queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id, token] });
+      await queryClient.invalidateQueries({ queryKey: ['commentAttachments', shareLink.file_id, token] });
       await queryClient.invalidateQueries({ queryKey: ['paintShapes', token, shareLink?.file_id, currentPage] });
     } catch (error) {
       showToast(`送信失敗: ${error.message}`, 'error');
@@ -594,12 +694,40 @@ function ShareViewContent() {
   const handleCloseDock = () => {
     setComposerText('');
     setDraftShapes([]);
+    setPendingFiles([]);
     setComposerMode('new');
     setComposerTargetCommentId(null);
+    setComposerParentCommentId(null);
     setPaintSessionCommentId(null);
     setActiveCommentId(null);
     setPaintMode(false);
+    setReplyingThreadId(null);
     setIsDockOpen(false);
+  };
+
+  const handleStartReply = (parentComment) => {
+    if (paintMode) {
+      showToast('ペイントを終了してから返信してください', 'info');
+      return;
+    }
+
+    setReplyingThreadId(parentComment.id);
+    setComposerMode('reply');
+    setComposerParentCommentId(parentComment.id);
+    setComposerTargetCommentId(null);
+    setComposerText('');
+    setPendingFiles([]);
+    setActiveCommentId(parentComment.id);
+    setIsDockOpen(true);
+  };
+
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files || []);
+    setPendingFiles(prev => [...prev, ...files]);
+  };
+
+  const handleRemoveFile = (index) => {
+    setPendingFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   // コメント削除（関連PaintShapeも削除）
@@ -826,7 +954,37 @@ function ShareViewContent() {
     return true;
   });
 
-  const sortedComments = [...filteredComments].sort((a, b) => {
+  // 親コメントと返信を分離
+  const topLevelComments = filteredComments.filter(c => !c.parent_comment_id);
+  const repliesByParent = React.useMemo(() => {
+    const map = new Map();
+    filteredComments.forEach(c => {
+      if (c.parent_comment_id) {
+        if (!map.has(c.parent_comment_id)) {
+          map.set(c.parent_comment_id, []);
+        }
+        map.get(c.parent_comment_id).push(c);
+      }
+    });
+    // 返信を日付順にソート
+    map.forEach((replies) => {
+      replies.sort((a, b) => new Date(a.created_date) - new Date(b.created_date));
+    });
+    return map;
+  }, [filteredComments]);
+
+  const attachmentsByComment = React.useMemo(() => {
+    const map = new Map();
+    attachments.forEach(att => {
+      if (!map.has(att.comment_id)) {
+        map.set(att.comment_id, []);
+      }
+      map.get(att.comment_id).push(att);
+    });
+    return map;
+  }, [attachments]);
+
+  const sortedComments = [...topLevelComments].sort((a, b) => {
     if (commentSort === 'page') return a.page_no - b.page_no || a.seq_no - b.seq_no;
     if (commentSort === 'oldest') return new Date(a.created_date) - new Date(b.created_date);
     if (commentSort === 'newest') return new Date(b.created_date) - new Date(a.created_date);
@@ -986,72 +1144,253 @@ function ShareViewContent() {
                   const shapesCount = paintShapes.filter(s => s.comment_id === comment.id).length;
                   const isActive = activeCommentId === comment.id;
                   const isLocked = paintSessionCommentId === comment.id;
+                  const replies = repliesByParent.get(comment.id) || [];
+                  const commentAttachments = attachmentsByComment.get(comment.id) || [];
+                  const isThreadOpen = replyingThreadId === comment.id;
 
                   return (
-                    <Card 
-                      key={comment.id} 
-                      className={`hover:shadow-md transition-shadow ${isActive ? 'border-2 border-blue-600 bg-blue-50' : ''} ${isLocked ? 'ring-2 ring-green-500' : ''}`}
-                    >
-                      <CardContent className="p-3">
-                        <div className="flex items-start gap-2">
-                          <div 
-                            className="flex-1 cursor-pointer" 
-                            onClick={() => selectComment(comment)}
-                            onDoubleClick={() => enterEdit(comment)}
-                          >
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="text-sm font-medium">{comment.author_name}</span>
-                              {comment.author_type === 'guest' && (
-                                <Badge variant="outline" className="text-xs">ゲスト</Badge>
+                    <div key={comment.id} className="space-y-2">
+                      <Card 
+                        className={`hover:shadow-md transition-shadow ${isActive ? 'border-2 border-blue-600 bg-blue-50' : ''} ${isLocked ? 'ring-2 ring-green-500' : ''}`}
+                      >
+                        <CardContent className="p-3">
+                          <div className="flex items-start gap-2">
+                            <div 
+                              className="flex-1 cursor-pointer" 
+                              onClick={() => selectComment(comment)}
+                              onDoubleClick={() => enterEdit(comment)}
+                            >
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-sm font-medium">{comment.author_name}</span>
+                                {comment.author_type === 'guest' && (
+                                  <Badge variant="outline" className="text-xs">ゲスト</Badge>
+                                )}
+                                {shapesCount > 0 && (
+                                  <Badge variant="outline" className="text-xs flex items-center gap-1">
+                                    <Paintbrush className="w-3 h-3" />
+                                    {shapesCount}
+                                  </Badge>
+                                )}
+                                {composerMode === 'edit' && composerTargetCommentId === comment.id && (
+                                  <Badge className="text-xs bg-green-600 text-white">
+                                    編集中
+                                  </Badge>
+                                )}
+                              </div>
+
+                              <p className="text-sm text-gray-700">{comment.body || '（本文なし）'}</p>
+
+                              {/* 添付ファイル表示 */}
+                              {commentAttachments.length > 0 && (
+                                <div className="mt-2 space-y-1">
+                                  {commentAttachments.map((att) => (
+                                    <a
+                                      key={att.id}
+                                      href={att.file_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-2 text-xs text-blue-600 hover:underline"
+                                    >
+                                      <Download className="w-3 h-3" />
+                                      {att.original_filename}
+                                    </a>
+                                  ))}
+                                </div>
                               )}
-                              {shapesCount > 0 && (
-                                <Badge variant="outline" className="text-xs flex items-center gap-1">
-                                  <Paintbrush className="w-3 h-3" />
-                                  {shapesCount}
-                                </Badge>
-                              )}
-                              {composerMode === 'edit' && composerTargetCommentId === comment.id && (
-                                <Badge className="text-xs bg-green-600 text-white">
-                                  編集中
-                                </Badge>
-                              )}
+
+                              <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
+                                <span>{comment.page_no}枚目</span>
+                                <span>•</span>
+                                <span>{format(new Date(comment.created_date), 'yyyy/MM/dd HH:mm', { locale: ja })}</span>
+                                {replies.length > 0 && (
+                                  <>
+                                    <span>•</span>
+                                    <Button
+                                      variant="link"
+                                      size="sm"
+                                      className="h-auto p-0 text-xs text-blue-600"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setReplyingThreadId(isThreadOpen ? null : comment.id);
+                                      }}
+                                    >
+                                      {replies.length}件の返信
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
                             </div>
 
-                            <p className="text-sm text-gray-700">{comment.body || '（本文なし）'}</p>
-                            <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
-                              <span>{comment.page_no}枚目</span>
-                              <span>•</span>
-                              <span>{format(new Date(comment.created_date), 'yyyy/MM/dd HH:mm', { locale: ja })}</span>
-                            </div>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-auto p-1">
+                                  <MoreVertical className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleStartEditComment(comment)}>
+                                  <Edit className="w-4 h-4 mr-2" />
+                                  編集
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleStartReply(comment)}>
+                                  <MessageSquare className="w-4 h-4 mr-2" />
+                                  返信
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleCopyCommentUrl(comment)}>
+                                  <LinkIcon className="w-4 h-4 mr-2" />
+                                  URLをコピー
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  onClick={() => handleDeleteComment(comment)}
+                                  className="text-red-600"
+                                >
+                                  <Trash className="w-4 h-4 mr-2" />
+                                  削除
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
+                        </CardContent>
+                      </Card>
 
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-auto p-1">
-                                <MoreVertical className="w-4 h-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => handleStartEditComment(comment)}>
-                                <Edit className="w-4 h-4 mr-2" />
-                                編集
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleCopyCommentUrl(comment)}>
-                                <LinkIcon className="w-4 h-4 mr-2" />
-                                URLをコピー
-                              </DropdownMenuItem>
-                              <DropdownMenuItem 
-                                onClick={() => handleDeleteComment(comment)}
-                                className="text-red-600"
-                              >
-                                <Trash className="w-4 h-4 mr-2" />
-                                削除
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                      {/* 返信リスト */}
+                      {isThreadOpen && replies.length > 0 && (
+                        <div className="ml-6 space-y-2">
+                          {replies.map((reply) => {
+                            const replyAttachments = attachmentsByComment.get(reply.id) || [];
+                            return (
+                              <Card key={reply.id} className="bg-gray-50">
+                                <CardContent className="p-3">
+                                  <div className="flex items-start gap-2">
+                                    <ChevronRight className="w-4 h-4 text-gray-400 mt-1 flex-shrink-0" />
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <span className="text-xs font-medium">{reply.author_name}</span>
+                                        {reply.author_type === 'guest' && (
+                                          <Badge variant="outline" className="text-xs">ゲスト</Badge>
+                                        )}
+                                      </div>
+                                      <p className="text-xs text-gray-700">{reply.body}</p>
+                                      
+                                      {/* 返信の添付ファイル */}
+                                      {replyAttachments.length > 0 && (
+                                        <div className="mt-2 space-y-1">
+                                          {replyAttachments.map((att) => (
+                                            <a
+                                              key={att.id}
+                                              href={att.file_url}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="flex items-center gap-2 text-xs text-blue-600 hover:underline"
+                                            >
+                                              <Download className="w-3 h-3" />
+                                              {att.original_filename}
+                                            </a>
+                                          ))}
+                                        </div>
+                                      )}
+
+                                      <div className="text-xs text-gray-500 mt-1">
+                                        {format(new Date(reply.created_date), 'yyyy/MM/dd HH:mm', { locale: ja })}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            );
+                          })}
                         </div>
-                      </CardContent>
-                    </Card>
+                      )}
+
+                      {/* 返信入力欄 */}
+                      {isThreadOpen && (
+                        <div className="ml-6 bg-white rounded-lg border-2 border-blue-200 p-3 space-y-2">
+                          <Textarea
+                            placeholder="返信を入力..."
+                            value={composerMode === 'reply' && composerParentCommentId === comment.id ? composerText : ''}
+                            onChange={(e) => {
+                              if (composerMode !== 'reply' || composerParentCommentId !== comment.id) {
+                                handleStartReply(comment);
+                              }
+                              setComposerText(e.target.value);
+                            }}
+                            rows={2}
+                            className="text-sm resize-none"
+                          />
+                          
+                          {/* 添付ファイル一覧 */}
+                          {pendingFiles.length > 0 && composerMode === 'reply' && composerParentCommentId === comment.id && (
+                            <div className="space-y-1">
+                              {pendingFiles.map((file, idx) => (
+                                <div key={idx} className="flex items-center gap-2 text-xs text-gray-600">
+                                  <Download className="w-3 h-3" />
+                                  <span className="flex-1 truncate">{file.name}</span>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-auto p-0 text-red-600"
+                                    onClick={() => handleRemoveFile(idx)}
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="file"
+                              multiple
+                              className="hidden"
+                              id={`file-input-${comment.id}`}
+                              onChange={(e) => {
+                                if (composerMode !== 'reply' || composerParentCommentId !== comment.id) {
+                                  handleStartReply(comment);
+                                }
+                                handleFileSelect(e);
+                              }}
+                            />
+                            <label htmlFor={`file-input-${comment.id}`}>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-xs"
+                                asChild
+                              >
+                                <span>
+                                  <Download className="w-3 h-3 mr-1" />
+                                  添付
+                                </span>
+                              </Button>
+                            </label>
+                            <Button
+                              size="sm"
+                              className="bg-blue-600 hover:bg-blue-700 text-xs"
+                              onClick={handleSendComment}
+                              disabled={!composerText.trim() && pendingFiles.length === 0}
+                            >
+                              <Send className="w-3 h-3 mr-1" />
+                              送信
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-xs"
+                              onClick={() => {
+                                setReplyingThreadId(null);
+                                setComposerMode('new');
+                                setComposerParentCommentId(null);
+                                setComposerText('');
+                                setPendingFiles([]);
+                              }}
+                            >
+                              閉じる
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   );
                 })
               )}
@@ -1105,14 +1444,57 @@ function ShareViewContent() {
               </Button>
 
               {/* 本文入力 */}
-              <Textarea
-                placeholder={composerMode === 'edit' ? '編集中...' : 'コメントを入力（描画のみでもOK）'}
-                value={composerText}
-                onChange={(e) => setComposerText(e.target.value)}
-                onFocus={() => setIsDockOpen(true)}
-                rows={2}
-                className="flex-1 text-sm resize-none"
+              <div className="flex-1 space-y-2">
+                <Textarea
+                  placeholder={composerMode === 'edit' ? '編集中...' : composerMode === 'reply' ? '返信を入力...' : 'コメントを入力（描画のみでもOK）'}
+                  value={composerText}
+                  onChange={(e) => setComposerText(e.target.value)}
+                  onFocus={() => setIsDockOpen(true)}
+                  rows={2}
+                  className="text-sm resize-none"
+                />
+                
+                {/* 添付ファイル一覧 */}
+                {pendingFiles.length > 0 && (
+                  <div className="space-y-1">
+                    {pendingFiles.map((file, idx) => (
+                      <div key={idx} className="flex items-center gap-2 text-xs text-gray-600">
+                        <Download className="w-3 h-3" />
+                        <span className="flex-1 truncate">{file.name}</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-auto p-0 text-red-600"
+                          onClick={() => handleRemoveFile(idx)}
+                        >
+                          <X className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 添付ボタン */}
+              <input
+                type="file"
+                multiple
+                className="hidden"
+                id="dock-file-input"
+                onChange={handleFileSelect}
               />
+              <label htmlFor="dock-file-input">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-1"
+                  asChild
+                >
+                  <span>
+                    <Download className="w-4 h-4" />
+                  </span>
+                </Button>
+              </label>
 
               {/* 送信ボタン */}
               <Button
