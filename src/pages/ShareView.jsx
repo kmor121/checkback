@@ -72,6 +72,7 @@ function ShareViewContent() {
   // Draft paint session state
   const [paintSessionCommentId, setPaintSessionCommentId] = useState(null);
   const [draftShapes, setDraftShapes] = useState([]);
+  const draftShapesRef = useRef([]);
   const [canvasSessionNonce, setCanvasSessionNonce] = useState(0);
   
   // Composer mode (new or edit or reply)
@@ -249,6 +250,7 @@ function ShareViewContent() {
       setActiveCommentId(null);
       setPaintSessionCommentId(null);
       setDraftShapes([]);
+      draftShapesRef.current = [];
       setComposerMode('new');
       setComposerTargetCommentId(null);
       setShowAllPaint(false);
@@ -339,14 +341,15 @@ function ShareViewContent() {
     try {
       const targetCommentId = paintSessionCommentId;
       
-      // Draft（新規コメント）の場合はメモリに保存のみ
+      // Draft（新規コメント）の場合はメモリに保存のみ（ref即時更新）
       if (!targetCommentId) {
         if (mode === 'create') {
-          setDraftShapes(prev => [...prev, shape]);
+          draftShapesRef.current = [...draftShapesRef.current, shape];
         } else {
-          setDraftShapes(prev => prev.map(s => s.id === shape.id ? shape : s));
+          draftShapesRef.current = draftShapesRef.current.map(s => (s.id === shape.id ? shape : s));
         }
-        return { dbId: shape.id };
+        setDraftShapes(draftShapesRef.current);
+        return { draft: true };
       }
 
       // 既存コメントの場合はDBに保存
@@ -399,9 +402,10 @@ function ShareViewContent() {
     }
     
     try {
-      // Draft中の場合はメモリから削除
+      // Draft中の場合はメモリから削除（ref即時更新）
       if (!paintSessionCommentId) {
-        setDraftShapes(prev => prev.filter(s => s.id !== shape.id));
+        draftShapesRef.current = draftShapesRef.current.filter(s => s.id !== shape.id);
+        setDraftShapes(draftShapesRef.current);
         return;
       }
 
@@ -429,8 +433,9 @@ function ShareViewContent() {
     try {
       const targetCommentId = paintSessionCommentId || activeCommentId;
       
-      // Draft中の場合
+      // Draft中の場合（ref即時更新）
       if (!targetCommentId) {
+        draftShapesRef.current = [];
         setDraftShapes([]);
         viewerCanvasRef.current?.clear();
         showToast('描画をクリアしました');
@@ -466,7 +471,8 @@ function ShareViewContent() {
     }
 
     const hasText = composerText.trim().length > 0;
-    const hasDraftShapes = draftShapes.length > 0;
+    const shapesToCommit = draftShapesRef.current || [];
+    const hasDraftShapes = shapesToCommit.length > 0;
     const hasFiles = pendingFiles.length > 0;
 
     if (!hasText && !hasDraftShapes && !hasFiles) {
@@ -553,13 +559,13 @@ function ShareViewContent() {
         });
         const maxSeqNo = existingComments.reduce((max, c) => Math.max(max, c.seq_no || 0), 0);
 
-        // アンカー位置の計算（draftShapesがあればその中心）
+        // アンカー位置の計算（shapesToCommitがあればその中心）
         let anchor_nx = 0.5;
         let anchor_ny = 0.5;
         
-        if (draftShapes.length > 0) {
+        if (shapesToCommit.length > 0) {
           const allPoints = [];
-          draftShapes.forEach(shape => {
+          shapesToCommit.forEach(shape => {
             if (shape.nx !== undefined) {
               allPoints.push({ x: shape.nx, y: shape.ny });
               if (shape.nw !== undefined) {
@@ -593,12 +599,12 @@ function ShareViewContent() {
           author_name: guestName,
           body: composerText,
           resolved: false,
-          has_paint: draftShapes.length > 0,
+          has_paint: shapesToCommit.length > 0,
         });
 
-        // DraftShapesをDBに保存
-        if (draftShapes.length > 0) {
-          for (const shape of draftShapes) {
+        // DraftShapesをDBに保存（refから取得）
+        if (shapesToCommit.length > 0) {
+          for (const shape of shapesToCommit) {
             await base44.entities.PaintShape.create({
               file_id: shareLink.file_id,
               share_token: token,
@@ -635,9 +641,10 @@ function ShareViewContent() {
         showToast('コメントを送信しました', 'success');
       }
 
-      // CRITICAL: 送信成功後は必ず状態を完全リセット
+      // CRITICAL: 送信成功後は必ず状態を完全リセット（ref含む）
       setComposerText('');
       setDraftShapes([]);
+      draftShapesRef.current = [];
       setPendingFiles([]);
       setComposerMode('new');
       setComposerTargetCommentId(null);
@@ -669,6 +676,7 @@ function ShareViewContent() {
       setComposerTargetCommentId(null);
       setComposerText('');
       setDraftShapes([]);
+      draftShapesRef.current = [];
       setPaintSessionCommentId(null);
       setIsDockOpen(false);
       return;
@@ -683,6 +691,8 @@ function ShareViewContent() {
     setComposerMode('new');
     setComposerTargetCommentId(null);
     setComposerText('');
+    setDraftShapes([]);
+    draftShapesRef.current = [];
   };
 
   const enterEdit = (comment) => {
@@ -702,6 +712,7 @@ function ShareViewContent() {
     setPaintMode(false);
     setPaintSessionCommentId(null);
     setDraftShapes([]);
+    draftShapesRef.current = [];
   };
 
   const handleStartEditComment = (comment) => {
@@ -711,6 +722,7 @@ function ShareViewContent() {
   const handleCloseDock = () => {
     setComposerText('');
     setDraftShapes([]);
+    draftShapesRef.current = [];
     setPendingFiles([]);
     setComposerMode('new');
     setComposerTargetCommentId(null);
