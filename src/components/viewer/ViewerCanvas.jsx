@@ -67,6 +67,7 @@ const ViewerCanvas = forwardRef(({
   const containerRef = useRef(null);
   const stageRef = useRef(null);
   const contentGroupRef = useRef(null);
+  const stableFileUrlRef = useRef(fileUrl);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [bgSize, setBgSize] = useState({ width: 800, height: 600 });
   const [error, setError] = useState(null);
@@ -119,6 +120,13 @@ const ViewerCanvas = forwardRef(({
   const isEditMode = tool === 'select';
   const isDrawMode = !isEditMode && (paintMode || tool === 'text');
   
+  // fileUrl安定化（最後の有効URLを保持）
+  useEffect(() => {
+    if (fileUrl) {
+      stableFileUrlRef.current = fileUrl;
+    }
+  }, [fileUrl]);
+
   // fileUrl/pageNumber/zoom変更時にリセット（hydrateより先に実行）
   useEffect(() => {
     if (DEBUG_MODE) {
