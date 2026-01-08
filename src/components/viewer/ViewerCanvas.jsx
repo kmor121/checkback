@@ -1100,14 +1100,18 @@ const ViewerCanvas = forwardRef(({
         points = shape.points;
       }
 
-      // 選択表示用のバウンディングボックス計算
+      // 選択表示用のバウンディングボックス計算（ドラッグ中も追従）
       let selectionBox = null;
       if (isSelected && points.length >= 2) {
+        const node = shapeRefs.current[shape.id];
+        const dx = node ? node.x() : 0;
+        const dy = node ? node.y() : 0;
+        
         const xs = [];
         const ys = [];
         for (let i = 0; i < points.length; i += 2) {
-          xs.push(points[i]);
-          ys.push(points[i + 1]);
+          xs.push(points[i] + dx);
+          ys.push(points[i + 1] + dy);
         }
         const pad = Math.max(6, shape.strokeWidth * 2);
         selectionBox = {
@@ -1199,14 +1203,18 @@ const ViewerCanvas = forwardRef(({
         points = shape.points;
       }
 
-      // 選択表示用のバウンディングボックス計算
+      // 選択表示用のバウンディングボックス計算（ドラッグ中も追従）
       let selectionBox = null;
       if (isSelected && points.length >= 2) {
+        const node = shapeRefs.current[shape.id];
+        const dx = node ? node.x() : 0;
+        const dy = node ? node.y() : 0;
+        
         const xs = [];
         const ys = [];
         for (let i = 0; i < points.length; i += 2) {
-          xs.push(points[i]);
-          ys.push(points[i + 1]);
+          xs.push(points[i] + dx);
+          ys.push(points[i + 1] + dy);
         }
         const pad = Math.max(10, shape.strokeWidth * 2 + 10); // 矢印は先端分も考慮
         selectionBox = {
