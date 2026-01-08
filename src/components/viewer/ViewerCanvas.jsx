@@ -52,6 +52,8 @@ const ViewerCanvas = forwardRef(({
   strokeWidth = 2,
   zoom = 100,
   onToolChange,
+  onStrokeColorChange,
+  onStrokeWidthChange,
   showBoundingBoxes = false,
   showAllPaint = false,
   debugInfo = null,
@@ -859,6 +861,49 @@ const ViewerCanvas = forwardRef(({
     }
   };
 
+  // 選択図形にスタイルを適用
+  const applyStyleToSelected = async (patch) => {
+    if (!selectedId) return;
+    const prev = shapes.find(s => s.id === selectedId);
+    if (!prev) return;
+
+    // テキストに太さは適用しない
+    const next = {
+      ...prev,
+      stroke: patch.stroke ?? prev.stroke,
+      strokeWidth: (prev.tool === 'text') ? prev.strokeWidth : (patch.strokeWidth ?? prev.strokeWidth),
+    };
+
+    // 差分が無ければ保存しない
+    if (next.stroke === prev.stroke && next.strokeWidth === prev.strokeWidth) return;
+
+    addToUndoStack({ type: 'update', shapeId: prev.id, before: prev, after: next });
+    setShapes(cur => cur.map(s => s.id === prev.id ? next : s));
+
+    // DB更新
+    if (onSaveShape) {
+      try {
+        const res = await onSaveShape(next, 'upsert');
+        if (res?.dbId) {
+          setShapes(cur => cur.map(s => s.id === prev.id ? { ...s, dbId: res.dbId } : s));
+        }
+      } catch (err) {
+        console.error('Apply style error:', err);
+      }
+    }
+  };
+
+  // ツールバー変更を選択図形に適用
+  useEffect(() => {
+    if (!isEditMode || !selectedId) return;
+    applyStyleToSelected({ stroke: strokeColor });
+  }, [strokeColor]);
+
+  useEffect(() => {
+    if (!isEditMode || !selectedId) return;
+    applyStyleToSelected({ strokeWidth });
+  }, [strokeWidth]);
+
   // Undo/Redo
   useImperativeHandle(ref, () => ({
     undo: performUndo,
@@ -887,10 +932,16 @@ const ViewerCanvas = forwardRef(({
       onMouseDown: isEditMode ? (e) => {
         e.cancelBubble = true;
         setSelectedId(shape.id);
+        // 選択図形の色/太さをツールバーに反映
+        if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
+        if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
       } : undefined,
       onTouchStart: isEditMode ? (e) => {
         e.cancelBubble = true;
         setSelectedId(shape.id);
+        // 選択図形の色/太さをツールバーに反映
+        if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
+        if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
       } : undefined,
       ref: (node) => {
         if (node) {
@@ -1064,10 +1115,16 @@ const ViewerCanvas = forwardRef(({
             onMouseDown={isEditMode ? (e) => {
               e.cancelBubble = true;
               setSelectedId(shape.id);
+              // 選択図形の色/太さをツールバーに反映
+              if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
+              if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
             } : undefined}
             onTouchStart={isEditMode ? (e) => {
               e.cancelBubble = true;
               setSelectedId(shape.id);
+              // 選択図形の色/太さをツールバーに反映
+              if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
+              if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
             } : undefined}
             ref={(node) => {
               if (node) {
