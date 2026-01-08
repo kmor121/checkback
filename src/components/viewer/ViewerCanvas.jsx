@@ -84,6 +84,7 @@ const ViewerCanvas = forwardRef(({
     imgX: 0,
     imgY: 0,
   });
+  const [isComposing, setIsComposing] = useState(false);
   const textInputRef = useRef(null);
   
   // Undo/Redo
@@ -467,7 +468,7 @@ const ViewerCanvas = forwardRef(({
 
     const { imgX, imgY, shapeId } = textEditor;
     const { nx, ny } = normalizeCoords(imgX, imgY);
-    
+
     // フォントサイズをstrokeWidthベースで計算
     const fontSize = Math.max(12, strokeWidth * 6);
 
@@ -484,10 +485,10 @@ const ViewerCanvas = forwardRef(({
           strokeWidth: strokeWidth,
           fontSize,
         };
-        
+
         addToUndoStack({ type: 'update', shapeId, before: existingShape, after: updatedShape });
         setShapes(prev => prev.map(s => s.id === shapeId ? updatedShape : s));
-        
+
         if (onSaveShape) {
           try {
             await onSaveShape(updatedShape, 'upsert');
@@ -528,13 +529,24 @@ const ViewerCanvas = forwardRef(({
     }
 
     setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0 });
+    setIsComposing(false);
     if (onToolChange) onToolChange('select');
   };
 
   // テキストキャンセル
   const handleTextCancel = () => {
     setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0 });
+    setIsComposing(false);
     if (onToolChange) onToolChange('select');
+  };
+
+  // テキストBlur確定（空ならキャンセル）
+  const handleTextBlur = () => {
+    if (textEditor.value.trim()) {
+      handleTextConfirm();
+    } else {
+      handleTextCancel();
+    }
   };
 
   // テキストダブルクリックで再編集
@@ -1191,8 +1203,10 @@ const ViewerCanvas = forwardRef(({
               fontFamily: 'Arial',
               boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
             }}
+            onCompositionStart={() => setIsComposing(true)}
+            onCompositionEnd={() => setIsComposing(false)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
+              if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
                 e.preventDefault();
                 handleTextConfirm();
               } else if (e.key === 'Escape') {
@@ -1200,6 +1214,7 @@ const ViewerCanvas = forwardRef(({
                 handleTextCancel();
               }
             }}
+            onBlur={handleTextBlur}
           />
           <div style={{ marginTop: '4px', fontSize: '11px', color: '#666' }}>
             Enter: 確定 | Esc: キャンセル | Shift+Enter: 改行
