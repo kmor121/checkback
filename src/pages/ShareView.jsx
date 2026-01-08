@@ -539,17 +539,56 @@ function ShareViewContent() {
     }
   };
 
-  const handleStartEditComment = (comment) => {
-    // カードクリックで編集に入るため、このメニュー項目は削除可能
-    // 念のため残す場合も、カードクリックと同じ挙動にする
+  const selectComment = (comment) => {
+    if (paintMode) {
+      showToast('ペイントを終了してから選択してください', 'info');
+      return;
+    }
+
+    // 同じコメントを再クリック → 選択解除＆新規モードに戻す
+    if (activeCommentId === comment.id) {
+      setActiveCommentId(null);
+      setComposerMode('new');
+      setComposerTargetCommentId(null);
+      setComposerText('');
+      setDraftShapes([]);
+      setPaintSessionCommentId(null);
+      setIsDockOpen(false);
+      return;
+    }
+
+    // 別のコメントをクリック → 選択のみ（編集には入らない）
+    setCurrentPage(comment.page_no);
+    setActiveCommentId(comment.id);
+    setIsDockOpen(true);
+
+    // クリックだけで edit にならないように必ず new に戻す
+    setComposerMode('new');
+    setComposerTargetCommentId(null);
+    setComposerText('');
+  };
+
+  const enterEdit = (comment) => {
+    if (paintMode) {
+      showToast('ペイントを終了してから編集してください', 'info');
+      return;
+    }
+
     setCurrentPage(comment.page_no);
     setActiveCommentId(comment.id);
     setComposerMode('edit');
     setComposerTargetCommentId(comment.id);
     setComposerText(comment.body || '');
-    setPaintSessionCommentId(comment.id);
-    setPaintMode(false);
     setIsDockOpen(true);
+
+    // 編集開始時はペイント/ドラフトを解除して事故防止
+    setPaintMode(false);
+    setPaintSessionCommentId(null);
+    setDraftShapes([]);
+  };
+
+  const handleStartEditComment = (comment) => {
+    enterEdit(comment);
   };
 
   const handleCloseDock = () => {
@@ -857,15 +896,9 @@ function ShareViewContent() {
               comments={comments.filter(c => c.page_no === currentPage)}
               activeCommentId={activeCommentId}
               onCommentClick={(id) => {
-                if (id === activeCommentId) {
-                  setActiveCommentId(null);
-                } else {
-                  const comment = comments.find(c => c.id === id);
-                  if (comment) {
-                    setCurrentPage(comment.page_no);
-                    setActiveCommentId(id);
-                  }
-                }
+                const comment = comments.find(c => c.id === id);
+                if (!comment) return;
+                selectComment(comment);
               }}
               onBeginPaint={handleBeginPaint}
               onSaveShape={handleSaveShape}
@@ -963,33 +996,8 @@ function ShareViewContent() {
                         <div className="flex items-start gap-2">
                           <div 
                             className="flex-1 cursor-pointer" 
-                            onClick={() => {
-                              // 同じコメントを再クリック → 選択解除＆新規モードに戻す
-                              if (isActive) {
-                                setActiveCommentId(null);
-                                setComposerMode('new');
-                                setComposerTargetCommentId(null);
-                                setComposerText('');
-                                setDraftShapes([]);
-                                setPaintSessionCommentId(null);
-                                setIsDockOpen(false);
-                                return;
-                              }
-
-                              // 別のコメントをクリック → 編集モードに切替
-                              if (paintMode) {
-                                showToast('ペイントを終了してから選択してください', 'info');
-                                return;
-                              }
-
-                              setCurrentPage(comment.page_no);
-                              setActiveCommentId(comment.id);
-                              setComposerMode('edit');
-                              setComposerTargetCommentId(comment.id);
-                              setComposerText(comment.body || '');
-                              setPaintSessionCommentId(comment.id);
-                              setIsDockOpen(true);
-                            }}
+                            onClick={() => selectComment(comment)}
+                            onDoubleClick={() => enterEdit(comment)}
                           >
                             <div className="flex items-center gap-2 mb-1">
                               <span className="text-sm font-medium">{comment.author_name}</span>
