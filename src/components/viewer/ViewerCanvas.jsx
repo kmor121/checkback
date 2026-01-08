@@ -104,7 +104,7 @@ const ViewerCanvas = forwardRef(({
   
   const isImage = mimeType?.startsWith('image/');
   const isEditMode = tool === 'select';
-  const isDrawMode = !isEditMode && paintMode;
+  const isDrawMode = !isEditMode && (paintMode || tool === 'text');
   
   // fileUrl/pageNumber変更時にリセット（hydrateより先に実行）
   useEffect(() => {
@@ -116,16 +116,15 @@ const ViewerCanvas = forwardRef(({
     setRedoStack([]);
   }, [fileUrl, pageNumber]);
 
-  // existingShapesからの初回hydrate（上書き防止・空配列での全消し禁止）
+  // existingShapesからの初回hydrate（後から非空配列が届いても反映）
   useEffect(() => {
-    // 空配列での全消しを防ぐ: existingShapes が空の場合は hydrate しない
-    if (!hydratedRef.current && existingShapes && existingShapes.length > 0) {
+    if (!existingShapes) return;
+    // 空配列では hydrate しない（後から非空が届く可能性がある）
+    if (existingShapes.length === 0) return;
+    // 未hydrate または 現在のshapesが空の時だけ反映（ローカル編集を上書きしない）
+    if (!hydratedRef.current || shapes.length === 0) {
       console.log('[ViewerCanvas] Hydrating shapes:', existingShapes.length);
       setShapes(existingShapes);
-      hydratedRef.current = true;
-    } else if (!hydratedRef.current && existingShapes && existingShapes.length === 0) {
-      // 空配列が来た場合は「初回で本当に空」と判断してhydrate完了とする
-      console.log('[ViewerCanvas] Hydrating with empty shapes (initial load)');
       hydratedRef.current = true;
     }
   }, [existingShapes]);
@@ -359,7 +358,12 @@ const ViewerCanvas = forwardRef(({
 
   // PointerDown: 描画開始（描画モード時のみ）
   const handlePointerDown = (e) => {
-    if (!isDrawMode) return;
+    if (!isDrawMode) {
+      if (DEBUG_MODE) {
+        console.log('[ViewerCanvas] PointerDown blocked:', { tool, paintMode, isEditMode, isDrawMode });
+      }
+      return;
+    }
     
     try {
       const stage = e.target.getStage();
