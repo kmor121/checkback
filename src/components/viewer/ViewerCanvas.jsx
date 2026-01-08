@@ -1060,7 +1060,6 @@ const ViewerCanvas = forwardRef(({
             fontSize={fontSize}
             fill={shape.stroke}
             fontFamily="Arial, sans-serif"
-            fontStyle="bold"
             onDblClick={isEditMode ? () => handleTextDblClick(shape) : undefined}
           />
         );
