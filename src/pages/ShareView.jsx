@@ -1568,7 +1568,7 @@ function ShareViewContent() {
                   {composerMode === 'edit' ? 'コメント編集中' : paintSessionCommentId ? 'コメントに追記中' : '新規作成中'}
                 </Badge>
                 <span>
-                  {composerMode === 'edit' ? '保存して更新' : '本文または描画を追加して送信'}
+                  {composerMode === 'edit' ? '保存して更新' : 'コメントを入力してください。'}
                 </span>
                 {draftShapes.length > 0 && (
                   <Badge variant="secondary">{draftShapes.length}個の描画</Badge>
