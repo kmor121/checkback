@@ -1129,20 +1129,64 @@ const ViewerCanvas = forwardRef(({
         points = shape.points;
       }
 
+      // bbox計算（透明当たり判定用）
+      const xs = [], ys = [];
+      for (let i = 0; i < points.length; i += 2) {
+        xs.push(points[i]);
+        ys.push(points[i + 1]);
+      }
+      const pad = Math.max(10, (shape.strokeWidth || 2) * 3);
+      const bboxX = Math.min(...xs) - pad;
+      const bboxY = Math.min(...ys) - pad;
+      const bboxW = Math.max(20, (Math.max(...xs) - Math.min(...xs)) + pad * 2);
+      const bboxH = Math.max(20, (Math.max(...ys) - Math.min(...ys)) + pad * 2);
+
       return (
         <React.Fragment key={shape.id}>
-          <Line 
-            {...commonProps} 
-            points={points} 
-            tension={0.5} 
-            lineCap="round" 
-            lineJoin="round" 
-            hitStrokeWidth={20} 
-            fill={undefined}
-            strokeWidth={isSelected ? shape.strokeWidth + 1 : shape.strokeWidth}
-            shadowBlur={isSelected ? 4 : 0}
-            shadowColor={isSelected ? shape.stroke : undefined}
-          />
+          <Group
+            ref={(node) => { if (node) shapeRefs.current[shape.id] = node; }}
+            draggable={isEditMode && !isExisting}
+            onMouseDown={isEditMode ? (e) => {
+              e.cancelBubble = true;
+              setSelectedId(shape.id);
+              if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
+              if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
+            } : undefined}
+            onTouchStart={isEditMode ? (e) => {
+              e.cancelBubble = true;
+              setSelectedId(shape.id);
+              if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
+              if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
+            } : undefined}
+            onDragStart={isEditMode ? (e) => {
+              e.cancelBubble = true;
+            } : undefined}
+            onDragMove={isEditMode ? (e) => {
+              setDragTick(prev => prev + 1);
+            } : undefined}
+            onDragEnd={isEditMode ? (e) => handleDragEnd(shape, e) : undefined}
+          >
+            <Line 
+              stroke={shape.stroke}
+              strokeWidth={isSelected ? shape.strokeWidth + 1 : shape.strokeWidth}
+              points={points} 
+              tension={0.5} 
+              lineCap="round" 
+              lineJoin="round" 
+              fill={undefined}
+              shadowBlur={isSelected ? 4 : 0}
+              shadowColor={isSelected ? shape.stroke : undefined}
+              listening={false}
+            />
+            <Rect 
+              x={bboxX} 
+              y={bboxY} 
+              width={bboxW} 
+              height={bboxH} 
+              fill="transparent"
+              listening={isEditMode}
+            />
+          </Group>
           {boundingBox && <Rect x={boundingBox.x} y={boundingBox.y} width={boundingBox.width} height={boundingBox.height} stroke="rgba(255,0,0,0.3)" strokeWidth={1} dash={[5,5]} fill={undefined} listening={false} />}
         </React.Fragment>
       );
@@ -1184,34 +1228,78 @@ const ViewerCanvas = forwardRef(({
 
       return null;
       } else if (shape.tool === 'arrow') {
-      let points = [];
+        let points = [];
 
-      // 正規化座標を優先（必ずこれから復元）
-      if (shape.normalizedPoints) {
-        for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
-          const { x, y } = denormalizeCoords(shape.normalizedPoints[i], shape.normalizedPoints[i + 1]);
-          points.push(x, y);
+        // 正規化座標を優先（必ずこれから復元）
+        if (shape.normalizedPoints) {
+          for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
+            const { x, y } = denormalizeCoords(shape.normalizedPoints[i], shape.normalizedPoints[i + 1]);
+            points.push(x, y);
+          }
+        } else if (shape.points) {
+          // 描画中の一時データ（normalizedPointsがない場合のみ）
+          points = shape.points;
         }
-      } else if (shape.points) {
-        // 描画中の一時データ（normalizedPointsがない場合のみ）
-        points = shape.points;
-      }
 
-      return (
-        <React.Fragment key={shape.id}>
-          <Arrow 
-            {...commonProps} 
-            points={points} 
-            pointerLength={10} 
-            pointerWidth={10} 
-            hitStrokeWidth={20}
-            strokeWidth={isSelected ? shape.strokeWidth + 1 : shape.strokeWidth}
-            shadowBlur={isSelected ? 4 : 0}
-            shadowColor={isSelected ? shape.stroke : undefined}
-          />
-          {boundingBox && <Rect x={boundingBox.x} y={boundingBox.y} width={boundingBox.width} height={boundingBox.height} stroke="rgba(255,0,0,0.3)" strokeWidth={1} dash={[5,5]} fill={undefined} listening={false} />}
-        </React.Fragment>
-      );
+        // bbox計算（透明当たり判定用）
+        const xs = [], ys = [];
+        for (let i = 0; i < points.length; i += 2) {
+          xs.push(points[i]);
+          ys.push(points[i + 1]);
+        }
+        const pad = Math.max(15, (shape.strokeWidth || 2) * 4); // 矢印は先端も考慮
+        const bboxX = Math.min(...xs) - pad;
+        const bboxY = Math.min(...ys) - pad;
+        const bboxW = Math.max(20, (Math.max(...xs) - Math.min(...xs)) + pad * 2);
+        const bboxH = Math.max(20, (Math.max(...ys) - Math.min(...ys)) + pad * 2);
+
+        return (
+          <React.Fragment key={shape.id}>
+            <Group
+              ref={(node) => { if (node) shapeRefs.current[shape.id] = node; }}
+              draggable={isEditMode && !isExisting}
+              onMouseDown={isEditMode ? (e) => {
+                e.cancelBubble = true;
+                setSelectedId(shape.id);
+                if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
+                if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
+              } : undefined}
+              onTouchStart={isEditMode ? (e) => {
+                e.cancelBubble = true;
+                setSelectedId(shape.id);
+                if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
+                if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
+              } : undefined}
+              onDragStart={isEditMode ? (e) => {
+                e.cancelBubble = true;
+              } : undefined}
+              onDragMove={isEditMode ? (e) => {
+                setDragTick(prev => prev + 1);
+              } : undefined}
+              onDragEnd={isEditMode ? (e) => handleDragEnd(shape, e) : undefined}
+            >
+              <Arrow 
+                stroke={shape.stroke}
+                strokeWidth={isSelected ? shape.strokeWidth + 1 : shape.strokeWidth}
+                points={points} 
+                pointerLength={10} 
+                pointerWidth={10} 
+                shadowBlur={isSelected ? 4 : 0}
+                shadowColor={isSelected ? shape.stroke : undefined}
+                listening={false}
+              />
+              <Rect 
+                x={bboxX} 
+                y={bboxY} 
+                width={bboxW} 
+                height={bboxH} 
+                fill="transparent"
+                listening={isEditMode}
+              />
+            </Group>
+            {boundingBox && <Rect x={boundingBox.x} y={boundingBox.y} width={boundingBox.width} height={boundingBox.height} stroke="rgba(255,0,0,0.3)" strokeWidth={1} dash={[5,5]} fill={undefined} listening={false} />}
+          </React.Fragment>
+        );
       } else if (shape.tool === 'text') {
         // Text描画
         let x = 0, y = 0;
