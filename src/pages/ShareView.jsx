@@ -1010,9 +1010,6 @@ function ShareViewContent() {
                                   {shapesCount}
                                 </Badge>
                               )}
-                              {isLocked && (
-                                <Badge className="text-xs bg-green-600">編集中</Badge>
-                              )}
                               {composerMode === 'edit' && composerTargetCommentId === comment.id && (
                                 <Badge className="text-xs bg-green-600 text-white">
                                   編集中
