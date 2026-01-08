@@ -33,7 +33,7 @@ function FileViewContent() {
   const [paintMode, setPaintMode] = useState(false);
   const [tool, setTool] = useState('pen');
   const [strokeColor, setStrokeColor] = useState('#ff0000');
-  const [strokeWidth, setStrokeWidth] = useState(2);
+  const [strokeWidth, setStrokeWidth] = useState(4);
   const [zoom, setZoom] = useState(100);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   

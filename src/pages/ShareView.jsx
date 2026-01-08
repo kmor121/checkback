@@ -60,7 +60,7 @@ function ShareViewContent() {
   const [paintMode, setPaintMode] = useState(false);
   const [tool, setTool] = useState('select');
   const [strokeColor, setStrokeColor] = useState('#ff0000');
-  const [strokeWidth, setStrokeWidth] = useState(2);
+  const [strokeWidth, setStrokeWidth] = useState(4);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const [showBoundingBoxes, setShowBoundingBoxes] = useState(false);
   const [isReady, setIsReady] = useState(false);
