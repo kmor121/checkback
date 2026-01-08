@@ -1487,7 +1487,7 @@ function ShareViewContent() {
               {/* 本文入力 */}
               <div className="flex-1 space-y-2">
                 <Textarea
-                  placeholder={composerMode === 'edit' ? '編集中...' : composerMode === 'reply' ? '返信を入力...' : 'コメントを入力（描画のみでもOK）'}
+                  placeholder={composerMode === 'edit' ? '編集中...' : composerMode === 'reply' ? '返信を入力...' : 'コメントを入力...'}
                   value={composerText}
                   onChange={(e) => setComposerText(e.target.value)}
                   onFocus={() => setIsDockOpen(true)}
