@@ -359,8 +359,59 @@ const ViewerCanvas = forwardRef(({
 
   // PointerDown: 描画開始（描画モード時のみ）
   const handlePointerDown = (e) => {
+    // CRITICAL: tool='text' のときは最優先で処理（paintMode不問）
+    if (tool === 'text' && !textEditor.visible) {
+      try {
+        const stage = e.target.getStage();
+        if (!stage) {
+          console.error('[ViewerCanvas] Text tool: stage is null');
+          return;
+        }
+        
+        // 座標を強制更新
+        if (e?.evt) stage.setPointersPositions(e.evt);
+        
+        const imgCoords = pointerToImageCoords(stage);
+        const pos = stage.getPointerPosition();
+        
+        if (!imgCoords || !pos) {
+          console.error('[ViewerCanvas] Text tool: coords unavailable', { imgCoords, pos });
+          return;
+        }
+        
+        const container = containerRef.current;
+        const scrollX = container ? container.scrollLeft : 0;
+        const scrollY = container ? container.scrollTop : 0;
+        
+        console.log('[ViewerCanvas] ✓ Text tool activated:', { 
+          tool, 
+          paintMode, 
+          isDrawMode,
+          pos: { x: pos.x, y: pos.y },
+          img: { x: imgCoords.x, y: imgCoords.y }
+        });
+        
+        setTextEditor({
+          visible: true,
+          x: pos.x + scrollX,
+          y: pos.y + scrollY,
+          value: '',
+          shapeId: null,
+          imgX: Math.max(0, Math.min(bgSize.width, imgCoords.x)),
+          imgY: Math.max(0, Math.min(bgSize.height, imgCoords.y)),
+          openedAt: Date.now(),
+        });
+        setIsDrawing(false);
+        setCurrentShape(null);
+        return;
+      } catch (err) {
+        console.error('[ViewerCanvas] Text tool error:', err);
+        return;
+      }
+    }
+    
     if (!isDrawMode) {
-      if (DEBUG_MODE) {
+      if (DEBUG_MODE || tool === 'text') {
         console.log('[ViewerCanvas] PointerDown blocked:', { tool, paintMode, isEditMode, isDrawMode });
       }
       return;
@@ -403,33 +454,6 @@ const ViewerCanvas = forwardRef(({
       if (tool === 'pen') {
         newShape.points = [imgCoords.x, imgCoords.y];
         setCurrentShape(newShape);
-      } else if (tool === 'text') {
-        // テキストツールの場合はエディタを表示（shape作成はしない）
-        const pos = stage.getPointerPosition();
-        if (!pos) {
-          console.error('[ViewerCanvas] Cannot get pointer position for text tool');
-          setIsDrawing(false);
-          return;
-        }
-        
-        const container = containerRef.current;
-        const scrollX = container ? container.scrollLeft : 0;
-        const scrollY = container ? container.scrollTop : 0;
-        
-        console.log('[ViewerCanvas] Text tool clicked:', { x: pos.x, y: pos.y, imgX: imgCoords.x, imgY: imgCoords.y });
-        setTextEditor({
-          visible: true,
-          x: pos.x + scrollX,
-          y: pos.y + scrollY,
-          value: '',
-          shapeId: null,
-          imgX: Math.max(0, Math.min(bgSize.width, imgCoords.x)),
-          imgY: Math.max(0, Math.min(bgSize.height, imgCoords.y)),
-          openedAt: Date.now(),
-        });
-        setIsDrawing(false);
-        setCurrentShape(null);
-        return;
       } else {
         setCurrentShape(newShape);
       }
@@ -594,6 +618,8 @@ const ViewerCanvas = forwardRef(({
     const container = containerRef.current;
     const scrollX = container ? container.scrollLeft : 0;
     const scrollY = container ? container.scrollTop : 0;
+
+    console.log('[ViewerCanvas] Text double-click edit:', { shapeId: shape.id, text: shape.text });
 
     // 編集時も現在のツールバー設定を使用
     setTextEditor({
@@ -1223,28 +1249,33 @@ const ViewerCanvas = forwardRef(({
             top: `${textEditor.y}px`,
             zIndex: 1000,
           }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
           <textarea
             ref={textInputRef}
             value={textEditor.value}
             onChange={(e) => setTextEditor(prev => ({ ...prev, value: e.target.value }))}
-            placeholder="テキストを入力... (Enter: 確定, Esc: キャンセル)"
+            placeholder="テキストを入力..."
             style={{
               padding: '8px',
               fontSize: '16px',
               border: '2px solid #4f46e5',
-              borderRadius: '4px',
+              borderRadius: '4px 4px 0 0',
               background: 'white',
               minWidth: '250px',
               minHeight: '80px',
               resize: 'both',
               fontFamily: 'Arial',
               boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+              display: 'block',
+              width: '100%',
             }}
             onCompositionStart={() => setIsComposing(true)}
             onCompositionEnd={() => setIsComposing(false)}
             onKeyDown={(e) => {
+              e.stopPropagation();
               // IME変換中はEnterを無視（keyCode 229 または isComposing）
               const isComposingNow = e.nativeEvent?.isComposing || e.keyCode === 229 || isComposing;
 
@@ -1259,7 +1290,69 @@ const ViewerCanvas = forwardRef(({
             onBlur={handleTextBlur}
             onClick={(e) => e.stopPropagation()}
           />
-          <div style={{ marginTop: '4px', fontSize: '11px', color: '#666' }}>
+          
+          {/* モバイル/タブレット用ボタン */}
+          <div style={{ 
+            display: 'flex', 
+            gap: '4px', 
+            background: 'white',
+            borderRadius: '0 0 4px 4px',
+            padding: '4px',
+            borderTop: '1px solid #e5e7eb',
+          }}>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleTextConfirm();
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+              style={{
+                flex: 1,
+                padding: '6px 12px',
+                background: '#10b981',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px',
+              }}
+            >
+              ✓ 確定
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleTextCancel();
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+              style={{
+                flex: 1,
+                padding: '6px 12px',
+                background: '#ef4444',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px',
+              }}
+            >
+              × キャンセル
+            </button>
+          </div>
+          
+          <div style={{ marginTop: '4px', fontSize: '11px', color: '#666', background: 'white', padding: '2px 4px', borderRadius: '2px' }}>
             Enter: 確定 | Esc: キャンセル | Shift+Enter: 改行
           </div>
         </div>
