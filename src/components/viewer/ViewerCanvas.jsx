@@ -72,6 +72,18 @@ const ViewerCanvas = forwardRef(({
   const shapeRefs = useRef({});
   const hydratedRef = useRef(false);
   
+  // テキスト入力用
+  const [textEditor, setTextEditor] = useState({
+    visible: false,
+    x: 0,
+    y: 0,
+    value: '',
+    shapeId: null,
+    imgX: 0,
+    imgY: 0,
+  });
+  const textInputRef = useRef(null);
+  
   // Undo/Redo
   const [undoStack, setUndoStack] = useState([]);
   const [redoStack, setRedoStack] = useState([]);
@@ -143,9 +155,29 @@ const ViewerCanvas = forwardRef(({
     }
   }, [selectedId, isEditMode, shapes]);
 
+  // テキストエディタフォーカス
+  useEffect(() => {
+    if (textEditor.visible && textInputRef.current) {
+      textInputRef.current.focus();
+      textInputRef.current.select();
+    }
+  }, [textEditor.visible]);
+
   // キーボードショートカット（入力欄フォーカス中は無効）
   useEffect(() => {
     const handleKeyDown = (e) => {
+      // テキストエディタ表示中のショートカット
+      if (textEditor.visible) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          handleTextConfirm();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          handleTextCancel();
+        }
+        return;
+      }
+      
       // 入力欄フォーカス中はショートカット無効
       const target = e.target;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
@@ -168,7 +200,7 @@ const ViewerCanvas = forwardRef(({
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedId, shapes, undoStack, redoStack, isEditMode]);
+  }, [selectedId, shapes, undoStack, redoStack, isEditMode, textEditor]);
 
   // ResizeObserver
   useEffect(() => {
@@ -368,14 +400,24 @@ const ViewerCanvas = forwardRef(({
       
       if (tool === 'pen') {
         newShape.points = [imgCoords.x, imgCoords.y];
+        setCurrentShape(newShape);
       } else if (tool === 'text') {
-        newShape.x = imgCoords.x;
-        newShape.y = imgCoords.y;
-        newShape.text = 'テキスト';
-        newShape.fontSize = 16;
+        // テキストツールの場合はエディタを表示（shape作成はしない）
+        const pos = stage.getPointerPosition();
+        setTextEditor({
+          visible: true,
+          x: pos.x,
+          y: pos.y,
+          value: '',
+          shapeId: null,
+          imgX: imgCoords.x,
+          imgY: imgCoords.y,
+        });
+        setIsDrawing(false);
+        return;
+      } else {
+        setCurrentShape(newShape);
       }
-      
-      setCurrentShape(newShape);
     } catch (err) {
       console.error('PointerDown Error:', err);
       setError(`PointerDown Error: ${err.message}`);
@@ -415,17 +457,108 @@ const ViewerCanvas = forwardRef(({
         newShape.y = currentShape.startY;
       } else if (tool === 'arrow') {
         newShape.points = [currentShape.startX, currentShape.startY, imgCoords.x, imgCoords.y];
-      } else if (tool === 'text') {
-        // Text描画中は位置更新しない（クリック一回で確定）
-        return;
       }
-      
+
       setCurrentShape(newShape);
     } catch (err) {
       console.error('PointerMove Error:', err);
     }
   };
   
+  // テキスト確定
+  const handleTextConfirm = async () => {
+    const text = textEditor.value.trim();
+    if (!text) {
+      setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0 });
+      if (onToolChange) onToolChange('select');
+      return;
+    }
+
+    const { imgX, imgY, shapeId } = textEditor;
+    const { nx, ny } = normalizeCoords(imgX, imgY);
+
+    if (shapeId) {
+      // 既存テキストの編集
+      const existingShape = shapes.find(s => s.id === shapeId);
+      if (existingShape) {
+        const updatedShape = {
+          ...existingShape,
+          text,
+          nx,
+          ny,
+        };
+        
+        addToUndoStack({ type: 'update', shapeId, before: existingShape, after: updatedShape });
+        setShapes(prev => prev.map(s => s.id === shapeId ? updatedShape : s));
+        
+        if (onSaveShape) {
+          try {
+            await onSaveShape(updatedShape, 'upsert');
+          } catch (err) {
+            console.error('Save text error:', err);
+          }
+        }
+      }
+    } else {
+      // 新規テキスト作成
+      const normalizedShape = {
+        id: generateUUID(),
+        tool: 'text',
+        stroke: strokeColor,
+        strokeWidth: strokeWidth,
+        bgWidth: bgSize.width,
+        bgHeight: bgSize.height,
+        nx,
+        ny,
+        text,
+        fontSize: 16,
+      };
+
+      addToUndoStack({ type: 'add', shapeId: normalizedShape.id });
+      setShapes(prev => [...prev, normalizedShape]);
+      setSelectedId(normalizedShape.id);
+
+      if (onSaveShape) {
+        try {
+          const result = await onSaveShape(normalizedShape, 'create');
+          if (result?.dbId) {
+            setShapes(prev => prev.map(s => s.id === normalizedShape.id ? { ...s, dbId: result.dbId } : s));
+          }
+        } catch (err) {
+          console.error('Save text error:', err);
+        }
+      }
+    }
+
+    setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0 });
+    if (onToolChange) onToolChange('select');
+  };
+
+  // テキストキャンセル
+  const handleTextCancel = () => {
+    setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0 });
+    if (onToolChange) onToolChange('select');
+  };
+
+  // テキストダブルクリックで再編集
+  const handleTextDblClick = (shape) => {
+    if (!isEditMode) return;
+    
+    const { x: imgX, y: imgY } = denormalizeCoords(shape.nx, shape.ny);
+    const screenX = offsetX + imgX * contentScale;
+    const screenY = offsetY + imgY * contentScale;
+    
+    setTextEditor({
+      visible: true,
+      x: screenX,
+      y: screenY,
+      value: shape.text || '',
+      shapeId: shape.id,
+      imgX,
+      imgY,
+    });
+  };
+
   // PointerUp: 描画終了（描画モード時のみ）
   const handlePointerUp = async () => {
     if (!isDrawMode || !isDrawing || !currentShape) return;
@@ -502,16 +635,7 @@ const ViewerCanvas = forwardRef(({
         normalizedShape.normalizedPoints = normalizedPoints;
         // 一時フィールドを削除（正規化データのみ保存）
         // points, startX, startY は含めない
-      } else if (tool === 'text') {
-        const x = currentShape.x ?? currentShape.startX ?? 0;
-        const y = currentShape.y ?? currentShape.startY ?? 0;
-        const { nx, ny } = normalizeCoords(x, y);
 
-        normalizedShape.nx = nx;
-        normalizedShape.ny = ny;
-        normalizedShape.text = currentShape.text ?? 'テキスト';
-        normalizedShape.fontSize = currentShape.fontSize || 16;
-      }
 
       // Undo履歴に追加
       addToUndoStack({ type: 'add', shapeId: normalizedShape.id });
@@ -614,7 +738,6 @@ const ViewerCanvas = forwardRef(({
       const { nx, ny } = normalizeCoords(x, y);
       updatedShape.nx = nx;
       updatedShape.ny = ny;
-      // Textはリセットしない
     }
     
     addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: updatedShape });
@@ -965,6 +1088,32 @@ const ViewerCanvas = forwardRef(({
   
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative', overflow: 'auto', background: '#e0e0e0' }}>
+      {/* テキスト入力エディタ */}
+      {textEditor.visible && (
+        <textarea
+          ref={textInputRef}
+          value={textEditor.value}
+          onChange={(e) => setTextEditor(prev => ({ ...prev, value: e.target.value }))}
+          onBlur={handleTextConfirm}
+          placeholder="テキストを入力... (Enter: 確定, Esc: キャンセル)"
+          style={{
+            position: 'absolute',
+            left: `${textEditor.x}px`,
+            top: `${textEditor.y}px`,
+            zIndex: 1000,
+            padding: '4px 8px',
+            fontSize: '14px',
+            border: '2px solid #4f46e5',
+            borderRadius: '4px',
+            background: 'white',
+            minWidth: '200px',
+            minHeight: '60px',
+            resize: 'both',
+            fontFamily: 'Arial',
+          }}
+        />
+      )}
+
       <Stage
         ref={stageRef}
         width={containerSize.width}
