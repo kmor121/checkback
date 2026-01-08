@@ -231,16 +231,18 @@ const ViewerCanvas = forwardRef(({
         if (entry) {
           const width = entry.contentRect.width;
           const height = entry.contentRect.height;
-          if (width > 0 && height > 0) {
+          // 極小値（50px以下）は無視して瞬断を防止
+          if (width > 50 && height > 50) {
             setContainerSize({ width, height });
           }
         }
       });
       
       resizeObserver.observe(containerRef.current);
-      
+
       const rect = containerRef.current.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
+      // 初期値も極小値は無視して瞬断を防止
+      if (rect.width > 50 && rect.height > 50) {
         setContainerSize({ width: rect.width, height: rect.height });
       }
       
@@ -1630,8 +1632,8 @@ const ViewerCanvas = forwardRef(({
             scaleX={contentScale}
             scaleY={contentScale}
           >
-            {isImage && fileUrl && (
-              <BackgroundImage src={fileUrl} onLoad={setBgSize} />
+            {isImage && stableFileUrlRef.current && (
+              <BackgroundImage src={stableFileUrlRef.current} onLoad={setBgSize} />
             )}
           </Group>
         </Layer>
