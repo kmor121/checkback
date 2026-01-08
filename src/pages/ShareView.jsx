@@ -313,6 +313,28 @@ function ShareViewContent() {
     localStorage.setItem(key, activeCommentId);
   }, [activeCommentId, token, shareLink?.file_id, currentPage]);
 
+  // ResizeObserver for composer height tracking
+  useEffect(() => {
+    if (!composerRef.current) return;
+    
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const height = entry.contentRect.height;
+        setComposerHeight(height);
+      }
+    });
+    
+    observer.observe(composerRef.current);
+    
+    // Initial measurement
+    const initialHeight = composerRef.current.offsetHeight;
+    if (initialHeight > 0) {
+      setComposerHeight(initialHeight);
+    }
+    
+    return () => observer.disconnect();
+  }, []);
+
   // CRITICAL: comment_idで絞らず、全shapesをフェッチ（表示フィルタはクライアント側）
   const { data: paintShapes = [], isFetching: shapesFetching } = useQuery({
     queryKey: ['paintShapes', token, shareLink?.file_id, currentPage],
