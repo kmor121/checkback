@@ -14,21 +14,27 @@ function generateUUID() {
 
 const DEBUG_MODE = import.meta.env.VITE_DEBUG === 'true';
 
-// 背景画像コンポーネント
+// 背景画像コンポーネント（チラつき防止：前の画像を保持）
 function BackgroundImage({ src, onLoad }) {
   const [image] = useImage(src);
+  const lastImageRef = useRef(null);
   
   useEffect(() => {
-    if (image && onLoad) {
-      onLoad({ width: image.width, height: image.height });
+    if (image) {
+      lastImageRef.current = image;
+      if (onLoad) {
+        onLoad({ width: image.width, height: image.height });
+      }
     }
   }, [image, onLoad]);
   
-  return image ? (
+  const imgToRender = image || lastImageRef.current;
+  
+  return imgToRender ? (
     <KonvaImage 
-      image={image} 
-      width={image.width} 
-      height={image.height} 
+      image={imgToRender} 
+      width={imgToRender.width} 
+      height={imgToRender.height} 
       listening={false} 
     />
   ) : null;
@@ -110,6 +116,9 @@ const ViewerCanvas = forwardRef(({
   
   // fileUrl/pageNumber変更時にリセット（hydrateより先に実行）
   useEffect(() => {
+    if (DEBUG_MODE) {
+      console.log('[ViewerCanvas] fileUrl/pageNumber changed, resetting state');
+    }
     hydratedRef.current = false;
     setShapes([]);
     setSelectedId(null);
@@ -117,6 +126,18 @@ const ViewerCanvas = forwardRef(({
     setUndoStack([]);
     setRedoStack([]);
   }, [fileUrl, pageNumber]);
+
+  // マウント検知（デバッグ用）
+  useEffect(() => {
+    if (DEBUG_MODE) {
+      console.log('[ViewerCanvas] Component MOUNTED', { fileUrl, pageNumber });
+    }
+    return () => {
+      if (DEBUG_MODE) {
+        console.log('[ViewerCanvas] Component UNMOUNTED');
+      }
+    };
+  }, []);
 
   // existingShapesからの初回hydrate（後から非空配列が届いても反映）
   useEffect(() => {

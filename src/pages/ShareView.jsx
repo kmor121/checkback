@@ -1109,7 +1109,7 @@ function ShareViewContent() {
             </div>
           ) : (
             <ViewerCanvas
-              key={`${token}:${shareLink?.file_id}:${currentPage}:${canvasSessionNonce}:${showAllPaint ? 'all' : (paintSessionCommentId || activeCommentId || 'none')}`}
+              key={`${token}:${shareLink?.file_id}:${currentPage}:${canvasSessionNonce}`}
               ref={viewerCanvasRef}
               fileUrl={file?.file_url}
               mimeType={file?.mime_type}
