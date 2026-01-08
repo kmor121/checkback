@@ -72,6 +72,10 @@ function ShareViewContent() {
   const [showAllPaint, setShowAllPaint] = useState(false);
   const [isDockOpen, setIsDockOpen] = useState(false);
   
+  // 対応済みチェック（composer用）
+  const activeComment = comments.find(c => c.id === activeCommentId);
+  const isLocked = activeComment?.resolved || false;
+  
   // Draft paint session state
   const [paintSessionCommentId, setPaintSessionCommentId] = useState(null);
   const [draftShapes, setDraftShapes] = useState([]);
@@ -1256,13 +1260,8 @@ function ShareViewContent() {
           </div>
 
           {/* 下段：コメント入力（composer） */}
-          {shareLink.can_post_comments && (() => {
-            // 対応済みチェック
-            const activeComment = comments.find(c => c.id === activeCommentId);
-            const isLocked = activeComment?.resolved || false;
-
-            return (
-              <div className="bg-gray-100 p-4 flex justify-center">
+          {shareLink.can_post_comments && (
+            <div className="bg-gray-100 p-4 flex justify-center">
                 <div className="w-full max-w-2xl bg-white rounded-xl shadow-2xl border-2 border-gray-200 p-4">
                   <div className="flex gap-3 items-start">
                     {/* ペイントボタン */}
