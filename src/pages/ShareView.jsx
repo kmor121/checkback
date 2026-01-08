@@ -57,24 +57,39 @@ function ShareViewContent() {
   const [zoom, setZoom] = useState(100);
   const [commentFilter, setCommentFilter] = useState('all');
   const [commentSort, setCommentSort] = useState('page');
-  const [commentBody, setCommentBody] = useState('');
   const [paintMode, setPaintMode] = useState(false);
   const [tool, setTool] = useState('pen');
   const [strokeColor, setStrokeColor] = useState('#ff0000');
   const [strokeWidth, setStrokeWidth] = useState(2);
-  const [shapes, setShapes] = useState([]);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const [showBoundingBoxes, setShowBoundingBoxes] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [activeCommentId, setActiveCommentId] = useState(null);
   const [composerText, setComposerText] = useState('');
-  const [autoCommentCreating, setAutoCommentCreating] = useState(false);
   const [showAllPaint, setShowAllPaint] = useState(false);
   const [isDockOpen, setIsDockOpen] = useState(false);
+  
+  // Draft paint session state
+  const [paintSessionCommentId, setPaintSessionCommentId] = useState(null);
+  const [draftShapes, setDraftShapes] = useState([]);
+  
   const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
   const didInitActiveRef = useRef(false);
-  const lockedCommentIdRef = useRef(null); // CRITICAL: 保存先を固定
+
+  // DEBUG: Trace ReviewComment.create calls
+  useEffect(() => {
+    if (DEBUG_MODE && base44.entities.ReviewComment) {
+      const original = base44.entities.ReviewComment.create;
+      base44.entities.ReviewComment.create = async (...args) => {
+        console.trace('[🔍 TRACE ShareView] ReviewComment.create called from:', args);
+        return original.apply(base44.entities.ReviewComment, args);
+      };
+      return () => {
+        base44.entities.ReviewComment.create = original;
+      };
+    }
+  }, []);
 
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
@@ -192,121 +207,31 @@ function ShareViewContent() {
     localStorage.setItem(key, String(showAllPaint));
   }, [showAllPaint, token, shareLink?.file_id, currentPage]);
 
-  // ペイントモードON時に下書きコメント自動作成
-  const handlePaintModeChange = async (mode) => {
+  const handlePaintModeChange = (mode) => {
     if (!mode) {
       setPaintMode(false);
       return;
     }
 
-    // 既にロック済みなら即座にON
-    if (lockedCommentIdRef.current) {
-      setPaintMode(true);
-      return;
-    }
-
     if (!guestName.trim()) {
       setShowNameDialog(true);
       return;
     }
 
-    if (autoCommentCreating) return;
-    setAutoCommentCreating(true);
-
-    try {
-      const anchor_nx = 0.5;
-      const anchor_ny = 0.5;
-
-      const existingComments = await base44.entities.ReviewComment.filter({ 
-        file_id: shareLink.file_id,
-        share_token: token 
-      });
-      const maxSeqNo = existingComments.reduce((max, c) => Math.max(max, c.seq_no || 0), 0);
-
-      const comment = await base44.entities.ReviewComment.create({
-        file_id: shareLink.file_id,
-        share_token: token,
-        page_no: currentPage,
-        seq_no: maxSeqNo + 1,
-        anchor_nx,
-        anchor_ny,
-        author_type: 'guest',
-        author_key: guestId,
-        author_name: guestName,
-        body: '',
-        resolved: false,
-        has_paint: false,
-      });
-
-      queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id, token] });
-      setActiveCommentId(comment.id);
-      lockedCommentIdRef.current = comment.id;
-      setComposerText('');
-      setAutoCommentCreating(false);
-      setPaintMode(true);
-      setIsDockOpen(true);
-      
-      if (DEBUG_MODE) {
-        console.log('[ShareView] Created draft comment:', comment.id);
-      }
-    } catch (error) {
-      console.error('[ShareView] Draft comment creation failed:', error);
-      showToast(`コメント作成失敗: ${error.message}`, 'error');
-      setAutoCommentCreating(false);
+    // ペイント開始時にセッションを固定（コメントは作らない）
+    setPaintSessionCommentId(activeCommentId ?? null);
+    if (!activeCommentId) {
+      setDraftShapes([]);
     }
+    setPaintMode(true);
+    setIsDockOpen(true);
   };
 
-  // 描画開始時の処理（lockedCommentIdがない場合のみ自動作成）
-  const handleBeginPaint = async (startX, startY, bgWidth, bgHeight) => {
-    if (lockedCommentIdRef.current) return; // 既にロック済み
-    if (autoCommentCreating) return;
-
-    if (!guestName.trim()) {
-      setShowNameDialog(true);
-      setPaintMode(false);
-      return;
-    }
-
-    setAutoCommentCreating(true);
-
-    try {
-      const anchor_nx = startX / bgWidth;
-      const anchor_ny = startY / bgHeight;
-
-      const existingComments = await base44.entities.ReviewComment.filter({ 
-        file_id: shareLink.file_id,
-        share_token: token 
-      });
-      const maxSeqNo = existingComments.reduce((max, c) => Math.max(max, c.seq_no || 0), 0);
-
-      const comment = await base44.entities.ReviewComment.create({
-        file_id: shareLink.file_id,
-        share_token: token,
-        page_no: currentPage,
-        seq_no: maxSeqNo + 1,
-        anchor_nx,
-        anchor_ny,
-        author_type: 'guest',
-        author_key: guestId,
-        author_name: guestName,
-        body: '',
-        resolved: false,
-        has_paint: false,
-      });
-
-      queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id, token] });
-      setActiveCommentId(comment.id);
-      lockedCommentIdRef.current = comment.id;
-      setAutoCommentCreating(false);
-      
-      if (DEBUG_MODE) {
-        console.log('[ShareView] Auto-created comment:', comment.id);
-      }
-    } catch (error) {
-      console.error('[ShareView] Auto comment creation failed:', error);
-      showToast(`コメント作成失敗: ${error.message}`, 'error');
-      setAutoCommentCreating(false);
-      setPaintMode(false);
+  const handleBeginPaint = () => {
+    // ペイント開始時はコメントを作らず、セッション開始のみ
+    setPaintSessionCommentId(activeCommentId ?? null);
+    if (!activeCommentId) {
+      setDraftShapes([]);
     }
   };
 
@@ -387,33 +312,24 @@ function ShareViewContent() {
       return;
     }
     
-    // CRITICAL: lockedCommentIdRefが無い場合は保存しない
-    // （自動作成中なら待つ）
-    if (!lockedCommentIdRef.current) {
-      if (autoCommentCreating) {
-        console.log('[ShareView] Waiting for auto comment creation...');
-        // 最大3秒待つ
-        for (let i = 0; i < 30; i++) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-          if (lockedCommentIdRef.current) break;
-        }
-        if (!lockedCommentIdRef.current) {
-          const msg = 'コメント作成が完了しませんでした';
-          showToast(msg, 'error');
-          throw new Error(msg);
-        }
-      } else {
-        const msg = 'comment_idが必要です';
-        console.error('[ShareView]', msg);
-        throw new Error(msg);
-      }
-    }
-    
     try {
+      const targetCommentId = paintSessionCommentId;
+      
+      // Draft（新規コメント）の場合はメモリに保存のみ
+      if (!targetCommentId) {
+        if (mode === 'create') {
+          setDraftShapes(prev => [...prev, shape]);
+        } else {
+          setDraftShapes(prev => prev.map(s => s.id === shape.id ? shape : s));
+        }
+        return { dbId: shape.id };
+      }
+
+      // 既存コメントの場合はDBに保存
       const shapeData = {
         file_id: shareLink.file_id,
         share_token: token,
-        comment_id: lockedCommentIdRef.current, // CRITICAL: ロックされたIDを使用
+        comment_id: targetCommentId,
         page_no: currentPage,
         client_shape_id: shape.id,
         shape_type: shape.tool,
@@ -422,19 +338,13 @@ function ShareViewContent() {
         author_name: guestName || 'Guest',
       };
       
-      if (DEBUG_MODE) {
-        console.log('[ShareView] Saving shape:', { mode, clientShapeId: shape.id, dbId: shape.dbId });
-      }
-      
       let result;
       
-      // CRITICAL: dbIdがあれば必ずupdate、無ければcreate（増殖防止）
       if (shape.dbId) {
         try {
           result = await base44.entities.PaintShape.update(shape.dbId, shapeData);
           if (DEBUG_MODE) console.log('[ShareView] Updated existing shape:', shape.dbId);
         } catch (err) {
-          // update失敗時のみcreate（極めて稀）
           if (err.message?.includes('not found') || err.message?.includes('Not Found')) {
             console.warn('[ShareView] Update failed (not found), creating:', shape.dbId);
             result = await base44.entities.PaintShape.create(shapeData);
@@ -443,14 +353,12 @@ function ShareViewContent() {
           }
         }
       } else {
-        // dbId無し → 新規作成
         result = await base44.entities.PaintShape.create(shapeData);
         if (DEBUG_MODE) console.log('[ShareView] Created new shape:', result.id);
       }
 
       await queryClient.invalidateQueries({ queryKey: ['paintShapes', token, shareLink?.file_id, currentPage] });
 
-      // CRITICAL: dbIdを返して呼び出し側で保存させる
       return { ...result, dbId: result.id };
     } catch (error) {
       console.error('[ShareView] Save shape error:', error);
@@ -467,6 +375,12 @@ function ShareViewContent() {
     }
     
     try {
+      // Draft中の場合はメモリから削除
+      if (!paintSessionCommentId) {
+        setDraftShapes(prev => prev.filter(s => s.id !== shape.id));
+        return;
+      }
+
       // CRITICAL: 必ずdbId(_id)で削除（client_shape_idは使わない）
       if (shape.dbId) {
         await base44.entities.PaintShape.delete(shape.dbId);
@@ -488,16 +402,20 @@ function ShareViewContent() {
   };
 
   const handleClearAll = async () => {
-    if (!isReady || !lockedCommentIdRef.current) return;
-    
-    if (!window.confirm('このコメントの自分の描画を全て削除しますか？')) {
-      return;
-    }
-    
     try {
-      // lockedCommentIdに紐づく自分のshapesを全削除
+      const targetCommentId = paintSessionCommentId || activeCommentId;
+      
+      // Draft中の場合
+      if (!targetCommentId) {
+        setDraftShapes([]);
+        viewerCanvasRef.current?.clear();
+        showToast('描画をクリアしました');
+        return;
+      }
+      
+      // 既存コメントの描画を削除
       const shapesToDelete = paintShapes.filter(s => 
-        s.comment_id === lockedCommentIdRef.current && 
+        s.comment_id === targetCommentId && 
         s.author_key === guestId
       );
       
@@ -506,55 +424,16 @@ function ShareViewContent() {
       }
 
       await queryClient.invalidateQueries({ queryKey: ['paintShapes', token, shareLink?.file_id, currentPage] });
-      
-      // ViewerCanvasをクリア
-      if (viewerCanvasRef.current?.clear) {
-        viewerCanvasRef.current.clear();
-      }
-      
+      viewerCanvasRef.current?.clear();
       showToast(`${shapesToDelete.length}個の描画を削除しました`, 'success');
     } catch (error) {
       console.error('Clear all error:', error);
-      const errorMsg = error.response?.data?.error || error.message || String(error);
-      showToast(`全削除失敗: ${errorMsg}`, 'error');
+      const errorMsg = error.message || String(error);
+      showToast(`削除失敗: ${errorMsg}`, 'error');
     }
   };
 
-  const createCommentMutation = useMutation({
-    mutationFn: async (data) => {
-      const existingComments = await base44.entities.ReviewComment.filter({ file_id: shareLink.file_id });
-      const maxSeqNo = existingComments.reduce((max, c) => Math.max(max, c.seq_no || 0), 0);
 
-      const comment = await base44.entities.ReviewComment.create({
-        file_id: shareLink.file_id,
-        share_token: token,
-        page_no: currentPage,
-        seq_no: maxSeqNo + 1,
-        anchor_nx: data.anchor_nx,
-        anchor_ny: data.anchor_ny,
-        author_type: 'guest',
-        author_key: guestId,
-        author_name: guestName,
-        body: data.body,
-        resolved: false,
-        has_paint: false,
-      });
-
-      return comment;
-    },
-    onSuccess: (comment) => {
-      queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id, token] });
-      setComposerText('');
-      setCurrentPage(comment.page_no);
-      setActiveCommentId(comment.id);
-      lockedCommentIdRef.current = null;
-      setIsDockOpen(false);
-      showToast('コメントを作成しました', 'success');
-    },
-    onError: (error) => {
-      showToast(`送信失敗: ${error.message}`, 'error');
-    },
-  });
 
   const handleSendComment = async () => {
     if (!guestName.trim()) {
@@ -562,42 +441,97 @@ function ShareViewContent() {
       return;
     }
 
-    // 本文と描画の両方が無い場合のみエラー
     const hasText = composerText.trim().length > 0;
-    const hasShapes = lockedCommentIdRef.current 
-      ? paintShapes.filter(s => s.comment_id === lockedCommentIdRef.current).length > 0
-      : false;
+    const hasDraftShapes = draftShapes.length > 0;
 
-    if (!hasText && !hasShapes) {
+    if (!hasText && !hasDraftShapes) {
       showToast('本文か描画を追加してください', 'error');
       return;
     }
 
-    if (lockedCommentIdRef.current) {
-      // 下書きコメントを更新
-      try {
-        await base44.entities.ReviewComment.update(lockedCommentIdRef.current, { body: composerText });
-        queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id, token] });
-        setComposerText('');
-        lockedCommentIdRef.current = null;
-        setActiveCommentId(null);
-        setPaintMode(false);
-        setIsDockOpen(false);
-        showToast('コメントを送信しました', 'success');
-      } catch (error) {
-        showToast(`送信失敗: ${error.message}`, 'error');
-      }
-    } else {
-      // フォールバック：新規作成
-      createCommentMutation.mutate({
-        anchor_nx: 0.5,
-        anchor_ny: 0.5,
-        body: composerText,
+    try {
+      const existingComments = await base44.entities.ReviewComment.filter({ 
+        file_id: shareLink.file_id,
+        share_token: token 
       });
+      const maxSeqNo = existingComments.reduce((max, c) => Math.max(max, c.seq_no || 0), 0);
+
+      // アンカー位置の計算（draftShapesがあればその中心）
+      let anchor_nx = 0.5;
+      let anchor_ny = 0.5;
+      
+      if (draftShapes.length > 0) {
+        const allPoints = [];
+        draftShapes.forEach(shape => {
+          if (shape.nx !== undefined) {
+            allPoints.push({ x: shape.nx, y: shape.ny });
+            if (shape.nw !== undefined) {
+              allPoints.push({ x: shape.nx + shape.nw, y: shape.ny + shape.nh });
+            }
+          }
+          if (shape.normalizedPoints) {
+            for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
+              allPoints.push({ x: shape.normalizedPoints[i], y: shape.normalizedPoints[i + 1] });
+            }
+          }
+        });
+        
+        if (allPoints.length > 0) {
+          const xs = allPoints.map(p => p.x);
+          const ys = allPoints.map(p => p.y);
+          anchor_nx = (Math.min(...xs) + Math.max(...xs)) / 2;
+          anchor_ny = (Math.min(...ys) + Math.max(...ys)) / 2;
+        }
+      }
+
+      const comment = await base44.entities.ReviewComment.create({
+        file_id: shareLink.file_id,
+        share_token: token,
+        page_no: currentPage,
+        seq_no: maxSeqNo + 1,
+        anchor_nx,
+        anchor_ny,
+        author_type: 'guest',
+        author_key: guestId,
+        author_name: guestName,
+        body: composerText,
+        resolved: false,
+        has_paint: draftShapes.length > 0,
+      });
+
+      // DraftShapesをDBに保存
+      if (draftShapes.length > 0) {
+        for (const shape of draftShapes) {
+          await base44.entities.PaintShape.create({
+            file_id: shareLink.file_id,
+            share_token: token,
+            comment_id: comment.id,
+            page_no: currentPage,
+            client_shape_id: shape.id,
+            shape_type: shape.tool,
+            data_json: JSON.stringify(shape),
+            author_key: guestId,
+            author_name: guestName,
+          });
+        }
+      }
+
+      setComposerText('');
+      setDraftShapes([]);
+      setActiveCommentId(comment.id);
+      setPaintSessionCommentId(comment.id);
+      setPaintMode(false);
+      setIsDockOpen(false);
+      
+      await queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id, token] });
+      await queryClient.invalidateQueries({ queryKey: ['paintShapes', token, shareLink?.file_id, currentPage] });
+      
+      showToast('コメントを送信しました', 'success');
+    } catch (error) {
+      showToast(`送信失敗: ${error.message}`, 'error');
     }
   };
 
-  // コメント編集開始
   const handleStartEditComment = (comment) => {
     if (paintMode || isDockOpen) {
       if (!window.confirm('編集中の内容が失われますが、よろしいですか？')) {
@@ -607,29 +541,16 @@ function ShareViewContent() {
     
     setActiveCommentId(comment.id);
     setCurrentPage(comment.page_no);
-    lockedCommentIdRef.current = comment.id;
+    setPaintSessionCommentId(comment.id);
     setComposerText(comment.body || '');
     setPaintMode(false);
     setIsDockOpen(true);
   };
 
-  // ドックを閉じる
-  const handleCloseDock = async () => {
-    if (lockedCommentIdRef.current) {
-      // 本文も描画もない場合は下書きを削除
-      const shapes = paintShapes.filter(s => s.comment_id === lockedCommentIdRef.current);
-      if (!composerText.trim() && shapes.length === 0) {
-        try {
-          await base44.entities.ReviewComment.delete(lockedCommentIdRef.current);
-          queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id, token] });
-        } catch (error) {
-          console.error('Failed to delete draft comment:', error);
-        }
-      }
-    }
-    
+  const handleCloseDock = () => {
     setComposerText('');
-    lockedCommentIdRef.current = null;
+    setDraftShapes([]);
+    setPaintSessionCommentId(null);
     setActiveCommentId(null);
     setPaintMode(false);
     setIsDockOpen(false);
@@ -677,16 +598,13 @@ function ShareViewContent() {
 
 
 
-  // PaintShapeをViewerCanvas用の形式に変換（全ペイント表示対応）
+  // PaintShapeをViewerCanvas用の形式に変換（draft含む）
   const existingShapes = React.useMemo(() => {
     if (!isReady || !paintShapes) {
-      return [];
+      return [...draftShapes];
     }
 
-    // CRITICAL: フィルタロジック明確化
-    // - showAllPaint=true: 全shapes表示（currentPageの全コメントのshape）
-    // - showAllPaint=false: lockedCommentIdのshapesのみ表示（未選択なら空配列）
-    const targetCommentId = lockedCommentIdRef.current || activeCommentId;
+    const targetCommentId = paintSessionCommentId || activeCommentId;
     const filtered = showAllPaint 
       ? paintShapes 
       : targetCommentId 
@@ -711,18 +629,8 @@ function ShareViewContent() {
       })
       .filter(Boolean);
 
-    if (DEBUG_MODE) {
-      console.log('[ShareView] existingShapes:', {
-        total: paintShapes.length,
-        filtered: result.length,
-        showAllPaint,
-        lockedCommentId: lockedCommentIdRef.current,
-        activeCommentId,
-      });
-    }
-
-    return result;
-  }, [paintShapes, isReady, activeCommentId, showAllPaint]);
+    return [...result, ...draftShapes];
+  }, [paintShapes, isReady, activeCommentId, paintSessionCommentId, showAllPaint, draftShapes]);
 
   const handleSaveName = () => {
     if (!guestName.trim()) return;
@@ -1037,7 +945,7 @@ function ShareViewContent() {
                 sortedComments.map((comment) => {
                   const shapesCount = paintShapes.filter(s => s.comment_id === comment.id).length;
                   const isActive = activeCommentId === comment.id;
-                  const isLocked = lockedCommentIdRef.current === comment.id;
+                  const isLocked = paintSessionCommentId === comment.id;
 
                   return (
                     <Card 
@@ -1146,7 +1054,7 @@ function ShareViewContent() {
             onToggleBoundingBoxes={DEBUG_MODE ? () => setShowBoundingBoxes(!showBoundingBoxes) : undefined}
             showAllPaint={showAllPaint}
             onToggleShowAllPaint={() => setShowAllPaint(!showAllPaint)}
-            hasActiveComment={!!lockedCommentIdRef.current}
+            hasActiveComment={!!(paintSessionCommentId || activeCommentId || draftShapes.length > 0)}
           />
         </div>
       )}
@@ -1200,10 +1108,13 @@ function ShareViewContent() {
               )}
             </div>
 
-            {lockedCommentIdRef.current && (
+            {(paintSessionCommentId || draftShapes.length > 0) && (
               <div className="mt-2 text-xs text-gray-500 flex items-center gap-2">
                 <Badge className="bg-green-600 text-white">編集中</Badge>
                 <span>本文または描画を追加して送信できます</span>
+                {draftShapes.length > 0 && (
+                  <Badge variant="secondary">{draftShapes.length}個の描画</Badge>
+                )}
               </div>
             )}
           </div>
