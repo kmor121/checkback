@@ -1029,6 +1029,10 @@ const ViewerCanvas = forwardRef(({
       onDragStart: isEditMode ? (e) => {
         e.cancelBubble = true;
       } : undefined,
+      onDragMove: isEditMode ? (e) => {
+        // ドラッグ中も選択枠を追従させるために再描画
+        e.target.getLayer()?.batchDraw();
+      } : undefined,
       onDragEnd: isEditMode ? (e) => handleDragEnd(shape, e) : undefined,
       // TransformEndはRect/Circleのみ
       onTransformEnd: (isEditMode && canTransform) ? (e) => handleTransformEnd(shape, e) : undefined,
@@ -1301,6 +1305,10 @@ const ViewerCanvas = forwardRef(({
             draggable={isEditMode && !isExisting}
             onDragStart={isEditMode ? (e) => {
               e.cancelBubble = true;
+            } : undefined}
+            onDragMove={isEditMode ? (e) => {
+              // ドラッグ中も選択枠を追従させるために再描画
+              e.target.getLayer()?.batchDraw();
             } : undefined}
             onDragEnd={isEditMode ? (e) => handleDragEnd(shape, e) : undefined}
             onDblClick={isEditMode ? () => handleTextDblClick(shape) : undefined}
