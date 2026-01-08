@@ -806,6 +806,56 @@ function ShareViewContent() {
     return [...result, ...draftShapes];
   }, [paintShapes, isReady, activeCommentId, paintSessionCommentId, showAllPaint, draftShapes]);
 
+  // 親コメントと返信を分離（条件付きreturnの前に配置）
+  const filteredComments = React.useMemo(() => {
+    return comments.filter(c => {
+      if (commentFilter === 'resolved') return c.resolved;
+      if (commentFilter === 'unresolved') return !c.resolved;
+      return true;
+    });
+  }, [comments, commentFilter]);
+
+  const topLevelComments = React.useMemo(() => {
+    return filteredComments.filter(c => !c.parent_comment_id);
+  }, [filteredComments]);
+
+  const repliesByParent = React.useMemo(() => {
+    const map = new Map();
+    filteredComments.forEach(c => {
+      if (c.parent_comment_id) {
+        if (!map.has(c.parent_comment_id)) {
+          map.set(c.parent_comment_id, []);
+        }
+        map.get(c.parent_comment_id).push(c);
+      }
+    });
+    // 返信を日付順にソート
+    map.forEach((replies) => {
+      replies.sort((a, b) => new Date(a.created_date) - new Date(b.created_date));
+    });
+    return map;
+  }, [filteredComments]);
+
+  const attachmentsByComment = React.useMemo(() => {
+    const map = new Map();
+    attachments.forEach(att => {
+      if (!map.has(att.comment_id)) {
+        map.set(att.comment_id, []);
+      }
+      map.get(att.comment_id).push(att);
+    });
+    return map;
+  }, [attachments]);
+
+  const sortedComments = React.useMemo(() => {
+    return [...topLevelComments].sort((a, b) => {
+      if (commentSort === 'page') return a.page_no - b.page_no || a.seq_no - b.seq_no;
+      if (commentSort === 'oldest') return new Date(a.created_date) - new Date(b.created_date);
+      if (commentSort === 'newest') return new Date(b.created_date) - new Date(a.created_date);
+      return 0;
+    });
+  }, [topLevelComments, commentSort]);
+
   const handleSaveName = () => {
     if (!guestName.trim()) return;
     localStorage.setItem(`guestName_${token}`, guestName);
@@ -948,48 +998,7 @@ function ShareViewContent() {
     );
   }
 
-  const filteredComments = comments.filter(c => {
-    if (commentFilter === 'resolved') return c.resolved;
-    if (commentFilter === 'unresolved') return !c.resolved;
-    return true;
-  });
 
-  // 親コメントと返信を分離
-  const topLevelComments = filteredComments.filter(c => !c.parent_comment_id);
-  const repliesByParent = React.useMemo(() => {
-    const map = new Map();
-    filteredComments.forEach(c => {
-      if (c.parent_comment_id) {
-        if (!map.has(c.parent_comment_id)) {
-          map.set(c.parent_comment_id, []);
-        }
-        map.get(c.parent_comment_id).push(c);
-      }
-    });
-    // 返信を日付順にソート
-    map.forEach((replies) => {
-      replies.sort((a, b) => new Date(a.created_date) - new Date(b.created_date));
-    });
-    return map;
-  }, [filteredComments]);
-
-  const attachmentsByComment = React.useMemo(() => {
-    const map = new Map();
-    attachments.forEach(att => {
-      if (!map.has(att.comment_id)) {
-        map.set(att.comment_id, []);
-      }
-      map.get(att.comment_id).push(att);
-    });
-    return map;
-  }, [attachments]);
-
-  const sortedComments = [...topLevelComments].sort((a, b) => {
-    if (commentSort === 'page') return a.page_no - b.page_no || a.seq_no - b.seq_no;
-    if (commentSort === 'oldest') return new Date(a.created_date) - new Date(b.created_date);
-    if (commentSort === 'newest') return new Date(b.created_date) - new Date(a.created_date);
-    return 0;
-  });
 
   return (
     <div className="max-w-full mx-auto h-screen flex flex-col">
