@@ -45,6 +45,21 @@ function FileViewContent() {
   const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
 
+  // DEBUG: Trace ReviewComment.create calls
+  useEffect(() => {
+    const DEBUG_MODE = import.meta.env.VITE_DEBUG === 'true';
+    if (DEBUG_MODE && base44.entities.ReviewComment) {
+      const original = base44.entities.ReviewComment.create;
+      base44.entities.ReviewComment.create = async (...args) => {
+        console.trace('[🔍 TRACE] ReviewComment.create called from:', args);
+        return original.apply(base44.entities.ReviewComment, args);
+      };
+      return () => {
+        base44.entities.ReviewComment.create = original;
+      };
+    }
+  }, []);
+
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
     setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3000);
