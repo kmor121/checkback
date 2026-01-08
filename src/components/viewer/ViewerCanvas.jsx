@@ -558,7 +558,7 @@ const ViewerCanvas = forwardRef(({
       }
     }
 
-    setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0 });
+    setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
     setIsComposing(false);
     if (onToolChange) onToolChange('select');
   };
