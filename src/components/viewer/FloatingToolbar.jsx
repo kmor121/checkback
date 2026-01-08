@@ -245,7 +245,7 @@ export default function FloatingToolbar({
 
             <div className="w-px h-6 bg-gray-300" />
 
-            {/* 完了 */}
+            {/* 閉じる */}
             <Button
               variant="default"
               size="sm"
@@ -253,7 +253,7 @@ export default function FloatingToolbar({
               className="gap-2 bg-green-600 hover:bg-green-700"
             >
               <Check className="w-4 h-4" />
-              完了
+              閉じる
             </Button>
             </>
             )}
