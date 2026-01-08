@@ -471,14 +471,15 @@ function ShareViewContent() {
     }
 
     const hasText = composerText.trim().length > 0;
+    
+    if (!hasText) {
+      showToast('コメント本文を入力してください（描画だけでは送信できません）', 'error');
+      return;
+    }
+
     const shapesToCommit = draftShapesRef.current || [];
     const hasDraftShapes = shapesToCommit.length > 0;
     const hasFiles = pendingFiles.length > 0;
-
-    if (!hasText && !hasDraftShapes && !hasFiles) {
-      showToast('本文、描画、または添付ファイルを追加してください', 'error');
-      return;
-    }
 
     try {
       if (composerMode === 'edit' && composerTargetCommentId) {
@@ -1406,9 +1407,9 @@ function ShareViewContent() {
                             </label>
                             <Button
                               size="sm"
-                              className="bg-blue-600 hover:bg-blue-700 text-xs"
+                              className="bg-blue-600 hover:bg-blue-700 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                               onClick={handleSendComment}
-                              disabled={!composerText.trim() && pendingFiles.length === 0}
+                              disabled={!composerText.trim()}
                             >
                               <Send className="w-3 h-3 mr-1" />
                               送信
@@ -1539,7 +1540,8 @@ function ShareViewContent() {
               {/* 送信ボタン */}
               <Button
                 onClick={handleSendComment}
-                className="bg-blue-600 hover:bg-blue-700 mt-1"
+                disabled={!composerText.trim()}
+                className="bg-blue-600 hover:bg-blue-700 mt-1 disabled:opacity-50 disabled:cursor-not-allowed"
                 size="sm"
                 title={composerMode === 'edit' ? '保存' : '送信'}
               >
