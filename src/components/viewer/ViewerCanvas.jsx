@@ -399,15 +399,19 @@ const ViewerCanvas = forwardRef(({
       } else if (tool === 'text') {
         // テキストツールの場合はエディタを表示（shape作成はしない）
         const pos = stage.getPointerPosition();
+        const container = containerRef.current;
+        const scrollX = container ? container.scrollLeft : 0;
+        const scrollY = container ? container.scrollTop : 0;
+        
         console.log('[ViewerCanvas] Text tool clicked:', { x: pos.x, y: pos.y, imgX: imgCoords.x, imgY: imgCoords.y });
         setTextEditor({
           visible: true,
-          x: pos.x,
-          y: pos.y,
+          x: pos.x + scrollX,
+          y: pos.y + scrollY,
           value: '',
           shapeId: null,
-          imgX: imgCoords.x,
-          imgY: imgCoords.y,
+          imgX: Math.max(0, Math.min(bgSize.width, imgCoords.x)),
+          imgY: Math.max(0, Math.min(bgSize.height, imgCoords.y)),
         });
         setIsDrawing(false);
         return;
