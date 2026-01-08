@@ -30,7 +30,10 @@ import {
   Trash,
   Link as LinkIcon,
   X,
-  Trash2
+  Trash2,
+  Check,
+  Circle,
+  Reply
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
