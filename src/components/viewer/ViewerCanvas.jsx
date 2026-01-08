@@ -166,18 +166,6 @@ const ViewerCanvas = forwardRef(({
   // キーボードショートカット（入力欄フォーカス中は無効）
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // テキストエディタ表示中のショートカット
-      if (textEditor.visible) {
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          handleTextConfirm();
-        } else if (e.key === 'Escape') {
-          e.preventDefault();
-          handleTextCancel();
-        }
-        return;
-      }
-      
       // 入力欄フォーカス中はショートカット無効
       const target = e.target;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
@@ -200,7 +188,7 @@ const ViewerCanvas = forwardRef(({
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedId, shapes, undoStack, redoStack, isEditMode, textEditor]);
+  }, [selectedId, shapes, undoStack, redoStack, isEditMode]);
 
   // ResizeObserver
   useEffect(() => {
@@ -404,6 +392,7 @@ const ViewerCanvas = forwardRef(({
       } else if (tool === 'text') {
         // テキストツールの場合はエディタを表示（shape作成はしない）
         const pos = stage.getPointerPosition();
+        console.log('[ViewerCanvas] Text tool clicked:', { x: pos.x, y: pos.y, imgX: imgCoords.x, imgY: imgCoords.y });
         setTextEditor({
           visible: true,
           x: pos.x,
@@ -1091,28 +1080,46 @@ const ViewerCanvas = forwardRef(({
     <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative', overflow: 'auto', background: '#e0e0e0' }}>
       {/* テキスト入力エディタ */}
       {textEditor.visible && (
-        <textarea
-          ref={textInputRef}
-          value={textEditor.value}
-          onChange={(e) => setTextEditor(prev => ({ ...prev, value: e.target.value }))}
-          onBlur={handleTextConfirm}
-          placeholder="テキストを入力... (Enter: 確定, Esc: キャンセル)"
+        <div
           style={{
             position: 'absolute',
             left: `${textEditor.x}px`,
             top: `${textEditor.y}px`,
             zIndex: 1000,
-            padding: '4px 8px',
-            fontSize: '14px',
-            border: '2px solid #4f46e5',
-            borderRadius: '4px',
-            background: 'white',
-            minWidth: '200px',
-            minHeight: '60px',
-            resize: 'both',
-            fontFamily: 'Arial',
           }}
-        />
+          onClick={(e) => e.stopPropagation()}
+        >
+          <textarea
+            ref={textInputRef}
+            value={textEditor.value}
+            onChange={(e) => setTextEditor(prev => ({ ...prev, value: e.target.value }))}
+            placeholder="テキストを入力... (Enter: 確定, Esc: キャンセル)"
+            style={{
+              padding: '8px',
+              fontSize: '16px',
+              border: '2px solid #4f46e5',
+              borderRadius: '4px',
+              background: 'white',
+              minWidth: '250px',
+              minHeight: '80px',
+              resize: 'both',
+              fontFamily: 'Arial',
+              boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleTextConfirm();
+              } else if (e.key === 'Escape') {
+                e.preventDefault();
+                handleTextCancel();
+              }
+            }}
+          />
+          <div style={{ marginTop: '4px', fontSize: '11px', color: '#666' }}>
+            Enter: 確定 | Esc: キャンセル | Shift+Enter: 改行
+          </div>
+        </div>
       )}
 
       <Stage
