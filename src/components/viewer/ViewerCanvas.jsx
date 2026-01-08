@@ -1186,6 +1186,18 @@ const ViewerCanvas = forwardRef(({
               fill="transparent"
               listening={isEditMode}
             />
+            {isSelected && (
+              <Rect 
+                x={bboxX} 
+                y={bboxY} 
+                width={bboxW} 
+                height={bboxH} 
+                stroke="#3b82f6"
+                strokeWidth={1}
+                dash={[4, 4]}
+                listening={false}
+              />
+            )}
           </Group>
           {boundingBox && <Rect x={boundingBox.x} y={boundingBox.y} width={boundingBox.width} height={boundingBox.height} stroke="rgba(255,0,0,0.3)" strokeWidth={1} dash={[5,5]} fill={undefined} listening={false} />}
         </React.Fragment>
