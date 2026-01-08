@@ -825,6 +825,41 @@ function ShareViewContent() {
     });
   };
 
+  // 対応済みトグル
+  const toggleResolvedMutation = useMutation({
+    mutationFn: async ({ commentId, resolved }) => {
+      return await base44.entities.ReviewComment.update(commentId, {
+        resolved,
+        resolved_at: resolved ? new Date().toISOString() : null,
+        resolved_by: resolved ? guestName : null,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id, token] });
+    },
+  });
+
+  const handleToggleResolved = async (comment, e) => {
+    e.stopPropagation();
+    const newResolved = !comment.resolved;
+
+    // 楽観更新
+    queryClient.setQueryData(['sharedComments', shareLink.file_id, token], (old) => {
+      return old.map(c => c.id === comment.id ? { ...c, resolved: newResolved } : c);
+    });
+
+    try {
+      await toggleResolvedMutation.mutateAsync({ commentId: comment.id, resolved: newResolved });
+      showToast(newResolved ? '対応済みにしました' : '未対応に戻しました', 'success');
+    } catch (error) {
+      // 失敗時はrevert
+      queryClient.setQueryData(['sharedComments', shareLink.file_id, token], (old) => {
+        return old.map(c => c.id === comment.id ? { ...c, resolved: !newResolved } : c);
+      });
+      showToast(`更新失敗: ${error.message}`, 'error');
+    }
+  };
+
 
 
   // PaintShapeをViewerCanvas用の形式に変換（draft含む）
@@ -1220,7 +1255,8 @@ function ShareViewContent() {
                       <Card 
                         className={`hover:shadow-md transition-shadow ${
                           isEditing ? 'border-2 border-green-600 bg-green-50' : 
-                          isSelected ? 'border-2 border-blue-600 bg-blue-50' : ''
+                          isSelected ? 'border-2 border-blue-600 bg-blue-50' : 
+                          comment.resolved ? 'opacity-75 bg-gray-50' : ''
                         }`}
                       >
                         <CardContent className="p-3">
@@ -1234,6 +1270,11 @@ function ShareViewContent() {
                                 <span className="text-sm font-medium">{comment.author_name}</span>
                                 {comment.author_type === 'guest' && (
                                   <Badge variant="outline" className="text-xs">ゲスト</Badge>
+                                )}
+                                {comment.resolved && (
+                                  <Badge className="text-xs bg-green-600 text-white">
+                                    対応済
+                                  </Badge>
                                 )}
                                 {shapesCount > 0 && (
                                   <Badge variant="outline" className="text-xs flex items-center gap-1">
@@ -1294,9 +1335,40 @@ function ShareViewContent() {
                                   </>
                                 )}
                               </div>
-                            </div>
+                              </div>
 
-                            <DropdownMenu>
+                              {/* 対応済みチェック */}
+                              <Button
+                              variant="ghost"
+                              size="sm"
+                              className={`h-auto p-1 ${comment.resolved ? 'text-green-600' : 'text-gray-400'}`}
+                              onClick={(e) => handleToggleResolved(comment, e)}
+                              title={comment.resolved ? '未対応に戻す' : '対応済みにする'}
+                              >
+                              {comment.resolved ? (
+                                <div className="w-5 h-5 rounded-full bg-green-600 flex items-center justify-center">
+                                  <Check className="w-3 h-3 text-white" />
+                                </div>
+                              ) : (
+                                <Circle className="w-5 h-5" />
+                              )}
+                              </Button>
+
+                              {/* 返信ボタン */}
+                              <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-auto p-1 text-gray-600"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleStartReply(comment);
+                              }}
+                              title="返信"
+                              >
+                              <Reply className="w-4 h-4" />
+                              </Button>
+
+                              <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="sm" className="h-auto p-1">
                                   <MoreVertical className="w-4 h-4" />
