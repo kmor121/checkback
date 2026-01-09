@@ -1908,11 +1908,10 @@ const ViewerCanvas = forwardRef(({
         const boxW = hasManualBoxW ? shape.boxW * bgSize.width : autoBoxW;
         const boxH = hasManualBoxH ? shape.boxH * bgSize.height : autoBoxH;
 
-        // ★ textY計算：auto時はグリフ上端をpadYに固定
+        // ★ textY/height方式：手計算廃止、verticalAlign="middle"に任せる
         const textX = padL;
-        const textY = hasManualBoxH
-          ? padY + (boxH - padY * 2 - bbox.height) / 2 - bbox.y  // リサイズ済み：中央配置
-          : padY - bbox.y;  // auto：グリフ上端をpadYに固定
+        const textY = padY;  // 常にpadY固定
+        const textH = boxH - padY * 2;  // Text領域の高さ
 
         // デバッグログ（auto時の確認用）
         if (DEBUG_MODE && !hasManualBoxH) {
@@ -1920,10 +1919,9 @@ const ViewerCanvas = forwardRef(({
             id: shape.id?.substring(0, 8),
             boxResized: shape.boxResized,
             shapeBoxH: shape.boxH,
-            bboxY: bbox.y.toFixed(2),
             bboxH: bbox.height.toFixed(2),
             autoBoxH: autoBoxH.toFixed(2),
-            textY: textY.toFixed(2),
+            textH: textH.toFixed(2),
           });
         }
 
@@ -1954,10 +1952,13 @@ const ViewerCanvas = forwardRef(({
               fill="transparent"
               listening={true}
             />
-            {/* テキスト：fontPropsを完全一致 */}
+            {/* テキスト：height + verticalAlign="middle"で中央配置 */}
             <Text
               x={textX}
               y={textY}
+              width={boxW - padL - padR}
+              height={textH}
+              verticalAlign="middle"
               text={textContent}
               {...fontProps}
               fill={shape.stroke}
