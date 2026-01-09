@@ -389,6 +389,12 @@ const ViewerCanvas = forwardRef(({
 
       if (canTransform) {
         transformerRef.current.nodes([shapeRefs.current[selectedId]]);
+        // テキストの場合はパディングを追加して枠を広げる（日本語文字の上寄り対策）
+        if (selectedShape.tool === 'text') {
+          transformerRef.current.padding(8);
+        } else {
+          transformerRef.current.padding(0);
+        }
         transformerRef.current.getLayer().batchDraw();
       } else {
         transformerRef.current.nodes([]);
@@ -398,7 +404,7 @@ const ViewerCanvas = forwardRef(({
       transformerRef.current.nodes([]);
       transformerRef.current.getLayer().batchDraw();
     }
-  }, [selectedId, isEditMode, shapes]);
+    }, [selectedId, isEditMode, shapes]);
 
   // テキストエディタフォーカス
   useEffect(() => {
