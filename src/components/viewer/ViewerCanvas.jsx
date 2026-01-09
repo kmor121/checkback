@@ -80,6 +80,7 @@ const ViewerCanvas = forwardRef(({
   const transformerRef = useRef(null);
   const shapeRefs = useRef({});
   const shapesRef = useRef([]); // CRITICAL: 常に最新shapesを参照（stale回避）
+  const drawViewRef = useRef(null); // CRITICAL: 描画中のview固定（ジャンプ防止）
   
   // shapesRefを常に最新に保つ
   useEffect(() => {
@@ -340,9 +341,9 @@ const ViewerCanvas = forwardRef(({
   const scaledWidth = bgSize.width * contentScale;
   const scaledHeight = bgSize.height * contentScale;
   
-  // 中央寄せオフセット
-  const offsetX = Math.max(0, (containerSize.width - scaledWidth) / 2);
-  const offsetY = Math.max(0, (containerSize.height - scaledHeight) / 2);
+  // 中央寄せオフセット（CRITICAL: Math.max削除で左上スナップ防止）
+  const offsetX = (containerSize.width - scaledWidth) / 2;
+  const offsetY = (containerSize.height - scaledHeight) / 2;
   
   // 実際の表示位置（パンを考慮）
   const viewX = offsetX + pan.x;
@@ -372,13 +373,40 @@ const ViewerCanvas = forwardRef(({
     return { x: nx, y: ny };
   };
   
-  // pointer座標 → 画像座標への変換
-  const pointerToImageCoords = (stage) => {
+  // CRITICAL: viewスナップショット取得（描画中固定用）
+  const getView = () => {
+    const scrollLeft = containerRef.current?.scrollLeft ?? 0;
+    const scrollTop = containerRef.current?.scrollTop ?? 0;
+    return {
+      offsetX,
+      offsetY,
+      contentScale,
+      panX: pan.x,
+      panY: pan.y,
+      bgWidth: bgSize.width,
+      bgHeight: bgSize.height,
+      scrollLeft,
+      scrollTop,
+    };
+  };
+
+  // pointer座標 → 画像座標への変換（CRITICAL: view引数対応）
+  const pointerToImageCoords = (stage, viewOverride) => {
     const pos = stage.getPointerPosition();
     if (!pos) return null;
     
-    const imgX = (pos.x - viewX) / contentScale;
-    const imgY = (pos.y - viewY) / contentScale;
+    const view = viewOverride ?? getView();
+    
+    // stageX/stageYはscrollを加味
+    const stageX = pos.x + view.scrollLeft;
+    const stageY = pos.y + view.scrollTop;
+    
+    // viewX/viewYを再計算
+    const vx = view.offsetX + view.panX;
+    const vy = view.offsetY + view.panY;
+    
+    const imgX = (stageX - vx) / view.contentScale;
+    const imgY = (stageY - vy) / view.contentScale;
     
     return { x: imgX, y: imgY };
   };
@@ -555,7 +583,9 @@ const ViewerCanvas = forwardRef(({
         // 座標を強制更新
         if (e?.evt) stage.setPointersPositions(e.evt);
         
-        const imgCoords = pointerToImageCoords(stage);
+        // ★viewを固定
+        const fixedView = getView();
+        const imgCoords = pointerToImageCoords(stage, fixedView);
         const pos = stage.getPointerPosition();
         
         if (!imgCoords || !pos) {
@@ -575,9 +605,11 @@ const ViewerCanvas = forwardRef(({
           img: { x: imgCoords.x, y: imgCoords.y }
         });
 
-        // スクリーン座標計算にviewX/viewYを使用
-        const screenX = viewX + imgCoords.x * contentScale;
-        const screenY = viewY + imgCoords.y * contentScale;
+        // スクリーン座標計算
+        const vx = fixedView.offsetX + fixedView.panX;
+        const vy = fixedView.offsetY + fixedView.panY;
+        const screenX = vx + imgCoords.x * fixedView.contentScale;
+        const screenY = vy + imgCoords.y * fixedView.contentScale;
 
         setTextEditor({
           visible: true,
@@ -615,7 +647,10 @@ const ViewerCanvas = forwardRef(({
       // 座標を強制更新（pointer取得を確実にする）
       if (e?.evt) stage.setPointersPositions(e.evt);
       
-      const imgCoords = pointerToImageCoords(stage);
+      // ★ここでviewをスナップショット
+      drawViewRef.current = getView();
+      
+      const imgCoords = pointerToImageCoords(stage, drawViewRef.current);
       if (!imgCoords) return;
       
       setLastEvent('down');
@@ -663,7 +698,9 @@ const ViewerCanvas = forwardRef(({
       // 座標を強制更新
       if (e?.evt) stage.setPointersPositions(e.evt);
       
-      const imgCoords = pointerToImageCoords(stage);
+      // ★描画中は固定view、描画していない時はlive view
+      const view = (isDrawMode && isDrawing) ? drawViewRef.current : null;
+      const imgCoords = pointerToImageCoords(stage, view);
       if (!imgCoords) return;
       
       setPointerPos(stage.getPointerPosition());
@@ -955,14 +992,18 @@ const ViewerCanvas = forwardRef(({
         } finally {
           setIsSaving(prev => ({ ...prev, [normalizedShape.id]: false }));
         }
-      }
-    } catch (err) {
-      console.error('PointerUp Error:', err);
-      setError(`PointerUp Error: ${err.message}`);
-      setLastSaveStatus('error');
-      setLastError(err.message);
-    }
-  };
+        }
+
+        // ★描画完了：view固定解除
+        drawViewRef.current = null;
+        } catch (err) {
+        console.error('PointerUp Error:', err);
+        setError(`PointerUp Error: ${err.message}`);
+        setLastSaveStatus('error');
+        setLastError(err.message);
+        drawViewRef.current = null; // エラー時も解除
+        }
+        };
   
   // ドラッグ終了時の更新（CRITICAL: 増殖防止のため置換処理）
   const handleDragEnd = async (shape, e) => {
