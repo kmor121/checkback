@@ -1842,7 +1842,7 @@ const ViewerCanvas = forwardRef(({
         const fontSize = shape.fontSize || Math.max(12, (shape.strokeWidth || 2) * 6);
 
         // テキストの場合は stroke を使わず fill のみ使用
-        // heightを指定せず、テキスト本来の高さで描画（Transformerで枠を合わせる）
+        // lineHeight調整で日本語テキストを垂直中央寄りに
         return (
           <Text
             key={shape.id}
@@ -1850,6 +1850,7 @@ const ViewerCanvas = forwardRef(({
             y={y}
             text={shape.text || ''}
             fontSize={fontSize}
+            lineHeight={1.0}
             fill={shape.stroke}
             fontFamily="Arial, sans-serif"
             onPointerDown={canEdit ? (e) => {
