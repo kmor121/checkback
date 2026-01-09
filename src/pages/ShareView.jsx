@@ -502,7 +502,21 @@ function ShareViewContent() {
 
 
 
+  // CRITICAL: 送信ロック用ref（ShareView用）
+  const submitLockRef = useRef(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handleSendComment = async () => {
+    // CRITICAL: 同期的なロックチェック（最優先）
+    if (submitLockRef.current === true) {
+      console.log("[ShareView submit] BLOCKED by submitLockRef");
+      return;
+    }
+    if (isSubmitting === true) {
+      console.log("[ShareView submit] BLOCKED by isSubmitting");
+      return;
+    }
+
     if (!guestName.trim()) {
       setShowNameDialog(true);
       return;
@@ -531,6 +545,11 @@ function ShareViewContent() {
         return;
       }
     }
+
+    // ★★★ CRITICAL: ここで即座にロック ★★★
+    submitLockRef.current = true;
+    setIsSubmitting(true);
+    console.log("[ShareView submit] === LOCK ACQUIRED ===", new Date().toISOString());
 
     const shapesToCommit = draftShapesRef.current || [];
     const hasDraftShapes = shapesToCommit.length > 0;
