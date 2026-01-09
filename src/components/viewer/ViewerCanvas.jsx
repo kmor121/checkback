@@ -1274,16 +1274,14 @@ const ViewerCanvas = forwardRef(({
       updatedShape.ny = ny;
     }
     
-    // CRITICAL: dirty/localTs付与で巻き戻り防止
+    // CRITICAL: Map方式でupsert + dirty/localTs付与
     const updatedWithDirty = { ...updatedShape, _dirty: true, _localTs: Date.now() };
     addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: updatedWithDirty });
 
-    // CRITICAL: Optimistic update は「同じidを置換」（追加ではない）+ 親に即同期
-    setShapes(prev => {
-      const next = prev.map(s => s.id === updatedWithDirty.id ? updatedWithDirty : s);
-      onShapesChange?.(next); // ★親にも即同期（巻き戻り防止）
-      return next;
-    });
+    // CRITICAL: Map更新 + 親に全量同期
+    shapesMapRef.current.set(updatedWithDirty.id, updatedWithDirty);
+    bump();
+    onShapesChange?.(getAllShapes());
 
     // ドラッグ終了
     isDraggingRef.current = false;
