@@ -544,6 +544,17 @@ const ViewerCanvas = forwardRef(({
     const stage = e.target.getStage();
     if (!stage) return;
 
+    if (DEBUG_MODE) {
+      console.log('[ViewerCanvas] StagePointerDown', {
+        paintMode,
+        tool,
+        isEditMode,
+        isDrawMode,
+        isPanMode: canPan,
+        textEditorVisible: textEditor.visible
+      });
+    }
+
     // 描画モードは従来処理
     if (isDrawMode) {
       handlePointerDown(e);
@@ -596,6 +607,16 @@ const ViewerCanvas = forwardRef(({
 
   // PointerDown: 描画開始（描画モード時のみ）
   const handlePointerDown = (e) => {
+    if (DEBUG_MODE) {
+      console.log('[ViewerCanvas] handlePointerDown called', {
+        tool,
+        paintMode,
+        isDrawMode,
+        isDrawing,
+        textEditorVisible: textEditor.visible
+      });
+    }
+
     // CRITICAL: tool='text' のときは最優先で処理（paintMode不問）
     if (tool === 'text' && !textEditor.visible) {
       try {
