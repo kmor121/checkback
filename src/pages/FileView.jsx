@@ -541,8 +541,7 @@ function FileViewContent() {
   });
 
   // PaintShapeをViewerCanvas用の形式に変換
-  // ★★★ CRITICAL: DBの comment_id フィールド（実際のReviewComment ID）を最優先で使う ★★★
-  // data_json 内の comment_id は仮のUUIDが入っている可能性があるため使わない
+  // ★★★ CRITICAL FIX: DBの comment_id フィールドを最優先で使い、スプレッドの後で上書き ★★★
   const allShapes = React.useMemo(() => {
     console.log('[FileView] allShapes recalculating, paintShapes count:', paintShapes.length);
     
@@ -551,27 +550,23 @@ function FileViewContent() {
         const data = JSON.parse(ps.data_json);
         
         // ★★★ CRITICAL: DBの ps.comment_id を最優先（これが実際のReviewComment ID）★★★
-        // data_json 内の comment_id/commentId は仮のUUIDなので使わない
-        const commentId = ps.comment_id;
+        const dbCommentId = ps.comment_id;
         
         console.log('[FileView] parsing shape:', {
           psId: ps.id,
-          psCommentId: ps.comment_id,  // ← これを使う（実際のReviewComment ID）
-          dataCommentId: data.comment_id,  // ← これは仮のUUID（使わない）
-          resolvedCommentId: commentId,
+          psCommentId: ps.comment_id,  // これが正しいID
+          dataCommentId: data.comment_id,  // これは仮UUID（無視すべき）
         });
         
-        if (!commentId) {
-          console.warn('[FileView] Shape has no comment_id, skipping:', ps.id);
-          return null;
-        }
+        // comment_idが無い場合でも表示は許可（古いデータ対応）
+        // ただし選択時のフィルタリングからは除外される
         
+        // ★★★ CRITICAL: スプレッドの後で comment_id を上書きして確定 ★★★
         return {
+          ...data,  // まずdata_jsonの中身を展開
           id: ps.id,
           tool: ps.shape_type,
-          ...data,
-          // ★★★ CRITICAL: DBのcomment_idで上書き（data_jsonの仮UUIDを無視）★★★
-          comment_id: commentId,
+          comment_id: dbCommentId,  // ★ DBのcomment_idで上書き（最重要）
         };
       } catch (e) {
         console.error('Failed to parse shape:', e);
@@ -588,34 +583,45 @@ function FileViewContent() {
   }, [paintShapes]);
 
   // CRITICAL: ViewerCanvasに渡すshapes（activeCommentIdがある時のみ）
+  // ★★★ CRITICAL FIX: 型を統一して比較し、デバッグログを追加 ★★★
   const shapesForCanvas = React.useMemo(() => {
     console.log('[FileView] shapesForCanvas calculation:', {
       activeCommentId,
       paintSessionCommentId,
       draftShapesCount: draftShapes.length,
       allShapesCount: allShapes.length,
-      allShapesCommentIds: allShapes.map(s => s.comment_id),
     });
     
     // activeCommentIdが無い場合は空配列（描画を表示しない）
-    if (!activeCommentId && !paintSessionCommentId && draftShapes.length === 0) return [];
+    if (!activeCommentId && !paintSessionCommentId && draftShapes.length === 0) {
+      console.log('[FileView] shapesForCanvas: returning empty (no target)');
+      return [];
+    }
     
     const targetId = activeCommentId || paintSessionCommentId;
-    if (!targetId) return draftShapes;
+    if (!targetId) {
+      console.log('[FileView] shapesForCanvas: returning draftShapes only');
+      return draftShapes;
+    }
     
     // ★★★ CRITICAL: 型を統一して比較（文字列に変換）★★★
     const targetIdStr = String(targetId);
+    
+    console.log('[FileView] filtering shapes for targetId:', targetIdStr);
+    console.log('[FileView] allShapes comment_ids:', allShapes.map(s => ({ id: s.id?.substring?.(0, 8), cid: s.comment_id })));
+    
     const filtered = allShapes.filter(s => {
-      // s.comment_id は既にDBのReviewComment IDに修正済み
       const shapeCommentId = s.comment_id;
-      const matches = shapeCommentId != null && String(shapeCommentId) === targetIdStr;
+      // ★★★ CRITICAL: null/undefinedチェックと文字列比較 ★★★
+      if (shapeCommentId == null) {
+        console.log('[FileView] shape has no comment_id:', s.id?.substring?.(0, 8));
+        return false;
+      }
+      const matches = String(shapeCommentId) === targetIdStr;
       
-      console.log('[FileView] shape filter check:', {
-        shapeId: s.id,
-        shapeCommentId,
-        targetIdStr,
-        matches,
-      });
+      if (matches) {
+        console.log('[FileView] MATCH found:', { shapeId: s.id?.substring?.(0, 8), shapeCommentId, targetIdStr });
+      }
       
       return matches;
     });
@@ -624,10 +630,9 @@ function FileViewContent() {
       targetId: targetIdStr,
       filteredCount: filtered.length,
       draftShapesCount: draftShapes.length,
-      filteredIds: filtered.map(s => s.id),
+      total: filtered.length + draftShapes.length,
     });
     
-    // allShapesとdraftShapesをマージして返す
     return [...filtered, ...draftShapes];
   }, [allShapes, activeCommentId, paintSessionCommentId, draftShapes]);
 
