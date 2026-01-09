@@ -1455,11 +1455,13 @@ const ViewerCanvas = forwardRef(({
       delete updatedShape.height;
       delete updatedShape.radius;
 
-      addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: updatedShape });
+      // CRITICAL: dirty/localTs付与で巻き戻り防止
+      const updatedWithDirty = { ...updatedShape, _dirty: true, _localTs: Date.now() };
+      addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: updatedWithDirty });
 
       // CRITICAL: Optimistic update は「同じidを置換」（追加ではない）+ 親に即同期
       setShapes(prev => {
-        const next = prev.map(s => s.id === updatedShape.id ? updatedShape : s);
+        const next = prev.map(s => s.id === updatedWithDirty.id ? updatedWithDirty : s);
         onShapesChange?.(next); // ★親にも即同期（巻き戻り防止）
         return next;
       });
@@ -1477,10 +1479,8 @@ const ViewerCanvas = forwardRef(({
         setLastSuccessId(result?.dbId || updatedShape.id);
         setLastError(null);
         
-        // CRITICAL: DBから返ってきた_idを既存shapeに上書き（新規追加しない）
-        if (result?.dbId) {
-          setShapes(prev => prev.map(s => s.id === updatedShape.id ? { ...s, dbId: result.dbId } : s));
-        }
+        // CRITICAL: DBから返ってきた_idを既存shapeに上書き + dirty解除
+        setShapes(prev => prev.map(s => s.id === updatedShape.id ? { ...s, dbId: result?.dbId, _dirty: false } : s));
       } catch (err) {
         console.error('Update shape error:', err);
         setLastSaveStatus('error');
