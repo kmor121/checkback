@@ -1189,7 +1189,7 @@ const ViewerCanvas = forwardRef(({
     e.cancelBubble = true;
   };
 
-  // CRITICAL: ドラッグ中の追従更新（残像防止）
+  // CRITICAL: ドラッグ中の追従更新（Map方式）
   const handleDragMove = (shape, e) => {
     if (!canEdit) return;
     const node = e.target;
@@ -1205,14 +1205,17 @@ const ViewerCanvas = forwardRef(({
 
       const { shape, x, y } = p;
 
-      // tool別に「stateを追従」させる（保存はしない）
+      // tool別にMapを追従させる（保存はしない）
+      const cur = shapesMapRef.current.get(shape.id);
+      if (!cur) return;
+      
       if (shape.tool === 'rect' || shape.tool === 'circle' || shape.tool === 'text') {
         const { nx, ny } = normalizeCoords(x, y);
-        setShapes(prev => prev.map(s => s.id === shape.id ? { ...s, nx, ny } : s));
+        shapesMapRef.current.set(shape.id, { ...cur, nx, ny });
       } else if (shape.tool === 'pen' || shape.tool === 'arrow') {
-        // pen/arrowはdragX/dragYでReact制御（ドラッグ中はnode.x/yをリセットしない）
-        setShapes(prev => prev.map(s => s.id === shape.id ? { ...s, dragX: x, dragY: y } : s));
+        shapesMapRef.current.set(shape.id, { ...cur, dragX: x, dragY: y });
       }
+      bump();
     });
   };
 
