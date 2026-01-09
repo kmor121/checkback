@@ -1299,14 +1299,21 @@ const ViewerCanvas = forwardRef(({
         setLastSuccessId(result?.dbId || updatedShape.id);
         setLastError(null);
         
-        // CRITICAL: DBから返ってきた_idを既存shapeに上書き + dirty解除
-        setShapes(prev => prev.map(s => s.id === updatedShape.id ? { ...s, dbId: result?.dbId, _dirty: false } : s));
+        // CRITICAL: dirty解除（Map方式）
+        const cur = shapesMapRef.current.get(updatedShape.id);
+        if (cur) {
+          shapesMapRef.current.set(updatedShape.id, { ...cur, dbId: result?.dbId, _dirty: false });
+          bump();
+          onShapesChange?.(getAllShapes());
+        }
       } catch (err) {
         console.error('Update shape error:', err);
         setLastSaveStatus('error');
         setLastError(err.message);
-        // 失敗時はrevert
-        setShapes(prev => prev.map(s => s.id === updatedShape.id ? shape : s));
+        // 失敗時はrevert（Map方式）
+        shapesMapRef.current.set(shape.id, shape);
+        bump();
+        onShapesChange?.(getAllShapes());
       } finally {
         setIsSaving(prev => ({ ...prev, [shape.id]: false }));
       }
