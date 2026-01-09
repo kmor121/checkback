@@ -1860,7 +1860,7 @@ const ViewerCanvas = forwardRef(({
         const fontSize = shape.fontSize || Math.max(12, (shape.strokeWidth || 2) * 6);
 
         // テキストの場合は stroke を使わず fill のみ使用
-        // height を指定し verticalAlign: 'middle' で垂直中央に配置
+        // heightを指定せず、テキスト本来の高さで描画（Transformerで枠を合わせる）
         return (
           <Text
             key={shape.id}
@@ -1868,10 +1868,8 @@ const ViewerCanvas = forwardRef(({
             y={y}
             text={shape.text || ''}
             fontSize={fontSize}
-            height={fontSize * 1.2}
             fill={shape.stroke}
             fontFamily="Arial, sans-serif"
-            verticalAlign="middle"
             onPointerDown={canEdit ? (e) => {
               if (!isEditable) return;
               e.cancelBubble = true;
