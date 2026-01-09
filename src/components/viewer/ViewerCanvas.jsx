@@ -86,14 +86,21 @@ const ViewerCanvas = forwardRef(({
   const [bgSize, setBgSize] = useState({ width: 800, height: 600 });
   const [error, setError] = useState(null);
   
-  // 描画状態
+  // 描画状態（CRITICAL: Map方式で置換禁止）
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentShape, setCurrentShape] = useState(null);
-  const [shapes, setShapes] = useState([]);
+  const shapesMapRef = useRef(new Map()); // ★ CRITICAL: Mapが唯一の真実
+  const [shapesVersion, setShapesVersion] = useState(0); // 再描画トリガー
   const [selectedId, setSelectedId] = useState(null);
   const transformerRef = useRef(null);
   const shapeRefs = useRef({});
-  const shapesRef = useRef([]); // CRITICAL: 常に最新shapesを参照（stale回避）
+  
+  // Map操作ヘルパー
+  const bump = () => setShapesVersion(v => v + 1);
+  const getAllShapes = () => Array.from(shapesMapRef.current.values());
+  
+  // 後方互換用（shapesRef.currentを参照している箇所向け）
+  const shapesRef = { get current() { return getAllShapes(); } };
   const drawViewRef = useRef(null); // CRITICAL: 描画中のview固定（ジャンプ防止）
   const isDraggingRef = useRef(false); // CRITICAL: ドラッグ中フラグ（残像防止）
   const dragRafRef = useRef(null); // RAF間引き用
