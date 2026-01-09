@@ -1438,8 +1438,6 @@ const ViewerCanvas = forwardRef(({
   const renderShape = (shape, isExisting = false) => {
     const isSelected = selectedId === shape.id;
     const canTransform = shape.tool === 'rect' || shape.tool === 'circle' || shape.tool === 'text' || shape.tool === 'arrow';
-    
-    // CRITICAL: isEditableShape関数で判定（editableIds依存をやめる）
     const isEditable = isEditableShape(shape);
 
     const commonProps = {
