@@ -374,6 +374,9 @@ function FileViewContent() {
       setActiveCommentId(null);
       setPaintMode(false);
       
+      // CRITICAL: ViewerCanvasの描画もクリア
+      viewerCanvasRef.current?.clear();
+      
       await queryClient.invalidateQueries(['comments']);
       await queryClient.invalidateQueries(['paintShapes']);
     } catch (error) {
