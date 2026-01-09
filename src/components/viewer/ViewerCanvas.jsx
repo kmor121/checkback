@@ -320,15 +320,32 @@ const ViewerCanvas = forwardRef(({
     setPan(p => clampPan(p.x, p.y));
   }, [zoom]);
 
-  // CRITICAL: existingShapes を常に反映（source-of-truth を props に寄せる）
+  // CRITICAL: existingShapes を常に反映（dirty優先マージで位置巻き戻り防止）
   useEffect(() => {
     // CRITICAL: 描画中は編集状態をリセットしない（描画継続を許可）
     if (isDrawing || currentShape) {
-      // 描画中でもexistingShapesは反映
-      const existingIds = new Set((existingShapes ?? []).map(s => s.id));
-      const localOnlyShapes = shapes.filter(s => !existingIds.has(s.id));
-      const merged = [...(existingShapes ?? []), ...localOnlyShapes];
-      setShapes(merged);
+      // 描画中でもexistingShapesは反映（ただしdirty優先）
+      setShapes(prev => {
+        const prevMap = new Map((prev ?? []).map(s => [s.id, s]));
+        const out = new Map();
+        
+        (existingShapes ?? []).forEach(s => out.set(s.id, s));
+        (prev ?? []).forEach(local => {
+          const server = out.get(local.id);
+          if (!server) {
+            out.set(local.id, local);
+            return;
+          }
+          // dirty or localTsが新しければローカル優先
+          if (local._dirty || (local._localTs && local._localTs > (server._localTs ?? 0))) {
+            out.set(local.id, { ...server, ...local });
+          } else {
+            out.set(local.id, { ...local, ...server });
+          }
+        });
+        
+        return Array.from(out.values());
+      });
       return;
     }
 
@@ -355,14 +372,30 @@ const ViewerCanvas = forwardRef(({
       return;
     }
 
-    // ★ CRITICAL: state保持マージ（propsで置換せずstateを必ず保持）
+    // ★ CRITICAL: dirty優先マージ（ローカル更新が巻き戻らない）
     setShapes(prev => {
-      const map = new Map();
-      // 1) まず prev を入れて保持（これが重要）
-      (prev ?? []).forEach(s => map.set(s.id, s));
-      // 2) 次に existingShapes を入れて更新（サーバー値を反映）
-      (existingShapes ?? []).forEach(s => map.set(s.id, { ...map.get(s.id), ...s }));
-      return Array.from(map.values());
+      const out = new Map();
+      
+      // 1) まず existingShapes を入れる
+      (existingShapes ?? []).forEach(s => out.set(s.id, s));
+      
+      // 2) 次に prev を重ねる：dirtyは必ず勝つ、dirtyでなくてもlocalTsが新しければ勝つ
+      (prev ?? []).forEach(local => {
+        const server = out.get(local.id);
+        if (!server) {
+          out.set(local.id, local);
+          return;
+        }
+        const localTs = local._localTs ?? 0;
+        const serverTs = server._localTs ?? 0;
+        if (local._dirty || localTs > serverTs) {
+          out.set(local.id, { ...server, ...local }); // local優先
+        } else {
+          out.set(local.id, { ...local, ...server }); // server優先
+        }
+      });
+      
+      return Array.from(out.values());
     });
 
     // ✅ 選択は「存在しているなら維持」（shapesRefベースで判定）
@@ -375,8 +408,6 @@ const ViewerCanvas = forwardRef(({
       ]);
       return allIds.has(prevSel) ? prevSel : null;
     });
-    
-    setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
 
     requestAnimationFrame(() => {
       if (transformerRef.current) {
