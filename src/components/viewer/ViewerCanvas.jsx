@@ -389,16 +389,10 @@ const ViewerCanvas = forwardRef(({
 
       if (canTransform) {
         transformerRef.current.nodes([shapeRefs.current[selectedId]]);
-        // テキストの場合はパディング調整（日本語文字の上寄り対策）
+        // テキストの場合
         if (selectedShape.tool === 'text') {
-          // 下の余白が大きいので、枠の下を縮める
           transformerRef.current.padding(0);
-          transformerRef.current.boundBoxFunc((oldBox, newBox) => {
-            return {
-              ...newBox,
-              height: newBox.height - 8, // 下を8px縮める
-            };
-          });
+          transformerRef.current.boundBoxFunc(null);
         } else {
           transformerRef.current.padding(0);
           transformerRef.current.boundBoxFunc(null);
