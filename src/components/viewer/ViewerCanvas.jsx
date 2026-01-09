@@ -391,13 +391,18 @@ const ViewerCanvas = forwardRef(({
         transformerRef.current.nodes([shapeRefs.current[selectedId]]);
         // テキストの場合はパディング調整（日本語文字の上寄り対策）
         if (selectedShape.tool === 'text') {
-          transformerRef.current.padding(6);
+          // 上パディング少なめ、下パディング多めで視覚的中央に
+          transformerRef.current.padding(0);
           transformerRef.current.boundBoxFunc((oldBox, newBox) => {
-            // 上下のパディングを非対称に（上を少なく、下を多く）
-            return newBox;
+            return {
+              ...newBox,
+              y: newBox.y - 2,       // 上を2px広げる
+              height: newBox.height + 6, // 下を4px広げる（計6px増）
+            };
           });
         } else {
           transformerRef.current.padding(0);
+          transformerRef.current.boundBoxFunc(null);
         }
         transformerRef.current.getLayer().batchDraw();
       } else {
