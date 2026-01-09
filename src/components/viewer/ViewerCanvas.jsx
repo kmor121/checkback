@@ -389,27 +389,9 @@ const ViewerCanvas = forwardRef(({
 
       if (canTransform) {
         transformerRef.current.nodes([shapeRefs.current[selectedId]]);
-        // テキストの場合：実際の描画領域に合わせて枠を調整
-        if (selectedShape.tool === 'text') {
-          transformerRef.current.padding(2);
-          // テキストノードの実際のテキスト高さを取得して枠を調整
-          const textNode = shapeRefs.current[selectedId];
-          if (textNode) {
-            const textHeight = textNode.textHeight || textNode.height();
-            const nodeHeight = textNode.height();
-            const diff = nodeHeight - textHeight;
-            // 下の余白分だけ枠を縮める
-            transformerRef.current.boundBoxFunc((oldBox, newBox) => ({
-              ...newBox,
-              height: newBox.height - diff * contentScale,
-            }));
-          } else {
-            transformerRef.current.boundBoxFunc(null);
-          }
-        } else {
-          transformerRef.current.padding(0);
-          transformerRef.current.boundBoxFunc(null);
-        }
+        // テキスト・その他共通：シンプルな設定
+        transformerRef.current.padding(0);
+        transformerRef.current.boundBoxFunc(null);
         transformerRef.current.getLayer().batchDraw();
       } else {
         transformerRef.current.nodes([]);
