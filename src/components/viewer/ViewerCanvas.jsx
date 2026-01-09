@@ -889,20 +889,23 @@ const ViewerCanvas = forwardRef(({
           fontSize,
         };
 
-        // CRITICAL: dirty/localTs付与で巻き戻り防止
+        // CRITICAL: Map方式でupsert + dirty/localTs付与
         const updatedWithDirty = { ...updatedShape, _dirty: true, _localTs: Date.now() };
         addToUndoStack({ type: 'update', shapeId, before: existingShape, after: updatedWithDirty });
-        setShapes(prev => {
-          const next = prev.map(s => s.id === shapeId ? updatedWithDirty : s);
-          onShapesChange?.(next); // ★親にも即反映（巻き戻り防止）
-          return next;
-        });
+        shapesMapRef.current.set(shapeId, updatedWithDirty);
+        bump();
+        onShapesChange?.(getAllShapes());
 
         if (onSaveShape) {
           try {
             await onSaveShape(updatedShape, 'upsert');
-            // CRITICAL: dirty解除
-            setShapes(prev => prev.map(s => s.id === shapeId ? { ...s, _dirty: false } : s));
+            // CRITICAL: dirty解除（Map方式）
+            const cur = shapesMapRef.current.get(shapeId);
+            if (cur) {
+              shapesMapRef.current.set(shapeId, { ...cur, _dirty: false });
+              bump();
+              onShapesChange?.(getAllShapes());
+            }
           } catch (err) {
             console.error('Save text error:', err);
           }
@@ -934,21 +937,24 @@ const ViewerCanvas = forwardRef(({
         });
       }
 
-      // CRITICAL: dirty/localTs付与で巻き戻り防止
+      // CRITICAL: Map方式でupsert + dirty/localTs付与
       const shapeWithDirty = { ...normalizedShape, _dirty: true, _localTs: Date.now() };
       addToUndoStack({ type: 'add', shapeId: normalizedShape.id });
-      setShapes(prev => {
-        const next = [...prev, shapeWithDirty];
-        onShapesChange?.(next); // ★親にも即反映（巻き戻り防止）
-        return next;
-      });
+      shapesMapRef.current.set(shapeWithDirty.id, shapeWithDirty);
+      bump();
+      onShapesChange?.(getAllShapes());
       setSelectedId(normalizedShape.id);
 
       if (onSaveShape) {
         try {
           const result = await onSaveShape(normalizedShape, 'create');
-          // CRITICAL: dirty解除
-          setShapes(prev => prev.map(s => s.id === normalizedShape.id ? { ...s, dbId: result?.dbId, _dirty: false } : s));
+          // CRITICAL: dirty解除（Map方式）
+          const cur = shapesMapRef.current.get(normalizedShape.id);
+          if (cur) {
+            shapesMapRef.current.set(normalizedShape.id, { ...cur, dbId: result?.dbId, _dirty: false });
+            bump();
+            onShapesChange?.(getAllShapes());
+          }
         } catch (err) {
           console.error('Save text error:', err);
         }
