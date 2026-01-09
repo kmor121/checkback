@@ -77,6 +77,7 @@ const ViewerCanvas = forwardRef(({
   showBoundingBoxes = false,
   showAllPaint = false,
   debugInfo = null,
+  clearAfterSubmitNonce = 0,
 }, ref) => {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
@@ -299,6 +300,29 @@ const ViewerCanvas = forwardRef(({
       lastStableCommentIdRef.current = activeCommentId;
     }
   }, [activeCommentId]);
+
+  // CRITICAL: 送信完了後のキャンバスクリア（nonce変化で発火）
+  const prevNonceRef = useRef(clearAfterSubmitNonce);
+  useEffect(() => {
+    if (clearAfterSubmitNonce !== prevNonceRef.current) {
+      prevNonceRef.current = clearAfterSubmitNonce;
+      if (DEBUG_MODE) console.log('[ViewerCanvas] clearAfterSubmitNonce changed, clearing display state');
+
+      // 描画表示をクリア（existingShapesは消さない）
+      lastStableCommentIdRef.current = null;
+      draftCommentIdRef.current = null;
+      setSelectedId(null);
+      setCurrentShape(null);
+      setIsDrawing(false);
+      setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
+
+      // Transformer解除
+      if (transformerRef.current) {
+        transformerRef.current.nodes([]);
+        transformerRef.current.getLayer()?.batchDraw();
+      }
+    }
+  }, [clearAfterSubmitNonce]);
 
   // CRITICAL: 仮commentIdで描いたshapeを、activeCommentId確定後に付け替える
   useEffect(() => {
