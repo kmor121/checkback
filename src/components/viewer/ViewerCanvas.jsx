@@ -239,23 +239,32 @@ const ViewerCanvas = forwardRef(({
   useEffect(() => {
     const prev = prevActiveCommentIdRef.current;
     prevActiveCommentIdRef.current = activeCommentId;
-    
+
     // ★超重要: 描画中 or currentShapeがある場合は絶対にリセットしない
     if (isDrawing || currentShape) {
       if (DEBUG_MODE) console.log('[ViewerCanvas] skip reset (drawing in progress)');
       return;
     }
-    
+
     if (DEBUG_MODE) {
       console.log('[ViewerCanvas] activeCommentId changed, resetting', { prev, next: activeCommentId });
     }
-    
-    // 通常のコメント切替/解除は安全にリセット
-    setSelectedId(null);
+
+    // ✅ 仮IDが残ってる間は仮IDを優先して"同じコメント扱い"にする
+    const effectiveId = draftCommentIdRef.current ?? activeCommentId ?? null;
+
+    // ✅ 選択は「同じコメントなら維持」、違うコメントor消えたら解除
+    setSelectedId(prevSel => {
+      if (!prevSel) return null;
+      const sel = (shapesRef.current ?? []).find(s => s.id === prevSel);
+      if (!sel) return null;
+      return (effectiveId != null && sameId(shapeCommentId(sel), effectiveId)) ? prevSel : null;
+    });
+
     setCurrentShape(null);
     setIsDrawing(false);
     setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
-    
+
     requestAnimationFrame(() => {
       if (transformerRef.current) {
         transformerRef.current.nodes([]);
@@ -326,14 +335,10 @@ const ViewerCanvas = forwardRef(({
     })();
     setShapes(mergedShapesLocal);
 
-    // ✅ 選択は「存在していて同じコメントなら維持」、そうでなければ解除
+    // ✅ 選択は「存在しているなら維持」（存在チェックのみ、強制解除しない）
     setSelectedId(prevSel => {
       if (!prevSel) return null;
-      const sel = mergedShapesLocal.find(s => s.id === prevSel);
-      if (!sel) return null;
-      const effId = activeCommentId ?? draftCommentIdRef.current ?? null;
-      if (effId == null) return null;
-      return sameId(shapeCommentId(sel), effId) ? prevSel : null;
+      return mergedShapesLocal.some(s => s.id === prevSel) ? prevSel : null;
     });
     
     setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
