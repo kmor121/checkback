@@ -1872,7 +1872,8 @@ const ViewerCanvas = forwardRef(({
 
         // テキストをボックス内で中央配置
         const textX = padL;
-        const textY = padY + (boxH - padY * 2 - th) / 2;
+        const baselineNudge = Math.round(fontSize * 0.18); // フォントメトリクス補正
+        const textY = padY + (boxH - padY * 2 - th) / 2 + baselineNudge;
 
         return (
           <Group
