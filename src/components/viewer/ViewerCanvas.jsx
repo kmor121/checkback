@@ -1911,12 +1911,13 @@ const ViewerCanvas = forwardRef(({
         const boxW = hasManualBoxW ? shape.boxW * bgSize.width : autoBoxW;
         const boxH = hasManualBoxH ? shape.boxH * bgSize.height : autoBoxH;
 
-        // ★ textY計算：グリフ上端がpadYに来るように配置 + サブピクセル調整
+        // ★ textY計算：グリフ上端がpadYに来るように配置
         const textX = padL;
-        const textYBase = hasManualBoxH
+        // Konva Textはbaselineがtopなので、ascent分だけ下にずらす必要はない
+        // ただしKonvaはデフォルトでtop配置なので、padYをそのまま使う
+        const textY = hasManualBoxH
           ? padY + (boxH - padY * 2 - glyphH) / 2  // リサイズ済み：中央配置
           : padY;  // auto：上端固定
-        const textY = textYBase - 1;  // 微調整：下余白を詰める
 
         // デバッグログ
         if (DEBUG_MODE && !hasManualBoxH) {
