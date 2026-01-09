@@ -161,6 +161,9 @@ const ViewerCanvas = forwardRef(({
   const isEditMode = tool === 'select';
   const isDrawMode = !isEditMode && (paintMode || tool === 'text');
   
+  // ★ CRITICAL: fileUrlを正規化してリセット判定に使う（クエリ違いでリセットしない）
+  const fileIdentity = useMemo(() => normalizeFileUrl(fileUrl), [fileUrl]);
+  
   // ★ CRITICAL: 選択に使うIDは activeCommentId または draftCommentIdRef（仮ID対応）
   const effectiveActiveId = activeCommentId ?? draftCommentIdRef.current ?? null;
   
