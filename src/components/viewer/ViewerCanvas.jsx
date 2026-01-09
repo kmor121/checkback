@@ -389,9 +389,14 @@ const ViewerCanvas = forwardRef(({
 
       if (canTransform) {
         transformerRef.current.nodes([shapeRefs.current[selectedId]]);
-        // テキスト・その他共通：シンプルな設定
-        transformerRef.current.padding(0);
-        transformerRef.current.boundBoxFunc(null);
+        // テキストの場合：上に余白を追加して中央寄せ
+        if (selectedShape.tool === 'text') {
+          transformerRef.current.padding(4);
+          transformerRef.current.boundBoxFunc(null);
+        } else {
+          transformerRef.current.padding(0);
+          transformerRef.current.boundBoxFunc(null);
+        }
         transformerRef.current.getLayer().batchDraw();
       } else {
         transformerRef.current.nodes([]);
