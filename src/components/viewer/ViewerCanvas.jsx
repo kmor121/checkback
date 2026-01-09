@@ -174,6 +174,7 @@ const ViewerCanvas = forwardRef(({
   const [lastPayload, setLastPayload] = useState(null);
   const [lastSuccessId, setLastSuccessId] = useState(null);
   const [isSaving, setIsSaving] = useState({});
+  const [selectionLabelPos, setSelectionLabelPos] = useState(null); // Stage座標系のラベル位置
   
   const isImage = mimeType?.startsWith('image/');
   const isEditMode = tool === 'select';
