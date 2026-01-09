@@ -175,6 +175,11 @@ const ViewerCanvas = forwardRef(({
       return mergedShapes.filter(s => (s.comment_id ?? s.commentId) === activeCommentId);
     }
     
+    // 描画中の仮ID shapeも表示（activeCommentIdがなくても描画継続）
+    if (draftCommentIdRef.current) {
+      return mergedShapes.filter(s => (s.comment_id ?? s.commentId) === draftCommentIdRef.current);
+    }
+    
     return [];
   }, [mergedShapes, showAllPaint, activeCommentId]);
   
@@ -804,10 +809,12 @@ const ViewerCanvas = forwardRef(({
         }
       }
     } else {
-      // 新規テキスト作成
+      // 新規テキスト作成（activeCommentIdがなければ仮IDを使用）
+      const commentIdForText = activeCommentId || getCommentIdForDrawing();
+      
       const normalizedShape = {
         id: generateUUID(),
-        comment_id: activeCommentId, // ★activeCommentIdを必ず付ける
+        comment_id: commentIdForText,
         tool: 'text',
         stroke: strokeColor,
         strokeWidth: strokeWidth,
@@ -818,6 +825,13 @@ const ViewerCanvas = forwardRef(({
         text,
         fontSize,
       };
+      
+      // 仮IDでコメント作成をトリガー
+      if (!activeCommentId && onBeginPaint) {
+        queueMicrotask(() => {
+          onBeginPaint(imgX, imgY, bgSize.width, bgSize.height);
+        });
+      }
 
       addToUndoStack({ type: 'add', shapeId: normalizedShape.id });
       setShapes(prev => [...prev, normalizedShape]);
@@ -1956,7 +1970,7 @@ const ViewerCanvas = forwardRef(({
             <div>fetchedCount: <span style={{ color: '#ff0', fontWeight: 'bold' }}>{debugInfo?.fetchedCount || 0}</span></div>
             <div>renderedCount: <span style={{ color: '#0f0', fontWeight: 'bold' }}>{shapes.length}</span></div>
             <div>existingShapes: {existingShapes?.length || 0}</div>
-            <div>activeShapes: {activeShapes?.length || 0}</div>
+            <div>renderedShapes: {renderedShapes?.length || 0}</div>
           </div>
 
           {/* Background & View */}
