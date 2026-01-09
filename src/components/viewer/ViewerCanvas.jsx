@@ -310,19 +310,26 @@ const ViewerCanvas = forwardRef(({
       return;
     }
 
-    // CRITICAL: existingShapesが空配列の場合は完全リセット（送信後のクリア対応）
-    if (!existingShapes || existingShapes.length === 0) {
-      setShapes([]);
-      setSelectedId(null);
-      setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
-      draftCommentIdRef.current = null;
-      
-      requestAnimationFrame(() => {
-        if (transformerRef.current) {
-          transformerRef.current.nodes([]);
-          transformerRef.current.getLayer()?.batchDraw();
-        }
-      });
+    // CRITICAL: existingShapesが空配列でも、保存中や一瞬の[]は無視する
+    const anySaving = Object.values(isSaving ?? {}).some(Boolean);
+    const prevLen = shapesRef.current?.length ?? 0;
+    const nextLen = existingShapes?.length ?? 0;
+    
+    if (nextLen === 0) {
+      // 本当のクリア（前に何かあった＆保存中でない）のみ全消し
+      if (prevLen > 0 && !anySaving && !isDrawing && !currentShape) {
+        setShapes([]);
+        setSelectedId(null);
+        setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
+        draftCommentIdRef.current = null;
+        
+        requestAnimationFrame(() => {
+          if (transformerRef.current) {
+            transformerRef.current.nodes([]);
+            transformerRef.current.getLayer()?.batchDraw();
+          }
+        });
+      }
       return;
     }
 
@@ -1176,10 +1183,8 @@ const ViewerCanvas = forwardRef(({
         const { nx, ny } = normalizeCoords(x, y);
         setShapes(prev => prev.map(s => s.id === shape.id ? { ...s, nx, ny } : s));
       } else if (shape.tool === 'pen' || shape.tool === 'arrow') {
-        // pen/arrowはdragX/dragYでReact制御
+        // pen/arrowはdragX/dragYでReact制御（ドラッグ中はnode.x/yをリセットしない）
         setShapes(prev => prev.map(s => s.id === shape.id ? { ...s, dragX: x, dragY: y } : s));
-        node.x(0);
-        node.y(0);
       }
     });
   };
@@ -1201,9 +1206,9 @@ const ViewerCanvas = forwardRef(({
     }
     
     const node = e.target;
-    // CRITICAL: dragX/dragY を優先（RAF更新済みなら node.x/y は0）
-    const dx = shape.dragX || node.x();
-    const dy = shape.dragY || node.y();
+    // CRITICAL: dragX/dragY を優先（??で0を潰さない）
+    const dx = shape.dragX ?? node.x();
+    const dy = shape.dragY ?? node.y();
     
     const updatedShape = { ...shape };
     
@@ -1218,8 +1223,7 @@ const ViewerCanvas = forwardRef(({
       updatedShape.normalizedPoints = newPoints;
       updatedShape.dragX = 0;
       updatedShape.dragY = 0;
-      node.x(0);
-      node.y(0);
+      node.position({ x: 0, y: 0 }); // dragEndでのみリセット
       } else if (shape.tool === 'rect') {
       // Rect: 絶対座標として直接保存
       const { nx, ny } = normalizeCoords(dx, dy);
@@ -1241,9 +1245,8 @@ const ViewerCanvas = forwardRef(({
       updatedShape.normalizedPoints = newPoints;
       updatedShape.dragX = 0;
       updatedShape.dragY = 0;
-      node.x(0);
-      node.y(0);
-    } else if (shape.tool === 'text') {
+      node.position({ x: 0, y: 0 }); // dragEndでのみリセット
+      } else if (shape.tool === 'text') {
       // Text: 絶対座標として直接保存
       const { nx, ny } = normalizeCoords(dx, dy);
       updatedShape.nx = nx;
@@ -1612,8 +1615,8 @@ const ViewerCanvas = forwardRef(({
         <React.Fragment key={shape.id}>
           <Group
             ref={(node) => { if (node) shapeRefs.current[shape.id] = node; }}
-            x={shape.dragX || 0}
-            y={shape.dragY || 0}
+            x={shape.dragX ?? 0}
+            y={shape.dragY ?? 0}
             listening={isSelectable}
             draggable={isEditable}
             onPointerDown={isSelectable ? (e) => {
@@ -1727,8 +1730,8 @@ const ViewerCanvas = forwardRef(({
           <React.Fragment key={shape.id}>
             <Group
               ref={(node) => { if (node) shapeRefs.current[shape.id] = node; }}
-              x={shape.dragX || 0}
-              y={shape.dragY || 0}
+              x={shape.dragX ?? 0}
+              y={shape.dragY ?? 0}
               listening={isSelectable}
               draggable={isEditable}
               onPointerDown={isSelectable ? (e) => {
