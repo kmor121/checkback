@@ -50,6 +50,7 @@ function FileViewContent() {
   const [clearAfterSubmitNonce, setClearAfterSubmitNonce] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const inFlightRef = useRef(null); // ★Promiseロック方式
+  const mutationIdRef = useRef(null); // ★送信1回につき同じIDを使い回す
   
   const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
@@ -343,8 +344,11 @@ function FileViewContent() {
           showToast('コメントを更新しました', 'success');
         } else {
           // 新規モード: 新しいコメントを作成
-          // CRITICAL: idempotency用のclientMutationIdを生成
-          const clientMutationId = crypto.randomUUID();
+          // CRITICAL: idempotency用のclientMutationIdを使用（inFlight中は同じIDを再利用）
+          if (!mutationIdRef.current) {
+            mutationIdRef.current = crypto.randomUUID();
+          }
+          const clientMutationId = mutationIdRef.current;
           console.log(`[comment] create called mid=${clientMutationId}`);
           
           const existingComments = await base44.entities.ReviewComment.filter({ file_id: fileId });
@@ -419,6 +423,7 @@ function FileViewContent() {
       } finally {
         setIsSubmitting(false);
         inFlightRef.current = null;
+        mutationIdRef.current = null; // ★完了したら次回用にクリア
       }
     })();
     
