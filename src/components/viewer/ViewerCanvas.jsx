@@ -222,9 +222,23 @@ const ViewerCanvas = forwardRef(({
   
   // CRITICAL: 実際に描画するshape配列（hidePaintUntilSelectで強制非表示）
   const renderedShapes = useMemo(() => {
+    if (DEBUG_MODE) {
+      console.log('[ViewerCanvas] renderedShapes calculation:', {
+        hidePaintUntilSelect,
+        showAllPaint,
+        activeCommentId,
+        draftCommentId: draftCommentIdRef.current,
+        lastStableId: lastStableCommentIdRef.current,
+        mergedShapesCount: mergedShapes.length,
+      });
+    }
+
     // ★送信完了後は強制非表示（これが本丸）
-    // ただし、新しい描画が始まった場合（draftCommentIdRefが設定された場合）は表示を許可
-    if (hidePaintUntilSelect && !draftCommentIdRef.current) return [];
+    // ただし、activeCommentIdが設定されている場合は表示を許可
+    if (hidePaintUntilSelect && activeCommentId == null && !draftCommentIdRef.current) {
+      if (DEBUG_MODE) console.log('[ViewerCanvas] renderedShapes: hidden (hidePaintUntilSelect)');
+      return [];
+    }
 
     if (showAllPaint) return mergedShapes;
 
@@ -232,13 +246,25 @@ const ViewerCanvas = forwardRef(({
     const renderTargetId =
       activeCommentId ?? draftCommentIdRef.current ?? lastStableCommentIdRef.current ?? null;
 
-    if (renderTargetId == null) return [];
+    if (renderTargetId == null) {
+      if (DEBUG_MODE) console.log('[ViewerCanvas] renderedShapes: empty (no renderTargetId)');
+      return [];
+    }
 
     const target = String(renderTargetId);
-    return mergedShapes.filter(s => {
+    const filtered = mergedShapes.filter(s => {
       const cid = s.comment_id ?? s.commentId ?? s.commentID;
       return cid != null && String(cid) === target;
     });
+    
+    if (DEBUG_MODE) {
+      console.log('[ViewerCanvas] renderedShapes result:', {
+        renderTargetId: target,
+        filteredCount: filtered.length,
+      });
+    }
+    
+    return filtered;
   }, [mergedShapes, showAllPaint, activeCommentId, hidePaintUntilSelect]);
   
   // ★ CRITICAL: activeShapes を existingShapes から抽出（comment_id統一判定）
