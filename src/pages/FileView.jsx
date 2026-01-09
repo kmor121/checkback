@@ -347,6 +347,10 @@ function FileViewContent() {
     },
     onSuccess: () => {
       showToast('コメントを送信しました', 'success');
+      // ★★★ CRITICAL: 描画クリアを最優先で実行 ★★★
+      viewerCanvasRef.current?.afterSubmitClear();
+      viewerCanvasRef.current?.clear();
+      
       // リセット処理
       setCommentBody('');
       setDraftShapes([]);
@@ -357,10 +361,12 @@ function FileViewContent() {
       setPaintMode(false);
       setTool('select');
       setClearAfterSubmitNonce(n => n + 1);
-      viewerCanvasRef.current?.afterSubmitClear();
-      viewerCanvasRef.current?.clear();
-      queryClient.invalidateQueries(['comments']);
-      queryClient.invalidateQueries(['paintShapes']);
+      
+      // invalidateは少し遅らせて描画クリアを確実に先に完了させる
+      setTimeout(() => {
+        queryClient.invalidateQueries(['comments']);
+        queryClient.invalidateQueries(['paintShapes']);
+      }, 100);
     },
     onError: (error) => {
       showToast(`送信失敗: ${error.message}`, 'error');
@@ -376,6 +382,10 @@ function FileViewContent() {
     },
     onSuccess: () => {
       showToast('コメントを更新しました', 'success');
+      // ★★★ CRITICAL: 描画クリアを最優先で実行 ★★★
+      viewerCanvasRef.current?.afterSubmitClear();
+      viewerCanvasRef.current?.clear();
+      
       // リセット処理
       setCommentBody('');
       setDraftShapes([]);
@@ -386,10 +396,12 @@ function FileViewContent() {
       setPaintMode(false);
       setTool('select');
       setClearAfterSubmitNonce(n => n + 1);
-      viewerCanvasRef.current?.afterSubmitClear();
-      viewerCanvasRef.current?.clear();
-      queryClient.invalidateQueries(['comments']);
-      queryClient.invalidateQueries(['paintShapes']);
+      
+      // invalidateは少し遅らせて描画クリアを確実に先に完了させる
+      setTimeout(() => {
+        queryClient.invalidateQueries(['comments']);
+        queryClient.invalidateQueries(['paintShapes']);
+      }, 100);
     },
     onError: (error) => {
       showToast(`更新失敗: ${error.message}`, 'error');
