@@ -1615,18 +1615,28 @@ const ViewerCanvas = forwardRef(({
     // CRITICAL: 送信完了後の強制クリア（ref経由で確実に実行）
     afterSubmitClear: () => {
       if (DEBUG_MODE) console.log('[ViewerCanvas] afterSubmitClear called');
+      
+      // ★★★ CRITICAL: shapesMapRefを完全クリア（これが本丸）★★★
+      shapesMapRef.current = new Map();
+      bump();
+      
       setHidePaintUntilSelect(true);
       lastStableCommentIdRef.current = null;
       draftCommentIdRef.current = null;
       setSelectedId(null);
       setCurrentShape(null);
       setIsDrawing(false);
+      setUndoStack([]);
+      setRedoStack([]);
       setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
+      
       // Transformer解除
       if (transformerRef.current) {
         transformerRef.current.nodes([]);
         transformerRef.current.getLayer()?.batchDraw();
       }
+      
+      if (DEBUG_MODE) console.log('[ViewerCanvas] afterSubmitClear: Map cleared, all state reset');
     },
     delete: handleDelete,
     canUndo: undoStack.length > 0,
