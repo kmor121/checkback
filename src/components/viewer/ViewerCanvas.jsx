@@ -1226,8 +1226,8 @@ const ViewerCanvas = forwardRef(({
 
   // Transform終了時の更新（CRITICAL: 増殖防止のため置換処理、Rect/Circle/Arrowに対応）
   const handleTransformEnd = async (shape, e) => {
-    // CRITICAL: 編集不可なら即return
-    if (!editableIds.has(shape.id)) {
+    // CRITICAL: 編集不可なら即return（isEditableShape関数で判定）
+    if (!isEditableShape(shape)) {
       console.log('[ViewerCanvas] TransformEnd blocked: not editable');
       return;
     }
