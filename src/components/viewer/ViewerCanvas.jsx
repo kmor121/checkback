@@ -208,13 +208,8 @@ const ViewerCanvas = forwardRef(({
     return draftCommentIdRef.current;
   };
   
-  // CRITICAL: existingShapes + shapes を1本にマージ（ローカル優先）
-  const mergedShapes = useMemo(() => {
-    const map = new Map();
-    (existingShapes ?? []).forEach(s => map.set(s.id, s));
-    (shapes ?? []).forEach(s => map.set(s.id, s)); // ローカルの方を優先
-    return Array.from(map.values());
-  }, [existingShapes, shapes]);
+  // ★ CRITICAL: Mapが唯一の真実（mergedShapesはMap由来）
+  const mergedShapes = useMemo(() => getAllShapes(), [shapesVersion]);
   
   // CRITICAL: 実際に描画するshape配列（lastStableCommentIdRef使用で一瞬null対策）
   const renderedShapes = useMemo(() => {
