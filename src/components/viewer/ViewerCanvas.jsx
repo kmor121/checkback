@@ -1697,12 +1697,22 @@ const ViewerCanvas = forwardRef(({
                   dash={[4, 4]}
                   listening={false}
                 />
+                {/* ラベル：枠内左上に配置（座標系統一） */}
+                <Rect
+                  x={bboxX + 2}
+                  y={bboxY + 2}
+                  width={28}
+                  height={14}
+                  fill="#3b82f6"
+                  cornerRadius={2}
+                  listening={false}
+                />
                 <Text
-                  x={bboxX + 4}
+                  x={bboxX + 6}
                   y={bboxY + 4}
                   text="ペン"
                   fontSize={10}
-                  fill="#3b82f6"
+                  fill="white"
                   listening={false}
                 />
               </>
