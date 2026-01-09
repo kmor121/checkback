@@ -96,6 +96,7 @@ const ViewerCanvas = forwardRef(({
   // CRITICAL: activeCommentId変化検知用
   const prevActiveCommentIdRef = useRef(activeCommentId);
   const draftCommentIdRef = useRef(null); // 仮コメントID（描画開始時にactiveCommentIdが無い場合）
+  const lastStableCommentIdRef = useRef(activeCommentId ?? null); // 最後に有効だったコメントID（一瞬null対策）
   
   // shapesRefを常に最新に保つ
   useEffect(() => {
@@ -183,29 +184,21 @@ const ViewerCanvas = forwardRef(({
     return Array.from(map.values());
   }, [existingShapes, shapes]);
   
-  // CRITICAL: 実際に描画するshape配列（互換性対策: comment_id ?? commentId、String比較）
+  // CRITICAL: 実際に描画するshape配列（lastStableCommentIdRef使用で一瞬null対策）
   const renderedShapes = useMemo(() => {
     if (showAllPaint) return mergedShapes;
-    
-    // activeCommentIdがある時はそれだけ（互換性対策＋String化で一致判定）
-    if (activeCommentId != null) {
-      const targetId = String(activeCommentId);
-      return mergedShapes.filter(s => {
-        const cid = s.comment_id ?? s.commentId;
-        return cid != null && String(cid) === targetId;
-      });
-    }
-    
-    // 描画中の仮ID shapeも表示（activeCommentIdがなくても描画継続）
-    if (draftCommentIdRef.current) {
-      const targetId = String(draftCommentIdRef.current);
-      return mergedShapes.filter(s => {
-        const shapeCommentId = s.comment_id ?? s.commentId;
-        return shapeCommentId && String(shapeCommentId) === targetId;
-      });
-    }
-    
-    return [];
+
+    // renderTargetId: activeCommentId → draftCommentIdRef → lastStableCommentIdRef の優先順
+    const renderTargetId =
+      activeCommentId ?? draftCommentIdRef.current ?? lastStableCommentIdRef.current ?? null;
+
+    if (renderTargetId == null) return [];
+
+    const target = String(renderTargetId);
+    return mergedShapes.filter(s => {
+      const cid = s.comment_id ?? s.commentId ?? s.commentID;
+      return cid != null && String(cid) === target;
+    });
   }, [mergedShapes, showAllPaint, activeCommentId]);
   
   // ★ CRITICAL: activeShapes を existingShapes から抽出（comment_id統一判定）
@@ -273,14 +266,21 @@ const ViewerCanvas = forwardRef(({
     });
   }, [activeCommentId, isDrawing, currentShape]);
   
+  // CRITICAL: lastStableCommentIdRefを更新（activeCommentIdが有効な時のみ）
+  useEffect(() => {
+    if (activeCommentId != null) {
+      lastStableCommentIdRef.current = activeCommentId;
+    }
+  }, [activeCommentId]);
+
   // CRITICAL: 仮commentIdで描いたshapeを、activeCommentId確定後に付け替える
   useEffect(() => {
     if (!activeCommentId) return;
     if (!draftCommentIdRef.current) return;
-    
+
     const draftId = draftCommentIdRef.current;
     if (DEBUG_MODE) console.log('[ViewerCanvas] attaching draft shapes to real comment', { draftId, activeCommentId });
-    
+
     setShapes(prev => prev.map(s => s.comment_id === draftId ? { ...s, comment_id: activeCommentId } : s));
     draftCommentIdRef.current = null;
   }, [activeCommentId]);
