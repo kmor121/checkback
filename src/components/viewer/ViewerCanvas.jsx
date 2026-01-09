@@ -148,10 +148,15 @@ const ViewerCanvas = forwardRef(({
   const isImage = mimeType?.startsWith('image/');
   const isEditMode = tool === 'select';
   const isDrawMode = !isEditMode && (paintMode || tool === 'text');
-  // CRITICAL: 編集操作（drag/transform/delete）はpaintMode中のみ許可
-  // ★ 切り分け用：選択できない原因がpaintModeかどうか確認時は下の行をコメントアウト
-  const canEdit = paintMode && isEditMode;
-  // const canEdit = isEditMode; // ★ デバッグ用：paintModeを無視して選択可能にする
+  
+  // ★ CRITICAL: 選択と編集を分離
+  const canSelect = isEditMode;                 // 選択だけは常にOK
+  const canMutate = paintMode && isEditMode;    // 移動/変形/削除はpaintMode時だけ
+  const canEdit = canMutate;                    // 後方互換用エイリアス
+  
+  // ★ このshapeを選択できるか（comment_id一致が必要）
+  const canSelectShape = (shape) =>
+    canSelect && activeCommentId != null && sameId(shapeCommentId(shape), activeCommentId);
   
   // CRITICAL: 描画に使うcomment_idを取得（仮IDまたはactiveCommentId）
   const getCommentIdForDrawing = () => {
@@ -1471,23 +1476,23 @@ const ViewerCanvas = forwardRef(({
   const renderShape = (shape, isExisting = false) => {
     const isSelected = selectedId === shape.id;
     const canTransform = shape.tool === 'rect' || shape.tool === 'circle' || shape.tool === 'text' || shape.tool === 'arrow';
-    // ★ CRITICAL: isEditable の条件を「activeCommentId を truthy で見ない」に統一
-    const isEditable = canEdit && activeCommentId != null && sameId(shapeCommentId(shape), activeCommentId);
+    // ★ CRITICAL: 選択可能か（クリックで選択）と編集可能か（移動/変形/削除）を分離
+    const isSelectable = canSelectShape(shape);
+    const isEditable = canMutate && isSelectable;
 
     const commonProps = {
       key: shape.id,
       stroke: shape.stroke,
       strokeWidth: shape.strokeWidth,
-      listening: isEditable, // ★編集できる時だけ当たり判定ON
-      onPointerDown: canEdit ? (e) => {
-        if (!isEditable) return;
+      listening: isSelectable, // ★選択可能な時は当たり判定ON（クリックで選択）
+      onPointerDown: isSelectable ? (e) => {
         e.cancelBubble = true;
         setSelectedId(shape.id);
         if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
         if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
       } : undefined,
       ref: (node) => { if (node) shapeRefs.current[shape.id] = node; },
-      draggable: isEditable,
+      draggable: isEditable, // ★移動はpaintMode時のみ
       onDragStart: isEditable ? (e) => handleDragStart(shape, e) : undefined,
       onDragMove: isEditable ? (e) => handleDragMove(shape, e) : undefined,
       onDragEnd: isEditable ? (e) => handleDragEnd(shape, e) : undefined,
@@ -1579,8 +1584,7 @@ const ViewerCanvas = forwardRef(({
             x={shape.dragX || 0}
             y={shape.dragY || 0}
             draggable={isEditable}
-            onPointerDown={canEdit ? (e) => {
-              if (!isEditable) return;
+            onPointerDown={isSelectable ? (e) => {
               e.cancelBubble = true;
               setSelectedId(shape.id);
               if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
@@ -1606,7 +1610,7 @@ const ViewerCanvas = forwardRef(({
               width={bboxW} 
               height={bboxH} 
               fill="rgba(0,0,0,0.01)"
-              listening={isEditable}
+              listening={isSelectable}
             />
             {isSelected && (
               <Rect 
@@ -1694,8 +1698,7 @@ const ViewerCanvas = forwardRef(({
               x={shape.dragX || 0}
               y={shape.dragY || 0}
               draggable={isEditable}
-              onPointerDown={canEdit ? (e) => {
-                if (!isEditable) return;
+              onPointerDown={isSelectable ? (e) => {
                 e.cancelBubble = true;
                 setSelectedId(shape.id);
                 if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
@@ -1719,7 +1722,7 @@ const ViewerCanvas = forwardRef(({
                 width={bboxW} 
                 height={bboxH} 
                 fill="rgba(0,0,0,0.01)"
-                listening={isEditable}
+                listening={isSelectable}
               />
             </Group>
             {boundingBox && <Rect x={boundingBox.x} y={boundingBox.y} width={boundingBox.width} height={boundingBox.height} stroke="rgba(255,0,0,0.3)" strokeWidth={1} dash={[5,5]} fill={undefined} listening={false} />}
@@ -1967,7 +1970,8 @@ const ViewerCanvas = forwardRef(({
               text={[
                 `paintMode: ${paintMode}`,
                 `tool: ${tool}`,
-                `canEdit: ${canEdit}`,
+                `canSelect: ${canSelect}`,
+                `canMutate: ${canMutate}`,
                 `activeCommentId: ${String(activeCommentId ?? 'null')}`,
                 `activeShapes: ${activeShapes?.length ?? 0}`,
                 `renderedShapes: ${renderedShapes?.length ?? 0}`,
