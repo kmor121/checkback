@@ -166,18 +166,26 @@ const ViewerCanvas = forwardRef(({
     return Array.from(map.values());
   }, [existingShapes, shapes]);
   
-  // CRITICAL: 実際に描画するshape配列（互換性対策: comment_id ?? commentId）
+  // CRITICAL: 実際に描画するshape配列（互換性対策: comment_id ?? commentId、String比較）
   const renderedShapes = useMemo(() => {
     if (showAllPaint) return mergedShapes;
     
-    // activeCommentIdがある時はそれだけ（互換性対策）
+    // activeCommentIdがある時はそれだけ（互換性対策＋String化で一致判定）
     if (activeCommentId) {
-      return mergedShapes.filter(s => (s.comment_id ?? s.commentId) === activeCommentId);
+      const targetId = String(activeCommentId);
+      return mergedShapes.filter(s => {
+        const shapeCommentId = s.comment_id ?? s.commentId;
+        return shapeCommentId && String(shapeCommentId) === targetId;
+      });
     }
     
     // 描画中の仮ID shapeも表示（activeCommentIdがなくても描画継続）
     if (draftCommentIdRef.current) {
-      return mergedShapes.filter(s => (s.comment_id ?? s.commentId) === draftCommentIdRef.current);
+      const targetId = String(draftCommentIdRef.current);
+      return mergedShapes.filter(s => {
+        const shapeCommentId = s.comment_id ?? s.commentId;
+        return shapeCommentId && String(shapeCommentId) === targetId;
+      });
     }
     
     return [];
