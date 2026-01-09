@@ -1854,7 +1854,7 @@ const ViewerCanvas = forwardRef(({
         const padR = 4;  // 右
         const padY = 3;  // 上下
 
-        // テキストサイズを実測（Konva Textを一時作成）
+        // テキストサイズを実測（Konva Textを一時作成、getClientRectでグリフbboxを取得）
         const tempText = new window.Konva.Text({
           text: textContent,
           fontSize: fontSize,
@@ -1864,16 +1864,18 @@ const ViewerCanvas = forwardRef(({
         });
         const tw = tempText.getTextWidth();
         const th = tempText.height();
+        const glyphRect = tempText.getClientRect({ skipTransform: true });
+        const glyphTop = glyphRect.y;    // グリフの上端オフセット（通常0〜数px）
+        const glyphH = glyphRect.height; // グリフの実際の高さ
         tempText.destroy();
 
-        // ボックスサイズ（リサイズ済みならそれを使用、なければ自動計算）
+        // ボックスサイズ（リサイズ済みならそれを使用、なければグリフ実測ベースで自動計算）
         const boxW = shape.boxW ? shape.boxW * bgSize.width : tw + padL + padR;
-        const boxH = shape.boxH ? shape.boxH * bgSize.height : th + padY * 2;
+        const boxH = shape.boxH ? shape.boxH * bgSize.height : glyphH + padY * 2;
 
-        // テキストをボックス内で中央配置
+        // テキストをボックス内で中央配置（グリフbboxベース）
         const textX = padL;
-        const baselineNudge = Math.round(fontSize * 0.18); // フォントメトリクス補正
-        const textY = padY + (boxH - padY * 2 - th) / 2 + baselineNudge;
+        const textY = padY + (boxH - padY * 2 - glyphH) / 2 - glyphTop;
 
         return (
           <Group
