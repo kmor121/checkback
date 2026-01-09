@@ -191,15 +191,16 @@ const ViewerCanvas = forwardRef(({
     return [];
   }, [mergedShapes, showAllPaint, activeCommentId]);
   
-  // CRITICAL: 編集可能なIDセット（互換性対策: comment_id ?? commentId、String比較）
-  const editableIds = useMemo(() => {
-    if (!activeCommentId) return new Set();
-    const targetId = String(activeCommentId);
-    return new Set(renderedShapes.filter(s => {
-      const shapeCommentId = s.comment_id ?? s.commentId;
-      return shapeCommentId && String(shapeCommentId) === targetId;
-    }).map(s => s.id));
-  }, [renderedShapes, activeCommentId]);
+  // CRITICAL: 正規化ユーティリティ（0や空文字を弾かない）
+  const norm = (v) => (v == null ? null : String(v));
+  const getCommentId = (s) => s.comment_id ?? s.commentId ?? s.commentID;
+
+  // CRITICAL: 編集可能かをcomment_id一致で判定（editableIds依存をやめる）
+  const isEditableShape = (shape) => {
+    if (!canEdit) return false;                  // paintMode && tool==='select' の時だけ編集OK
+    if (activeCommentId == null) return false;   // 0を弾かないために == null を使う
+    return norm(getCommentId(shape)) === norm(activeCommentId);
+  };
   
   // fileUrl安定化（最後の有効URLを保持）
   useEffect(() => {
