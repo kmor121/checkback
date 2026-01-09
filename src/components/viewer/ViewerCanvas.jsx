@@ -1168,8 +1168,9 @@ const ViewerCanvas = forwardRef(({
       // Undo履歴に追加
       addToUndoStack({ type: 'add', shapeId: normalizedShape.id });
 
-      // CRITICAL: Optimistic update は追加（新規描画のみ）
-      setShapes(prev => [...prev, normalizedShape]);
+      // CRITICAL: Optimistic update は追加（新規描画のみ）+ dirty/localTs付与
+      const shapeWithDirty = { ...normalizedShape, _dirty: true, _localTs: Date.now() };
+      setShapes(prev => [...prev, shapeWithDirty]);
       setCurrentShape(null);
 
       // ✅ 描画直後に選択状態にする
@@ -1199,10 +1200,8 @@ const ViewerCanvas = forwardRef(({
           setLastSuccessId(result?.dbId || normalizedShape.id);
           setLastError(null);
 
-          // CRITICAL: DBから返ってきた_idを既存shapeに上書き（新規追加しない）
-          if (result?.dbId) {
-            setShapes(prev => prev.map(s => s.id === normalizedShape.id ? { ...s, dbId: result.dbId } : s));
-          }
+          // CRITICAL: DBから返ってきた_idを既存shapeに上書き + dirty解除
+          setShapes(prev => prev.map(s => s.id === normalizedShape.id ? { ...s, dbId: result?.dbId, _dirty: false } : s));
         } catch (err) {
           setLastSaveStatus('error');
           setLastError(err.message || String(err));
