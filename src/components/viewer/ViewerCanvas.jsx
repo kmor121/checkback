@@ -359,8 +359,8 @@ const ViewerCanvas = forwardRef(({
   const viewX = offsetX + pan.x;
   const viewY = offsetY + pan.y;
   
-  // パン可否判定
-  const canPan = isEditMode && tool === 'select' && zoom > 100;
+  // CRITICAL: パンは select ツール時のみ（描画ツールとの競合回避）
+  const canPan = paintMode && tool === 'select' && zoom > 100;
   
   // パン範囲のクランプ
   const clampPan = (nx, ny) => {
@@ -713,8 +713,8 @@ const ViewerCanvas = forwardRef(({
       const imgCoords = pointerToImageCoords(stage, view);
       if (!imgCoords) return;
       
-      // CRITICAL: デバッグ用座標更新はドラッグ中は止める（残像防止）
-      if (DEBUG_MODE && !isDraggingRef.current) {
+      // CRITICAL: デバッグ用座標更新はドラッグ中・描画中は止める（残像防止）
+      if (DEBUG_MODE && !isDraggingRef.current && !isDrawing) {
         setPointerPos(stage.getPointerPosition());
         setImgPos(imgCoords);
       }
@@ -966,11 +966,8 @@ const ViewerCanvas = forwardRef(({
       setShapes(prev => [...prev, normalizedShape]);
       setCurrentShape(null);
 
-      // 描画完了後、自動で選択ツールに切り替え＆新図形を選択
-      setSelectedId(normalizedShape.id);
-      if (onToolChange) {
-        onToolChange('select');
-      }
+      // CRITICAL: 連続描画のためツールは維持（自動で select に戻さない）
+      setSelectedId(null);
 
       // DB保存前の検証（一時フィールドが残っていないことを確認）
       if (DEBUG_MODE) {

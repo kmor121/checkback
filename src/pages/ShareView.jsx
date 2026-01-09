@@ -282,7 +282,6 @@ function ShareViewContent() {
       setComposerTargetCommentId(null);
       setShowAllPaint(false);
       viewerCanvasRef.current?.clear();
-      setCanvasSessionNonce(n => n + 1);
     }
 
     setPaintMode(true);
@@ -1223,7 +1222,7 @@ function ShareViewContent() {
               </div>
             ) : (
               <ViewerCanvas
-                key={`${token}:${shareLink?.file_id}:${currentPage}:${canvasSessionNonce}`}
+                key={`${token}:${shareLink?.file_id}:${currentPage}`}
                 ref={viewerCanvasRef}
                 fileUrl={file?.file_url}
                 mimeType={file?.mime_type}
