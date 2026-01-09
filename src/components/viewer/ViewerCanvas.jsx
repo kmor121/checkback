@@ -1419,6 +1419,29 @@ const ViewerCanvas = forwardRef(({
       node.rotation(0);
       node.x(0);
       node.y(0);
+    } else if (shape.tool === 'text') {
+      // Text: リサイズ時にboxResized=trueとboxW/boxHを保存
+      const finalX = node.x();
+      const finalY = node.y();
+      
+      // Group内のRectを取得してサイズを計算
+      const rectChild = node.findOne('Rect');
+      const finalW = rectChild ? Math.max(20, rectChild.width() * scaleX) : 100;
+      const finalH = rectChild ? Math.max(16, rectChild.height() * scaleY) : 24;
+
+      // ノードを更新
+      node.scaleX(1);
+      node.scaleY(1);
+      node.x(finalX);
+      node.y(finalY);
+
+      // 正規化座標に変換
+      const { nx, ny } = normalizeCoords(finalX, finalY);
+      updatedShape.nx = nx;
+      updatedShape.ny = ny;
+      updatedShape.boxResized = true;
+      updatedShape.boxW = finalW / bgSize.width;
+      updatedShape.boxH = finalH / bgSize.height;
       }
 
       // CRITICAL: 一時フィールドを完全削除（更新前に）
