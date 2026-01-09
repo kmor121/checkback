@@ -317,12 +317,13 @@ const ViewerCanvas = forwardRef(({
     draftCommentIdRef.current = null;
   }, [activeCommentId]);
 
-  // CRITICAL: fileIdentity/pageNumber変更時のみリセット（クエリ違いやzoomではリセットしない）
+  // CRITICAL: fileIdentity/pageNumber変更時のみリセット（Mapをクリア）
   useEffect(() => {
     if (DEBUG_MODE) {
       console.log('[ViewerCanvas] fileIdentity/pageNumber changed, resetting state', { fileIdentity, pageNumber });
     }
-    setShapes([]);
+    shapesMapRef.current = new Map(); // ★ Mapをクリア
+    bump();
     setSelectedId(null);
     setCurrentShape(null);
     setUndoStack([]);
