@@ -1451,7 +1451,8 @@ const ViewerCanvas = forwardRef(({
   const renderShape = (shape, isExisting = false) => {
     const isSelected = selectedId === shape.id;
     const canTransform = shape.tool === 'rect' || shape.tool === 'circle' || shape.tool === 'text' || shape.tool === 'arrow';
-    const isEditable = isEditableShape(shape);
+    // CRITICAL: isEditable の条件を「activeCommentId を truthy で見ない」に統一
+    const isEditable = canEdit && activeCommentId != null && sameId(getShapeCommentId(shape), activeCommentId);
 
     const commonProps = {
       key: shape.id,
@@ -1584,7 +1585,7 @@ const ViewerCanvas = forwardRef(({
               y={bboxY} 
               width={bboxW} 
               height={bboxH} 
-              fill="transparent"
+              fill="rgba(0,0,0,0.01)"
               listening={isEditable}
             />
             {isSelected && (
@@ -1697,7 +1698,7 @@ const ViewerCanvas = forwardRef(({
                 y={bboxY} 
                 width={bboxW} 
                 height={bboxH} 
-                fill="transparent"
+                fill="rgba(0,0,0,0.01)"
                 listening={isEditable}
               />
             </Group>
