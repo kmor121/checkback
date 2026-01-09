@@ -122,9 +122,10 @@ const ViewerCanvas = forwardRef(({
   const [dragTick, setDragTick] = useState(0);
   
   const isImage = mimeType?.startsWith('image/');
-  // CRITICAL: 編集モードはペイント中のみ
-  const isEditMode = paintMode && tool === 'select';
-  const isDrawMode = paintMode && tool !== 'select';
+  const isEditMode = tool === 'select';
+  const isDrawMode = !isEditMode && (paintMode || tool === 'text');
+  // CRITICAL: 編集操作（drag/transform/delete）はpaintMode中のみ許可
+  const canEdit = paintMode && isEditMode;
   
   // CRITICAL: activeCommentId ベースで表示・編集を厳密に分離
   const activeShapes = useMemo(() => {
@@ -277,8 +278,8 @@ const ViewerCanvas = forwardRef(({
       }
       
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        // CRITICAL: 編集可能なIDのみ削除を許可
-        if (isEditMode && selectedId && editableIds.has(selectedId)) {
+        // CRITICAL: 編集可能なIDのみ削除を許可（paintMode必須）
+        if (canEdit && selectedId && editableIds.has(selectedId)) {
           e.preventDefault();
           handleDelete();
         }
@@ -293,7 +294,7 @@ const ViewerCanvas = forwardRef(({
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedId, shapes, undoStack, redoStack, isEditMode, editableIds]);
+    }, [selectedId, shapes, undoStack, redoStack, canEdit, editableIds]);
 
   // ResizeObserver
   useEffect(() => {
@@ -1233,14 +1234,14 @@ const ViewerCanvas = forwardRef(({
 
   // ツールバー変更を選択図形に適用
   useEffect(() => {
-    if (!isEditMode || !selectedId) return;
+    if (!canEdit || !selectedId) return;
     applyStyleToSelected({ stroke: strokeColor });
-  }, [strokeColor]);
+  }, [strokeColor, canEdit, selectedId]);
 
   useEffect(() => {
-    if (!isEditMode || !selectedId) return;
+    if (!canEdit || !selectedId) return;
     applyStyleToSelected({ strokeWidth });
-  }, [strokeWidth]);
+  }, [strokeWidth, canEdit, selectedId]);
 
   // Undo/Redo
   useImperativeHandle(ref, () => ({
