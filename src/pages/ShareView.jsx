@@ -735,6 +735,11 @@ function ShareViewContent() {
       await queryClient.invalidateQueries({ queryKey: ['paintShapes', token, shareLink?.file_id, currentPage] });
     } catch (error) {
       showToast(`送信失敗: ${error.message}`, 'error');
+    } finally {
+      // ★★★ CRITICAL: 成功/失敗に関わらず必ずロック解除 ★★★
+      console.log("[ShareView submit] === LOCK RELEASED ===", new Date().toISOString());
+      submitLockRef.current = false;
+      setIsSubmitting(false);
     }
   };
 
