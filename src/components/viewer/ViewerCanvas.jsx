@@ -218,7 +218,8 @@ const ViewerCanvas = forwardRef(({
   // CRITICAL: 実際に描画するshape配列（hidePaintUntilSelectで強制非表示）
   const renderedShapes = useMemo(() => {
     // ★送信完了後は強制非表示（これが本丸）
-    if (hidePaintUntilSelect) return [];
+    // ただし、新しい描画が始まった場合（draftCommentIdRefが設定された場合）は表示を許可
+    if (hidePaintUntilSelect && !draftCommentIdRef.current) return [];
 
     if (showAllPaint) return mergedShapes;
 
