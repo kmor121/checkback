@@ -389,14 +389,16 @@ const ViewerCanvas = forwardRef(({
 
       if (canTransform) {
         transformerRef.current.nodes([shapeRefs.current[selectedId]]);
-        // テキストの場合：上に余白を追加して中央寄せ
+        // テキストの場合：非対称paddingで中央寄せ（上を大きく、下を小さく）
         if (selectedShape.tool === 'text') {
-          transformerRef.current.padding(12);
-          // 下の余白を大幅に縮小して中央寄せ
+          // paddingは0にして、boundBoxFuncで非対称に調整
+          transformerRef.current.padding(0);
           transformerRef.current.boundBoxFunc((oldBox, newBox) => {
+            // 上に16px、下に0pxの余白を追加（テキストを下に押し下げる効果）
             return {
               ...newBox,
-              height: newBox.height - 20, // 下の余白を20px縮小
+              y: newBox.y - 16,      // 上に16px拡張
+              height: newBox.height + 16, // その分高さも追加
             };
           });
         } else {
