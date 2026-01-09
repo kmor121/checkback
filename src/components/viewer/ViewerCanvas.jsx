@@ -394,11 +394,10 @@ const ViewerCanvas = forwardRef(({
           // paddingは0にして、boundBoxFuncで非対称に調整
           transformerRef.current.padding(0);
           transformerRef.current.boundBoxFunc((oldBox, newBox) => {
-            // 上に8px、下に-8pxの余白（ボックスを上に縮小してテキストを相対的に下げる）
+            // 下の余白を大幅に縮小
             return {
               ...newBox,
-              y: newBox.y - 8,       // 上に8px拡張
-              height: newBox.height - 8, // 下を16px縮小（差し引き下が小さくなる）
+              height: newBox.height - 24, // 下を24px縮小
             };
           });
         } else {
