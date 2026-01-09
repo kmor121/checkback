@@ -489,6 +489,14 @@ function FileViewContent() {
   ]);
 
   const handleCommentClick = (comment) => {
+    console.log('[FileView] handleCommentClick:', {
+      commentId: comment.id,
+      currentActiveCommentId: activeCommentId,
+      paintMode,
+      allShapesCount: allShapes.length,
+      matchingShapes: allShapes.filter(s => String(s.comment_id) === String(comment.id)).length,
+    });
+    
     if (paintMode) {
       showToast('ペイントを終了してからコメントを選択してください', 'error');
       return;
@@ -496,6 +504,7 @@ function FileViewContent() {
     
     // 同じコメントを再クリック → 選択解除＆新規モードに戻す
     if (activeCommentId === comment.id) {
+      console.log('[FileView] Deselecting comment');
       setActiveCommentId(null);
       setPaintSessionCommentId(null); // CRITICAL: paintSessionも解除
       setComposerMode('new');
@@ -506,6 +515,7 @@ function FileViewContent() {
     }
     
     // 別のコメントをクリック → 編集モードに切替
+    console.log('[FileView] Selecting comment:', comment.id);
     setActiveCommentId(comment.id);
     setPaintSessionCommentId(comment.id); // CRITICAL: paintSessionも設定して描画を表示
     setComposerMode('edit');
