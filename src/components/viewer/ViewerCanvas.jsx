@@ -371,35 +371,30 @@ const ViewerCanvas = forwardRef(({
     }
   };
 
-  // CRITICAL: 削除（DB削除も実行、永続化）
+  // 削除（DB削除も実行）
   const handleDelete = async () => {
     if (!isEditMode || !selectedId || tool !== 'select') return;
-
+    
     const index = shapes.findIndex(s => s.id === selectedId);
     if (index === -1) return;
-
+    
     const shape = shapes[index];
-
+    addToUndoStack({ type: 'delete', shape, index });
+    
     // Transformer解除（先に）
     if (transformerRef.current) {
       transformerRef.current.nodes([]);
       transformerRef.current.getLayer()?.batchDraw();
     }
-
+    
     // Optimistic update
     setShapes(prev => prev.filter(s => s.id !== selectedId));
     setSelectedId(null);
-
-    // Undo履歴に追加（revert用）
-    addToUndoStack({ type: 'delete', shape, index });
-
-    // CRITICAL: DB削除を確実に実行（永続化）
+    
+    // DB削除を実行
     if (onDeleteShape) {
-      setIsSaving(prev => ({ ...prev, [shape.id]: true }));
       setLastMutation('delete');
-      setLastPayload(JSON.stringify({ id: shape.id, dbId: shape.dbId }));
-      setLastSaveStatus('saving');
-
+      setLastPayload(JSON.stringify({ id: shape.id }));
       try {
         await onDeleteShape(shape);
         setLastSaveStatus('success');
@@ -414,9 +409,6 @@ const ViewerCanvas = forwardRef(({
           newShapes.splice(index, 0, shape);
           return newShapes;
         });
-        setSelectedId(shape.id);
-      } finally {
-        setIsSaving(prev => ({ ...prev, [shape.id]: false }));
       }
     }
   };
@@ -760,38 +752,43 @@ const ViewerCanvas = forwardRef(({
   // PointerUp: 描画終了（描画モード時のみ）
   const handlePointerUp = async () => {
     if (!isDrawMode || !isDrawing || !currentShape) return;
-
+    
     try {
       setLastEvent('up');
       setIsDrawing(false);
-
-      // CRITICAL: しきい値チェック（誤クリック対策）
+      
+      // しきい値チェック（誤クリック対策）
       if (tool === 'rect') {
         if (!currentShape.width || !currentShape.height || currentShape.width < 5 || currentShape.height < 5) {
           setCurrentShape(null);
+          setIsDrawing(false);
           return;
         }
       } else if (tool === 'circle') {
         if (!currentShape.radius || currentShape.radius < 3) {
           setCurrentShape(null);
+          setIsDrawing(false);
           return;
         }
       } else if (tool === 'arrow' && currentShape.points) {
         const dx = currentShape.points[2] - currentShape.points[0];
         const dy = currentShape.points[3] - currentShape.points[1];
         const length = Math.sqrt(dx * dx + dy * dy);
-        if (length < 10) {
+        if (length < 5) {
           setCurrentShape(null);
+          setIsDrawing(false);
           return;
         }
       } else if (tool === 'pen' && currentShape.points) {
+        // Penは最低2点（4座標）必要
         if (currentShape.points.length < 4) {
           setCurrentShape(null);
+          setIsDrawing(false);
           return;
         }
       }
       
-      // CRITICAL: 正規化データを作成（一時フィールドは完全に除外）
+      // 正規化データを作成
       const normalizedShape = {
         id: currentShape.id,
         tool: currentShape.tool,
@@ -800,7 +797,7 @@ const ViewerCanvas = forwardRef(({
         bgWidth: bgSize.width,
         bgHeight: bgSize.height,
       };
-
+      
       if (tool === 'pen' && currentShape.points) {
         const normalizedPoints = [];
         for (let i = 0; i < currentShape.points.length; i += 2) {
@@ -808,7 +805,6 @@ const ViewerCanvas = forwardRef(({
           normalizedPoints.push(nx, ny);
         }
         normalizedShape.normalizedPoints = normalizedPoints;
-        // 一時フィールドは含めない（points, startX, startY）
       } else if (tool === 'rect') {
         const { nx: nx1, ny: ny1 } = normalizeCoords(currentShape.x, currentShape.y);
         const { nx: nx2, ny: ny2 } = normalizeCoords(currentShape.x + currentShape.width, currentShape.y + currentShape.height);
@@ -816,13 +812,11 @@ const ViewerCanvas = forwardRef(({
         normalizedShape.ny = ny1;
         normalizedShape.nw = nx2 - nx1;
         normalizedShape.nh = ny2 - ny1;
-        // 一時フィールドは含めない（x, y, width, height, startX, startY）
       } else if (tool === 'circle') {
         const { nx, ny } = normalizeCoords(currentShape.x, currentShape.y);
         normalizedShape.nx = nx;
         normalizedShape.ny = ny;
         normalizedShape.nr = currentShape.radius / bgSize.width;
-        // 一時フィールドは含めない（x, y, radius, startX, startY）
       } else if (tool === 'arrow' && currentShape.points) {
         const normalizedPoints = [];
         for (let i = 0; i < currentShape.points.length; i += 2) {
@@ -830,8 +824,17 @@ const ViewerCanvas = forwardRef(({
           normalizedPoints.push(nx, ny);
         }
         normalizedShape.normalizedPoints = normalizedPoints;
-        // 一時フィールドは含めない（points, startX, startY）
       }
+
+      // CRITICAL: 一時フィールドを完全削除（正規化データのみ保存）
+      delete normalizedShape.points;
+      delete normalizedShape.startX;
+      delete normalizedShape.startY;
+      delete normalizedShape.x;
+      delete normalizedShape.y;
+      delete normalizedShape.width;
+      delete normalizedShape.height;
+      delete normalizedShape.radius;
 
       // Undo履歴に追加
       addToUndoStack({ type: 'add', shapeId: normalizedShape.id });
@@ -844,6 +847,15 @@ const ViewerCanvas = forwardRef(({
       setSelectedId(normalizedShape.id);
       if (onToolChange) {
         onToolChange('select');
+      }
+
+      // DB保存前の検証（一時フィールドが残っていないことを確認）
+      if (DEBUG_MODE) {
+        const hasTemp = ['points', 'startX', 'startY', 'x', 'y', 'width', 'height', 'radius']
+          .some(key => normalizedShape[key] !== undefined);
+        if (hasTemp) {
+          console.warn('[ViewerCanvas] WARNING: Temp fields detected in normalizedShape:', normalizedShape);
+        }
       }
 
       // 親コンポーネントに保存を依頼（createモード）
@@ -905,19 +917,17 @@ const ViewerCanvas = forwardRef(({
       // Pen/Arrowのみリセット
       node.x(0);
       node.y(0);
-    } else if (shape.tool === 'rect') {
+      } else if (shape.tool === 'rect') {
       // Rect: 絶対座標として直接保存
       const { nx, ny } = normalizeCoords(x, y);
       updatedShape.nx = nx;
       updatedShape.ny = ny;
-      // Rect/Circleはリセットしない
-    } else if (shape.tool === 'circle') {
+      } else if (shape.tool === 'circle') {
       // Circle: 絶対座標として直接保存
       const { nx, ny } = normalizeCoords(x, y);
       updatedShape.nx = nx;
       updatedShape.ny = ny;
-      // Rect/Circleはリセットしない
-    } else if (shape.tool === 'arrow' && shape.normalizedPoints) {
+      } else if (shape.tool === 'arrow' && shape.normalizedPoints) {
       // Arrow: deltaとしてpointsに焼き込み
       const newPoints = [];
       for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
@@ -1047,15 +1057,25 @@ const ViewerCanvas = forwardRef(({
       node.rotation(0);
       node.x(0);
       node.y(0);
-    }
-    
-    addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: updatedShape });
-    
-    // CRITICAL: Optimistic update は「同じidを置換」（追加ではない）
-    setShapes(prev => prev.map(s => s.id === updatedShape.id ? updatedShape : s));
-    
-    // DB更新（upsertモード）
-    if (onSaveShape) {
+      }
+
+      // CRITICAL: 一時フィールドを完全削除（更新前に）
+      delete updatedShape.points;
+      delete updatedShape.startX;
+      delete updatedShape.startY;
+      delete updatedShape.x;
+      delete updatedShape.y;
+      delete updatedShape.width;
+      delete updatedShape.height;
+      delete updatedShape.radius;
+
+      addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: updatedShape });
+
+      // CRITICAL: Optimistic update は「同じidを置換」（追加ではない）
+      setShapes(prev => prev.map(s => s.id === updatedShape.id ? updatedShape : s));
+
+      // DB更新（upsertモード）
+      if (onSaveShape) {
       setIsSaving(prev => ({ ...prev, [shape.id]: true }));
       setLastMutation('update-transform');
       setLastPayload(JSON.stringify(updatedShape));
@@ -1142,13 +1162,13 @@ const ViewerCanvas = forwardRef(({
     canRedo: redoStack.length > 0,
   }));
   
-  // CRITICAL: Shape描画（正規化座標を絶対優先）
+  // Shape描画（正規化座標から復元）
   const renderShape = (shape, isExisting = false) => {
     const isSelected = selectedId === shape.id;
     const canTransform = shape.tool === 'rect' || shape.tool === 'circle' || shape.tool === 'text' || shape.tool === 'arrow';
-
+    
     const commonProps = {
-      key: shape.id, // CRITICAL: idのみ使用（updatedAtなどは不可）
+      key: shape.id,
       stroke: shape.stroke,
       strokeWidth: shape.strokeWidth,
       onMouseDown: isEditMode ? (e) => {
@@ -1321,42 +1341,42 @@ const ViewerCanvas = forwardRef(({
         </React.Fragment>
       );
     } else if (shape.tool === 'rect') {
-      // CRITICAL: 正規化座標を絶対優先（一時フィールドより優先）
+      // 正規化座標を優先（必ずこれから復元）
       if (shape.nx !== undefined) {
         const p1 = denormalizeCoords(shape.nx, shape.ny);
         const p2 = denormalizeCoords(shape.nx + shape.nw, shape.ny + shape.nh);
         return (
           <React.Fragment key={shape.id}>
-            <Rect {...commonProps} x={p1.x} y={p1.y} width={p2.x - p1.x} height={p2.y - p1.y} fill={undefined} hitStrokeWidth={15} />
+            <Rect {...commonProps} x={p1.x} y={p1.y} width={p2.x - p1.x} height={p2.y - p1.y} fill={undefined} hitStrokeWidth={Math.max(10, (shape.strokeWidth || 2) * 3)} />
             {boundingBox && <Rect x={boundingBox.x} y={boundingBox.y} width={boundingBox.width} height={boundingBox.height} stroke="rgba(255,0,0,0.3)" strokeWidth={1} dash={[5,5]} fill={undefined} listening={false} />}
           </React.Fragment>
         );
-      }
+        }
 
-      // 描画中の一時データ（nxがない場合のみ）
-      if (shape.x !== undefined && shape.width !== undefined) {
-        return <Rect {...commonProps} x={shape.x} y={shape.y} width={shape.width} height={shape.height} fill={undefined} hitStrokeWidth={15} />;
-      }
+        // 描画中の一時データ（nxがない場合のみ - 保存後は存在しないはず）
+        if (shape.x !== undefined && shape.width !== undefined) {
+        return <Rect {...commonProps} x={shape.x} y={shape.y} width={shape.width} height={shape.height} fill={undefined} hitStrokeWidth={Math.max(10, (shape.strokeWidth || 2) * 3)} />;
+        }
 
-      return null;
-      } else if (shape.tool === 'circle') {
-      // CRITICAL: 正規化座標を絶対優先（一時フィールドより優先）
-      if (shape.nx !== undefined) {
+        return null;
+        } else if (shape.tool === 'circle') {
+        // CRITICAL: 正規化座標を優先（必ずこれから復元）
+        if (shape.nx !== undefined) {
         const center = denormalizeCoords(shape.nx, shape.ny);
         return (
           <React.Fragment key={shape.id}>
-            <Circle {...commonProps} x={center.x} y={center.y} radius={shape.nr * bgSize.width} fill={undefined} hitStrokeWidth={15} />
+            <Circle {...commonProps} x={center.x} y={center.y} radius={shape.nr * bgSize.width} fill={undefined} hitStrokeWidth={Math.max(10, (shape.strokeWidth || 2) * 3)} />
             {boundingBox && <Rect x={boundingBox.x} y={boundingBox.y} width={boundingBox.width} height={boundingBox.height} stroke="rgba(255,0,0,0.3)" strokeWidth={1} dash={[5,5]} fill={undefined} listening={false} />}
           </React.Fragment>
         );
-      }
+        }
 
-      // 描画中の一時データ（nxがない場合のみ）
-      if (shape.x !== undefined && shape.radius !== undefined) {
-        return <Circle {...commonProps} x={shape.x} y={shape.y} radius={shape.radius} fill={undefined} hitStrokeWidth={15} />;
-      }
+        // 描画中の一時データ（nxがない場合のみ - 保存後は存在しないはず）
+        if (shape.x !== undefined && shape.radius !== undefined) {
+        return <Circle {...commonProps} x={shape.x} y={shape.y} radius={shape.radius} fill={undefined} hitStrokeWidth={Math.max(10, (shape.strokeWidth || 2) * 3)} />;
+        }
 
-      return null;
+        return null;
       } else if (shape.tool === 'arrow') {
         let points = [];
 
