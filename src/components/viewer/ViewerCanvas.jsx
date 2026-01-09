@@ -149,14 +149,21 @@ const ViewerCanvas = forwardRef(({
   const isEditMode = tool === 'select';
   const isDrawMode = !isEditMode && (paintMode || tool === 'text');
   
+  // ★ CRITICAL: 選択に使うIDは activeCommentId または draftCommentIdRef（仮ID対応）
+  const effectiveActiveId = activeCommentId ?? draftCommentIdRef.current ?? null;
+  
   // ★ CRITICAL: 選択と編集を分離
   const canSelect = isEditMode;                 // 選択だけは常にOK
   const canMutate = paintMode && isEditMode;    // 移動/変形/削除はpaintMode時だけ
   const canEdit = canMutate;                    // 後方互換用エイリアス
   
-  // ★ このshapeを選択できるか（comment_id一致が必要）
-  const canSelectShape = (shape) =>
-    canSelect && activeCommentId != null && sameId(shapeCommentId(shape), activeCommentId);
+  // ★ このshapeを選択できるか（effectiveActiveId使用で仮ID対応）
+  const isSelectableShape = (shape) =>
+    canSelect && effectiveActiveId != null && sameId(shapeCommentId(shape), effectiveActiveId);
+  
+  // ★ このshapeを編集できるか（paintMode時のみ）
+  const isEditableShape2 = (shape) =>
+    canMutate && isSelectableShape(shape);
   
   // CRITICAL: 描画に使うcomment_idを取得（仮IDまたはactiveCommentId）
   const getCommentIdForDrawing = () => {
@@ -1477,8 +1484,8 @@ const ViewerCanvas = forwardRef(({
     const isSelected = selectedId === shape.id;
     const canTransform = shape.tool === 'rect' || shape.tool === 'circle' || shape.tool === 'text' || shape.tool === 'arrow';
     // ★ CRITICAL: 選択可能か（クリックで選択）と編集可能か（移動/変形/削除）を分離
-    const isSelectable = canSelectShape(shape);
-    const isEditable = canMutate && isSelectable;
+    const isSelectable = isSelectableShape(shape);
+    const isEditable = isEditableShape2(shape);
 
     const commonProps = {
       key: shape.id,
@@ -1583,6 +1590,7 @@ const ViewerCanvas = forwardRef(({
             ref={(node) => { if (node) shapeRefs.current[shape.id] = node; }}
             x={shape.dragX || 0}
             y={shape.dragY || 0}
+            listening={isSelectable}
             draggable={isEditable}
             onPointerDown={isSelectable ? (e) => {
               e.cancelBubble = true;
@@ -1697,6 +1705,7 @@ const ViewerCanvas = forwardRef(({
               ref={(node) => { if (node) shapeRefs.current[shape.id] = node; }}
               x={shape.dragX || 0}
               y={shape.dragY || 0}
+              listening={isSelectable}
               draggable={isEditable}
               onPointerDown={isSelectable ? (e) => {
                 e.cancelBubble = true;
@@ -1973,6 +1982,7 @@ const ViewerCanvas = forwardRef(({
                 `canSelect: ${canSelect}`,
                 `canMutate: ${canMutate}`,
                 `activeCommentId: ${String(activeCommentId ?? 'null')}`,
+                `effectiveActiveId: ${String(effectiveActiveId ?? 'null')}`,
                 `activeShapes: ${activeShapes?.length ?? 0}`,
                 `renderedShapes: ${renderedShapes?.length ?? 0}`,
               ].join('\n')}
