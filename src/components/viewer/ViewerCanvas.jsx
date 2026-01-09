@@ -1888,40 +1888,47 @@ const ViewerCanvas = forwardRef(({
         const padR = 4;
         const padY = 3;
 
-        // ★ 測定用Textを作成（fontPropsを完全一致させる）
-        const tempText = new window.Konva.Text({
-          text: textContent,
-          ...fontProps,
-        });
-        const tw = tempText.getTextWidth();
-        const bbox = tempText.getClientRect({ skipTransform: true });
-        tempText.destroy();
+        // ★ Canvas measureTextでグリフのAscent/Descentを実測
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        ctx.font = `${fontProps.fontStyle} ${fontSize}px ${fontProps.fontFamily}`;
+        const metrics = ctx.measureText(textContent || 'M');
+        
+        // actualBoundingBox系でグリフの実際の高さを取得
+        const ascent = metrics.actualBoundingBoxAscent || fontSize * 0.8;
+        const descent = metrics.actualBoundingBoxDescent || fontSize * 0.2;
+        const glyphH = ascent + descent;
+        const tw = metrics.width;
 
         // ★ 判定を厳密に（boxResized === true かつ boxH != null）
         const hasManualBoxW = shape.boxResized === true && shape.boxW != null;
         const hasManualBoxH = shape.boxResized === true && shape.boxH != null;
 
-        // ★ auto時：bbox.heightベースで計算（グリフ実測）
+        // ★ auto時：グリフ実測ベースで計算
         const autoBoxW = tw + padL + padR;
-        const autoBoxH = bbox.height + padY * 2;
+        const autoBoxH = glyphH + padY * 2;
         
         const boxW = hasManualBoxW ? shape.boxW * bgSize.width : autoBoxW;
         const boxH = hasManualBoxH ? shape.boxH * bgSize.height : autoBoxH;
 
-        // ★ textY/height方式：手計算廃止、verticalAlign="middle"に任せる
+        // ★ textY計算：グリフ上端がpadYに来るように配置
         const textX = padL;
-        const textY = padY;  // 常にpadY固定
-        const textH = boxH - padY * 2;  // Text領域の高さ
+        // Konva Textはbaselineがtopなので、ascent分だけ下にずらす必要はない
+        // ただしKonvaはデフォルトでtop配置なので、padYをそのまま使う
+        const textY = hasManualBoxH
+          ? padY + (boxH - padY * 2 - glyphH) / 2  // リサイズ済み：中央配置
+          : padY;  // auto：上端固定
 
-        // デバッグログ（auto時の確認用）
+        // デバッグログ
         if (DEBUG_MODE && !hasManualBoxH) {
-          console.log('[Text auto]', {
+          console.log('[Text auto canvas]', {
             id: shape.id?.substring(0, 8),
-            boxResized: shape.boxResized,
-            shapeBoxH: shape.boxH,
-            bboxH: bbox.height.toFixed(2),
+            ascent: ascent.toFixed(2),
+            descent: descent.toFixed(2),
+            glyphH: glyphH.toFixed(2),
             autoBoxH: autoBoxH.toFixed(2),
-            textH: textH.toFixed(2),
+            boxH: boxH.toFixed(2),
+            textY: textY.toFixed(2),
           });
         }
 
@@ -1952,13 +1959,10 @@ const ViewerCanvas = forwardRef(({
               fill="transparent"
               listening={true}
             />
-            {/* テキスト：height + verticalAlign="middle"で中央配置 */}
+            {/* テキスト：Canvas実測ベースで配置 */}
             <Text
               x={textX}
               y={textY}
-              width={boxW - padL - padR}
-              height={textH}
-              verticalAlign="middle"
               text={textContent}
               {...fontProps}
               fill={shape.stroke}
