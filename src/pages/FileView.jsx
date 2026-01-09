@@ -290,6 +290,7 @@ function FileViewContent() {
     }
   };
 
+  // CRITICAL: 送信ロック用のグローバルフラグ（useStateではなくモジュールスコープ）
   const handleSendComment = (e) => {
     e?.preventDefault?.();
     e?.stopPropagation?.();
@@ -297,17 +298,27 @@ function FileViewContent() {
     console.count("[submit] handler called");
     console.log("[submit] inFlight:", !!inFlightRef.current, "isSubmitting:", isSubmitting);
     
-    if (!commentBody.trim() || !user) return;
-    
-    // ★Promiseロック：すでに送信中なら同じPromiseを返す（=二重送信ゼロ）
+    // ★最優先チェック：すでに送信中なら即座にreturn（同期的に判定）
     if (inFlightRef.current) {
-      console.log("[submit] blocked by inFlightRef");
+      console.log("[submit] BLOCKED by inFlightRef");
       return inFlightRef.current;
     }
     
+    if (!commentBody.trim() || !user) {
+      console.log("[submit] BLOCKED: empty body or no user");
+      return;
+    }
+    
+    // ★ここで即座にロックをかける（Promiseを作る前に）
+    // これにより同期的な連打を100%ブロック
+    const lockId = crypto.randomUUID();
+    inFlightRef.current = lockId; // 一時的にstringでロック
+    setIsSubmitting(true);
+    
+    console.count("[submit] lock acquired");
+    
     const p = (async () => {
       try {
-        setIsSubmitting(true);
         console.count("[submit] api called");
         
         // CRITICAL: 編集モード or activeCommentIdがある場合は「更新」
@@ -399,12 +410,14 @@ function FileViewContent() {
       } catch (error) {
         showToast(`送信失敗: ${error.message}`, 'error');
       } finally {
+        console.count("[submit] lock released");
         setIsSubmitting(false);
         inFlightRef.current = null;
         mutationIdRef.current = null; // ★完了したら次回用にクリア
       }
     })();
     
+    // Promiseでロックを上書き（既にstringでロック済みなので連打は通らない）
     inFlightRef.current = p;
     return p;
   };
