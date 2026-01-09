@@ -121,9 +121,10 @@ Deno.serve(async (req) => {
       // Update
       const updated = await base44.asServiceRole.entities.PaintShape.update(existing[0].id, {
         data_json: finalDataJson,
+        comment_id: commentId || existing[0].comment_id, // ★ comment_idも更新
       });
       
-      console.log('[savePaintShape] Updated:', updated.id);
+      console.log('[savePaintShape] Updated:', updated.id, 'comment_id:', commentId);
       return Response.json({ 
         success: true, 
         mode: 'update', 
@@ -132,17 +133,20 @@ Deno.serve(async (req) => {
         clientShapeId 
       });
     } else {
-      // Create
+      // Create - ★★★ CRITICAL: comment_id を必ず設定 ★★★
       const created = await base44.asServiceRole.entities.PaintShape.create({
         file_id: fileId,
         share_link_id: token || null,
+        comment_id: commentId, // ★★★ CRITICAL: これが欠けていた！★★★
         page_no: pageNo,
         shape_type: shapeType,
         data_json: finalDataJson,
         author_name: authorName || 'User',
+        author_key: authorKey,
+        client_shape_id: clientShapeId,
       });
       
-      console.log('[savePaintShape] Created:', created.id);
+      console.log('[savePaintShape] Created:', created.id, 'comment_id:', commentId);
       return Response.json({ 
         success: true, 
         mode: 'create', 
