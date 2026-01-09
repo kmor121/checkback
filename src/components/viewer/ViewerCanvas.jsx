@@ -587,22 +587,19 @@ const ViewerCanvas = forwardRef(({
     }
   };
 
-  // CRITICAL: 削除（DB削除も実行、永続化）
+  // CRITICAL: 削除（Map方式）
   const handleDelete = async () => {
     if (!canEdit || !selectedId) return;
     
     // CRITICAL: 編集可能なIDのみ削除を許可（isEditableShape関数で判定）
-    const selectedShape = shapes.find(s => s.id === selectedId);
+    const selectedShape = shapesMapRef.current.get(selectedId);
     if (!selectedShape || !isEditableShape(selectedShape)) {
       console.log('[ViewerCanvas] Delete blocked: not editable');
       return;
     }
     
-    const index = shapes.findIndex(s => s.id === selectedId);
-    if (index === -1) return;
-    
-    const shape = shapes[index];
-    addToUndoStack({ type: 'delete', shape, index });
+    const shape = selectedShape;
+    addToUndoStack({ type: 'delete', shape, index: 0 });
     
     // Transformer解除（先に）
     if (transformerRef.current) {
@@ -610,8 +607,10 @@ const ViewerCanvas = forwardRef(({
       transformerRef.current.getLayer()?.batchDraw();
     }
     
-    // Optimistic update
-    setShapes(prev => prev.filter(s => s.id !== selectedId));
+    // Optimistic update（Mapから削除）
+    shapesMapRef.current.delete(selectedId);
+    bump();
+    onShapesChange?.(getAllShapes());
     setSelectedId(null);
     
     // DB削除を実行
@@ -626,12 +625,10 @@ const ViewerCanvas = forwardRef(({
         console.error('Delete shape error:', err);
         setLastSaveStatus('error');
         setLastError(err.message);
-        // 失敗時はrevert
-        setShapes(prev => {
-          const newShapes = [...prev];
-          newShapes.splice(index, 0, shape);
-          return newShapes;
-        });
+        // 失敗時はrevert（Mapに戻す）
+        shapesMapRef.current.set(shape.id, shape);
+        bump();
+        onShapesChange?.(getAllShapes());
       }
     }
   };
