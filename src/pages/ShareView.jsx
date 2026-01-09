@@ -740,6 +740,12 @@ function ShareViewContent() {
   };
 
   const enterEdit = (comment) => {
+    // 対応済みコメントは編集不可
+    if (comment.resolved) {
+      showToast('対応済みのコメントは編集できません（未対応に戻すと編集できます）', 'error');
+      return;
+    }
+
     if (paintMode) {
       showToast('ペイントを終了してから編集してください', 'info');
       return;
