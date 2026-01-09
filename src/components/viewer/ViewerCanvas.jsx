@@ -1437,9 +1437,6 @@ const ViewerCanvas = forwardRef(({
     const isSelected = selectedId === shape.id;
     const canTransform = shape.tool === 'rect' || shape.tool === 'circle' || shape.tool === 'text' || shape.tool === 'arrow';
     
-    // CRITICAL: 編集可能かどうかを厳密に判定（paintMode必須）
-    const isEditable = editableIds.has(shape.id) && canEdit && activeCommentId;
-    
     // CRITICAL: isEditableShape関数で判定（editableIds依存をやめる）
     const isEditable = isEditableShape(shape);
 
