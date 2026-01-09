@@ -123,7 +123,6 @@ const ViewerCanvas = forwardRef(({
   const [lastPayload, setLastPayload] = useState(null);
   const [lastSuccessId, setLastSuccessId] = useState(null);
   const [isSaving, setIsSaving] = useState({});
-  const [dragTick, setDragTick] = useState(0);
   
   const isImage = mimeType?.startsWith('image/');
   const isEditMode = tool === 'select';
@@ -210,10 +209,13 @@ const ViewerCanvas = forwardRef(({
     // 重要：コメント切替/解除でも確実に同期
     setShapes(existingShapes ?? []);
 
-    // ついでに編集状態を完全リセット（残留編集防止）
+    // CRITICAL: 描画中は編集状態をリセットしない（描画継続を許可）
+    if (isDrawing || currentShape) {
+      return;
+    }
+
+    // 編集状態を完全リセット（残留編集防止）
     setSelectedId(null);
-    setCurrentShape(null);
-    setIsDrawing(false);
     setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
 
     requestAnimationFrame(() => {
