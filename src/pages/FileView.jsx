@@ -292,17 +292,123 @@ function FileViewContent() {
     }
   };
 
-  // CRITICAL: 送信ロック用のグローバルフラグ（モジュールスコープで管理）
+  // CRITICAL: useMutationで送信処理を管理（React Queryが重複防止を担当）
+  const createCommentMutation = useMutation({
+    mutationFn: async ({ body, shapes }) => {
+      // CRITICAL: mutationIdを生成（一度だけ）
+      const clientMutationId = crypto.randomUUID();
+      console.log(`[comment] create called mid=${clientMutationId}`);
+      
+      const existingComments = await base44.entities.ReviewComment.filter({ file_id: fileId });
+      const maxSeqNo = existingComments.reduce((max, c) => Math.max(max, c.seq_no || 0), 0);
+
+      // アンカー位置の計算
+      let anchor_nx = 0.5;
+      let anchor_ny = 0.5;
+      
+      if (shapes.length > 0) {
+        const allPoints = [];
+        shapes.forEach(shape => {
+          if (shape.nx !== undefined) {
+            allPoints.push({ x: shape.nx, y: shape.ny });
+            if (shape.nw !== undefined) {
+              allPoints.push({ x: shape.nx + shape.nw, y: shape.ny + shape.nh });
+            }
+          }
+          if (shape.normalizedPoints) {
+            for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
+              allPoints.push({ x: shape.normalizedPoints[i], y: shape.normalizedPoints[i + 1] });
+            }
+          }
+        });
+        
+        if (allPoints.length > 0) {
+          const xs = allPoints.map(p => p.x);
+          const ys = allPoints.map(p => p.y);
+          anchor_nx = (Math.min(...xs) + Math.max(...xs)) / 2;
+          anchor_ny = (Math.min(...ys) + Math.max(...ys)) / 2;
+        }
+      }
+
+      return base44.entities.ReviewComment.create({
+        file_id: fileId,
+        page_no: 1,
+        seq_no: maxSeqNo + 1,
+        anchor_nx,
+        anchor_ny,
+        author_type: 'user',
+        author_user_id: user?.id,
+        author_name: user?.full_name,
+        body,
+        resolved: false,
+        has_paint: shapes.length > 0,
+        client_mutation_id: clientMutationId,
+      });
+    },
+    onSuccess: () => {
+      showToast('コメントを送信しました', 'success');
+      // リセット処理
+      setCommentBody('');
+      setDraftShapes([]);
+      setComposerMode('new');
+      setComposerTargetCommentId(null);
+      setPaintSessionCommentId(null);
+      setActiveCommentId(null);
+      setPaintMode(false);
+      setTool('select');
+      setClearAfterSubmitNonce(n => n + 1);
+      viewerCanvasRef.current?.afterSubmitClear();
+      viewerCanvasRef.current?.clear();
+      queryClient.invalidateQueries(['comments']);
+      queryClient.invalidateQueries(['paintShapes']);
+    },
+    onError: (error) => {
+      showToast(`送信失敗: ${error.message}`, 'error');
+    },
+  });
+
+  const updateCommentMutation = useMutation({
+    mutationFn: async ({ targetId, body, hasShapes }) => {
+      return base44.entities.ReviewComment.update(targetId, {
+        body,
+        has_paint: hasShapes,
+      });
+    },
+    onSuccess: () => {
+      showToast('コメントを更新しました', 'success');
+      // リセット処理
+      setCommentBody('');
+      setDraftShapes([]);
+      setComposerMode('new');
+      setComposerTargetCommentId(null);
+      setPaintSessionCommentId(null);
+      setActiveCommentId(null);
+      setPaintMode(false);
+      setTool('select');
+      setClearAfterSubmitNonce(n => n + 1);
+      viewerCanvasRef.current?.afterSubmitClear();
+      viewerCanvasRef.current?.clear();
+      queryClient.invalidateQueries(['comments']);
+      queryClient.invalidateQueries(['paintShapes']);
+    },
+    onError: (error) => {
+      showToast(`更新失敗: ${error.message}`, 'error');
+    },
+  });
+
   const handleSendComment = (e) => {
     e?.preventDefault?.();
     e?.stopPropagation?.();
     
-    console.count("[submit] handler called");
-    console.log("[submit] globalSubmitLock:", globalSubmitLock, "isSubmitting:", isSubmitting);
+    // CRITICAL: refでロックチェック（useStateより確実）
+    if (submitLockRef.current) {
+      console.log("[submit] BLOCKED by submitLockRef");
+      return;
+    }
     
-    // ★最優先チェック：グローバルロックで即座にブロック（同期的に判定）
-    if (globalSubmitLock) {
-      console.log("[submit] BLOCKED by globalSubmitLock");
+    // mutation実行中もブロック
+    if (createCommentMutation.isPending || updateCommentMutation.isPending) {
+      console.log("[submit] BLOCKED by mutation isPending");
       return;
     }
     
@@ -311,111 +417,36 @@ function FileViewContent() {
       return;
     }
     
-    // ★ここで即座にロックをかける（非同期処理の前に同期的にロック）
-    globalSubmitLock = true;
+    // ★即座にロック
+    submitLockRef.current = true;
     setIsSubmitting(true);
     
-    console.count("[submit] lock acquired");
+    console.log("[submit] lock acquired, executing mutation");
     
-    (async () => {
-      try {
-        console.count("[submit] api called");
-        
-        // CRITICAL: 編集モード or activeCommentIdがある場合は「更新」
-        if ((composerMode === 'edit' && composerTargetCommentId) || activeCommentId) {
-          const targetId = composerTargetCommentId || activeCommentId;
-          
-          await base44.entities.ReviewComment.update(targetId, {
-            body: commentBody,
-            has_paint: draftShapes.length > 0,
-          });
-          
-          showToast('コメントを更新しました', 'success');
-        } else {
-          // 新規モード: 新しいコメントを作成
-          // CRITICAL: idempotency用のclientMutationIdを使用
-          if (!globalMutationId) {
-            globalMutationId = crypto.randomUUID();
-          }
-          const clientMutationId = globalMutationId;
-          console.log(`[comment] create called mid=${clientMutationId}`);
-          
-          const existingComments = await base44.entities.ReviewComment.filter({ file_id: fileId });
-          const maxSeqNo = existingComments.reduce((max, c) => Math.max(max, c.seq_no || 0), 0);
-
-          // アンカー位置の計算（draftShapesがあればその中心）
-          let anchor_nx = 0.5;
-          let anchor_ny = 0.5;
-          
-          if (draftShapes.length > 0) {
-            const allPoints = [];
-            draftShapes.forEach(shape => {
-              if (shape.nx !== undefined) {
-                allPoints.push({ x: shape.nx, y: shape.ny });
-                if (shape.nw !== undefined) {
-                  allPoints.push({ x: shape.nx + shape.nw, y: shape.ny + shape.nh });
-                }
-              }
-              if (shape.normalizedPoints) {
-                for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
-                  allPoints.push({ x: shape.normalizedPoints[i], y: shape.normalizedPoints[i + 1] });
-                }
-              }
-            });
-            
-            if (allPoints.length > 0) {
-              const xs = allPoints.map(p => p.x);
-              const ys = allPoints.map(p => p.y);
-              anchor_nx = (Math.min(...xs) + Math.max(...xs)) / 2;
-              anchor_ny = (Math.min(...ys) + Math.max(...ys)) / 2;
-            }
-          }
-
-          console.count(`[comment] network request`);
-          await base44.entities.ReviewComment.create({
-            file_id: fileId,
-            page_no: 1,
-            seq_no: maxSeqNo + 1,
-            anchor_nx,
-            anchor_ny,
-            author_type: 'user',
-            author_user_id: user?.id,
-            author_name: user?.full_name,
-            body: commentBody,
-            resolved: false,
-            has_paint: draftShapes.length > 0,
-            client_mutation_id: clientMutationId,
-          });
-          
-          showToast('コメントを送信しました', 'success');
+    // CRITICAL: 編集モード or activeCommentIdがある場合は「更新」
+    if ((composerMode === 'edit' && composerTargetCommentId) || activeCommentId) {
+      const targetId = composerTargetCommentId || activeCommentId;
+      updateCommentMutation.mutate(
+        { targetId, body: commentBody, hasShapes: draftShapes.length > 0 },
+        {
+          onSettled: () => {
+            submitLockRef.current = false;
+            setIsSubmitting(false);
+          },
         }
-
-        // CRITICAL: 送信成功後は必ず状態を完全リセット
-        setCommentBody('');
-        setDraftShapes([]);
-        setComposerMode('new');
-        setComposerTargetCommentId(null);
-        setPaintSessionCommentId(null);
-        setActiveCommentId(null);
-        setPaintMode(false);
-        setTool('select');
-        
-        // CRITICAL: ViewerCanvasの描画もクリア（ref経由で確実に実行）
-        setClearAfterSubmitNonce(n => n + 1);
-        viewerCanvasRef.current?.afterSubmitClear();
-        viewerCanvasRef.current?.clear();
-        
-        await queryClient.invalidateQueries(['comments']);
-        await queryClient.invalidateQueries(['paintShapes']);
-      } catch (error) {
-        showToast(`送信失敗: ${error.message}`, 'error');
-      } finally {
-        console.count("[submit] lock released");
-        setIsSubmitting(false);
-        globalSubmitLock = false;
-        globalMutationId = null; // ★完了したら次回用にクリア
-      }
-    })();
+      );
+    } else {
+      // 新規モード
+      createCommentMutation.mutate(
+        { body: commentBody, shapes: draftShapes },
+        {
+          onSettled: () => {
+            submitLockRef.current = false;
+            setIsSubmitting(false);
+          },
+        }
+      );
+    }
   };
 
   const handleCommentClick = (comment) => {
