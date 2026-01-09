@@ -222,21 +222,20 @@ const ViewerCanvas = forwardRef(({
   
   // CRITICAL: 実際に描画するshape配列（hidePaintUntilSelectで強制非表示）
   const renderedShapes = useMemo(() => {
-    if (DEBUG_MODE) {
-      console.log('[ViewerCanvas] renderedShapes calculation:', {
-        hidePaintUntilSelect,
-        showAllPaint,
-        activeCommentId,
-        draftCommentId: draftCommentIdRef.current,
-        lastStableId: lastStableCommentIdRef.current,
-        mergedShapesCount: mergedShapes.length,
-      });
-    }
+    console.log('[ViewerCanvas] renderedShapes calculation:', {
+      hidePaintUntilSelect,
+      showAllPaint,
+      activeCommentId,
+      draftCommentId: draftCommentIdRef.current,
+      lastStableId: lastStableCommentIdRef.current,
+      mergedShapesCount: mergedShapes.length,
+      mergedShapesIds: mergedShapes.map(s => ({ id: s.id?.substring(0, 8), cid: s.comment_id })),
+    });
 
     // ★送信完了後は強制非表示（これが本丸）
     // ただし、activeCommentIdが設定されている場合は表示を許可
     if (hidePaintUntilSelect && activeCommentId == null && !draftCommentIdRef.current) {
-      if (DEBUG_MODE) console.log('[ViewerCanvas] renderedShapes: hidden (hidePaintUntilSelect)');
+      console.log('[ViewerCanvas] renderedShapes: hidden (hidePaintUntilSelect)');
       return [];
     }
 
@@ -247,22 +246,28 @@ const ViewerCanvas = forwardRef(({
       activeCommentId ?? draftCommentIdRef.current ?? lastStableCommentIdRef.current ?? null;
 
     if (renderTargetId == null) {
-      if (DEBUG_MODE) console.log('[ViewerCanvas] renderedShapes: empty (no renderTargetId)');
+      console.log('[ViewerCanvas] renderedShapes: empty (no renderTargetId)');
       return [];
     }
 
     const target = String(renderTargetId);
     const filtered = mergedShapes.filter(s => {
       const cid = s.comment_id ?? s.commentId ?? s.commentID;
-      return cid != null && String(cid) === target;
+      const matches = cid != null && String(cid) === target;
+      console.log('[ViewerCanvas] shape filter:', {
+        shapeId: s.id?.substring(0, 8),
+        shapeCid: cid,
+        target,
+        matches,
+      });
+      return matches;
     });
     
-    if (DEBUG_MODE) {
-      console.log('[ViewerCanvas] renderedShapes result:', {
-        renderTargetId: target,
-        filteredCount: filtered.length,
-      });
-    }
+    console.log('[ViewerCanvas] renderedShapes result:', {
+      renderTargetId: target,
+      filteredCount: filtered.length,
+      filteredIds: filtered.map(s => s.id?.substring(0, 8)),
+    });
     
     return filtered;
   }, [mergedShapes, showAllPaint, activeCommentId, hidePaintUntilSelect]);
