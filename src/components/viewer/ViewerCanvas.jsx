@@ -391,7 +391,7 @@ const ViewerCanvas = forwardRef(({
         transformerRef.current.nodes([shapeRefs.current[selectedId]]);
         // テキストの場合：上に余白を追加して中央寄せ
         if (selectedShape.tool === 'text') {
-          transformerRef.current.padding(8);
+          transformerRef.current.padding(12);
           transformerRef.current.boundBoxFunc(null);
         } else {
           transformerRef.current.padding(0);
