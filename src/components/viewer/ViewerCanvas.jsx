@@ -333,14 +333,15 @@ const ViewerCanvas = forwardRef(({
       return;
     }
 
-    // ★ CRITICAL: ローカル優先マージ（ドラッグ後の位置を守る）
-    const mergedShapesLocal = (() => {
+    // ★ CRITICAL: state保持マージ（propsで置換せずstateを必ず保持）
+    setShapes(prev => {
       const map = new Map();
-      (existingShapes ?? []).forEach(s => map.set(s.id, s));
-      (shapes ?? []).forEach(s => map.set(s.id, s));
+      // 1) まず prev を入れて保持（これが重要）
+      (prev ?? []).forEach(s => map.set(s.id, s));
+      // 2) 次に existingShapes を入れて更新（サーバー値を反映）
+      (existingShapes ?? []).forEach(s => map.set(s.id, { ...map.get(s.id), ...s }));
       return Array.from(map.values());
-    })();
-    setShapes(mergedShapesLocal);
+    });
 
     // ✅ 選択は「存在しているなら維持」（存在チェックのみ、強制解除しない）
     setSelectedId(prevSel => {
@@ -888,7 +889,11 @@ const ViewerCanvas = forwardRef(({
         };
 
         addToUndoStack({ type: 'update', shapeId, before: existingShape, after: updatedShape });
-        setShapes(prev => prev.map(s => s.id === shapeId ? updatedShape : s));
+        setShapes(prev => {
+          const next = prev.map(s => s.id === shapeId ? updatedShape : s);
+          onShapesChange?.(next); // ★親にも即反映（巻き戻り防止）
+          return next;
+        });
 
         if (onSaveShape) {
           try {
@@ -925,7 +930,11 @@ const ViewerCanvas = forwardRef(({
       }
 
       addToUndoStack({ type: 'add', shapeId: normalizedShape.id });
-      setShapes(prev => [...prev, normalizedShape]);
+      setShapes(prev => {
+        const next = [...prev, normalizedShape];
+        onShapesChange?.(next); // ★親にも即反映（巻き戻り防止）
+        return next;
+      });
       setSelectedId(normalizedShape.id);
 
       if (onSaveShape) {
@@ -1999,23 +2008,25 @@ const ViewerCanvas = forwardRef(({
         {/* ★ DEBUGオーバーレイ Layer（最前面） */}
         {DEBUG_MODE && (
           <Layer listening={false}>
-            <Rect x={5} y={5} width={220} height={100} fill="rgba(0,0,0,0.8)" cornerRadius={4} />
+            <Rect x={5} y={5} width={280} height={160} fill="rgba(0,0,0,0.8)" cornerRadius={4} />
             <Text 
               x={10} 
               y={10} 
               text={[
+                `shapes(state): ${shapes.length}`,
+                `existingShapes(props): ${existingShapes?.length ?? 0}`,
+                `mergedShapes: ${mergedShapes.length}`,
+                `renderedShapes: ${renderedShapes?.length ?? 0}`,
+                `renderTargetId: ${String(activeCommentId ?? draftCommentIdRef.current ?? lastStableCommentIdRef.current ?? 'null')}`,
+                `---`,
                 `paintMode: ${paintMode}`,
                 `tool: ${tool}`,
-                `canSelect: ${canSelect}`,
-                `canMutate: ${canMutate}`,
                 `activeCommentId: ${String(activeCommentId ?? 'null')}`,
-                `effectiveActiveId: ${String(effectiveActiveId ?? 'null')}`,
-                `activeShapes: ${activeShapes?.length ?? 0}`,
-                `renderedShapes: ${renderedShapes?.length ?? 0}`,
+                `lastStableId: ${String(lastStableCommentIdRef.current ?? 'null')}`,
               ].join('\n')}
-              fontSize={12} 
+              fontSize={11} 
               fill="white" 
-              lineHeight={1.4}
+              lineHeight={1.3}
             />
           </Layer>
         )}
