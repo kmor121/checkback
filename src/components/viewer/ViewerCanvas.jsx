@@ -389,9 +389,9 @@ const ViewerCanvas = forwardRef(({
 
       if (canTransform) {
         transformerRef.current.nodes([shapeRefs.current[selectedId]]);
-        // テキストの場合：シンプルなpadding
+        // テキストの場合：Group内のRectを対象にする
         if (selectedShape.tool === 'text') {
-          transformerRef.current.padding(4);
+          transformerRef.current.padding(0);
           transformerRef.current.boundBoxFunc(null);
         } else {
           transformerRef.current.padding(0);
@@ -1846,17 +1846,27 @@ const ViewerCanvas = forwardRef(({
 
         const fontSize = shape.fontSize || Math.max(12, (shape.strokeWidth || 2) * 6);
 
-        // テキストの場合は stroke を使わず fill のみ使用
+        // テキストの場合：Group + Rect + Text で中央配置
+        // ボックスサイズを計算（テキスト幅・高さ + パディング）
+        const textContent = shape.text || '';
+        const charWidth = fontSize * 0.6; // 概算
+        const textWidth = Math.max(textContent.length * charWidth, 50);
+        const textHeight = fontSize;
+        const boxPadding = 8;
+        const boxW = shape.boxW ? shape.boxW * bgSize.width : textWidth + boxPadding * 2;
+        const boxH = shape.boxH ? shape.boxH * bgSize.height : textHeight + boxPadding * 2;
+
+        // テキストをボックス内で中央配置するためのオフセット
+        const textY = (boxH - textHeight) / 2;
+        const textX = boxPadding;
+
         return (
-          <Text
+          <Group
             key={shape.id}
             x={x}
             y={y}
-            text={shape.text || ''}
-            fontSize={fontSize}
-            lineHeight={1.0}
-            fill={shape.stroke}
-            fontFamily="Arial, sans-serif"
+            ref={(node) => { if (node) shapeRefs.current[shape.id] = node; }}
+            draggable={isEditable}
             onPointerDown={canEdit ? (e) => {
               if (!isEditable) return;
               e.cancelBubble = true;
@@ -1864,13 +1874,31 @@ const ViewerCanvas = forwardRef(({
               if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
               if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
             } : undefined}
-            ref={(node) => { if (node) shapeRefs.current[shape.id] = node; }}
-            draggable={isEditable}
             onDragStart={isEditable ? (e) => handleDragStart(shape, e) : undefined}
             onDragMove={isEditable ? (e) => handleDragMove(shape, e) : undefined}
             onDragEnd={isEditable ? (e) => handleDragEnd(shape, e) : undefined}
+            onTransformEnd={isEditable ? (e) => handleTransformEnd(shape, e) : undefined}
             onDblClick={canEdit ? () => handleTextDblClick(shape) : undefined}
-          />
+          >
+            {/* 透明Rect：Transformerの対象・当たり判定 */}
+            <Rect
+              width={boxW}
+              height={boxH}
+              fill="transparent"
+              listening={true}
+            />
+            {/* テキスト：中央配置 */}
+            <Text
+              x={textX}
+              y={textY}
+              text={textContent}
+              fontSize={fontSize}
+              lineHeight={1.0}
+              fill={shape.stroke}
+              fontFamily="Arial, sans-serif"
+              listening={false}
+            />
+          </Group>
         );
       }
       return null;
