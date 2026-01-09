@@ -946,9 +946,11 @@ const ViewerCanvas = forwardRef(({
           fontSize,
         };
 
-        addToUndoStack({ type: 'update', shapeId, before: existingShape, after: updatedShape });
+        // CRITICAL: dirty/localTs付与で巻き戻り防止
+        const updatedWithDirty = { ...updatedShape, _dirty: true, _localTs: Date.now() };
+        addToUndoStack({ type: 'update', shapeId, before: existingShape, after: updatedWithDirty });
         setShapes(prev => {
-          const next = prev.map(s => s.id === shapeId ? updatedShape : s);
+          const next = prev.map(s => s.id === shapeId ? updatedWithDirty : s);
           onShapesChange?.(next); // ★親にも即反映（巻き戻り防止）
           return next;
         });
@@ -956,6 +958,8 @@ const ViewerCanvas = forwardRef(({
         if (onSaveShape) {
           try {
             await onSaveShape(updatedShape, 'upsert');
+            // CRITICAL: dirty解除
+            setShapes(prev => prev.map(s => s.id === shapeId ? { ...s, _dirty: false } : s));
           } catch (err) {
             console.error('Save text error:', err);
           }
