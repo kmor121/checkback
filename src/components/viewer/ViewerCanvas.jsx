@@ -1870,41 +1870,61 @@ const ViewerCanvas = forwardRef(({
         }
 
         const fontSize = shape.fontSize || Math.max(12, (shape.strokeWidth || 2) * 6);
-
-        // テキストの場合：Group + Rect + Text で中央配置
         const textContent = shape.text || '';
 
-        // パディング設定（右余白を小さく）
-        const padL = 4;  // 左
-        const padR = 4;  // 右
-        const padY = 3;  // 上下
+        // ★ フォント設定を完全統一（測定と描画で同一）
+        const fontProps = {
+          fontFamily: 'Arial, sans-serif',
+          fontStyle: 'normal',
+          fontSize: fontSize,
+          lineHeight: 1,
+          letterSpacing: 0,
+          padding: 0,
+        };
 
-        // テキストサイズを実測（Konva Textを一時作成、getClientRectでグリフbboxを取得）
+        // パディング設定
+        const padL = 4;
+        const padR = 4;
+        const padY = 3;
+
+        // ★ 測定用Textを作成（fontPropsを完全一致させる）
         const tempText = new window.Konva.Text({
           text: textContent,
-          fontSize: fontSize,
-          fontFamily: 'Arial, sans-serif',
-          lineHeight: 1.0,
-          padding: 0,
+          ...fontProps,
         });
         const tw = tempText.getTextWidth();
-        const th = tempText.height();
-        const glyphRect = tempText.getClientRect({ skipTransform: true });
-        const glyphTop = glyphRect.y;    // グリフの上端オフセット（通常0〜数px）
-        const glyphH = glyphRect.height; // グリフの実際の高さ
+        const bbox = tempText.getClientRect({ skipTransform: true });
         tempText.destroy();
 
-        // ボックスサイズ（リサイズ済みならそれを使用、なければグリフ実測ベースで自動計算）
-        const hasManualBoxW = shape.boxW != null && shape.boxResized === true;
-        const hasManualBoxH = shape.boxH != null && shape.boxResized === true;
-        const boxW = hasManualBoxW ? shape.boxW * bgSize.width : tw + padL + padR;
-        const boxH = hasManualBoxH ? shape.boxH * bgSize.height : glyphH + padY * 2;
+        // ★ 判定を厳密に（boxResized === true かつ boxH != null）
+        const hasManualBoxW = shape.boxResized === true && shape.boxW != null;
+        const hasManualBoxH = shape.boxResized === true && shape.boxH != null;
 
-        // テキスト配置（autoサイズ時はグリフ上端がpadYに来るように、リサイズ済みは中央配置）
+        // ★ auto時：bbox.heightベースで計算（グリフ実測）
+        const autoBoxW = tw + padL + padR;
+        const autoBoxH = bbox.height + padY * 2;
+        
+        const boxW = hasManualBoxW ? shape.boxW * bgSize.width : autoBoxW;
+        const boxH = hasManualBoxH ? shape.boxH * bgSize.height : autoBoxH;
+
+        // ★ textY計算：auto時はグリフ上端をpadYに固定
         const textX = padL;
-        const textY = hasManualBoxH 
-          ? padY + (boxH - padY * 2 - glyphH) / 2 - glyphTop  // リサイズ済み：中央配置
-          : padY - glyphTop;  // auto：グリフ上端をpadYに固定
+        const textY = hasManualBoxH
+          ? padY + (boxH - padY * 2 - bbox.height) / 2 - bbox.y  // リサイズ済み：中央配置
+          : padY - bbox.y;  // auto：グリフ上端をpadYに固定
+
+        // デバッグログ（auto時の確認用）
+        if (DEBUG_MODE && !hasManualBoxH) {
+          console.log('[Text auto]', {
+            id: shape.id?.substring(0, 8),
+            boxResized: shape.boxResized,
+            shapeBoxH: shape.boxH,
+            bboxY: bbox.y.toFixed(2),
+            bboxH: bbox.height.toFixed(2),
+            autoBoxH: autoBoxH.toFixed(2),
+            textY: textY.toFixed(2),
+          });
+        }
 
         return (
           <Group
@@ -1933,16 +1953,13 @@ const ViewerCanvas = forwardRef(({
               fill="transparent"
               listening={true}
             />
-            {/* テキスト：中央配置 */}
+            {/* テキスト：fontPropsを完全一致 */}
             <Text
               x={textX}
               y={textY}
               text={textContent}
-              fontSize={fontSize}
-              lineHeight={1.0}
-              padding={0}
+              {...fontProps}
               fill={shape.stroke}
-              fontFamily="Arial, sans-serif"
               listening={false}
             />
           </Group>
