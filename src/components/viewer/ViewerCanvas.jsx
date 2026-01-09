@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef, useMemo } from 'react';
 import { Stage, Layer, Line, Rect, Circle, Arrow, Image as KonvaImage, Group, Transformer, Text } from 'react-konva';
 import useImage from 'use-image';
-// CommentPin は使用しない（バッジ非表示）
 
 // UUID生成（clientShapeId用、再生成されない保証）
 function generateUUID() {
@@ -13,6 +12,10 @@ function generateUUID() {
 }
 
 const DEBUG_MODE = import.meta.env.VITE_DEBUG === 'true';
+
+// ★ CRITICAL: comment_id判定ユーティリティ（フィールド名/型ブレ吸収）
+const shapeCommentId = (s) => s?.comment_id ?? s?.commentId ?? s?.commentID ?? null;
+const sameId = (a, b) => String(a ?? '') === String(b ?? '');
 
 // 背景画像コンポーネント（チラつき防止：前の画像を保持）
 function BackgroundImage({ src, onLoad }) {
@@ -146,7 +149,9 @@ const ViewerCanvas = forwardRef(({
   const isEditMode = tool === 'select';
   const isDrawMode = !isEditMode && (paintMode || tool === 'text');
   // CRITICAL: 編集操作（drag/transform/delete）はpaintMode中のみ許可
+  // ★ 切り分け用：選択できない原因がpaintModeかどうか確認時は下の行をコメントアウト
   const canEdit = paintMode && isEditMode;
+  // const canEdit = isEditMode; // ★ デバッグ用：paintModeを無視して選択可能にする
   
   // CRITICAL: 描画に使うcomment_idを取得（仮IDまたはactiveCommentId）
   const getCommentIdForDrawing = () => {
@@ -191,20 +196,18 @@ const ViewerCanvas = forwardRef(({
     return [];
   }, [mergedShapes, showAllPaint, activeCommentId]);
   
-  // CRITICAL: 正規化ユーティリティ（0や空文字を弾かない）
-  const norm = (v) => (v == null ? null : String(v));
-  const getCommentId = (s) => s.comment_id ?? s.commentId ?? s.commentID;
-  const getShapeCommentId = (s) => s?.comment_id ?? s?.commentId ?? s?.commentID ?? null;
-  const sameId = (a, b) => String(a ?? '') === String(b ?? '');
+  // ★ CRITICAL: activeShapes を existingShapes から抽出（comment_id統一判定）
+  const activeShapes = useMemo(() => {
+    if (!existingShapes?.length) return [];
+    if (activeCommentId == null) return [];
+    return existingShapes.filter((s) => sameId(shapeCommentId(s), activeCommentId));
+  }, [existingShapes, activeCommentId]);
   
-  // CRITICAL: editableIds を shapes(state) から作る（描いた直後のshapeも含む）
-  const editableIds = useMemo(() => {
-    return new Set(
-      shapes
-        .filter(s => sameId(getShapeCommentId(s), activeCommentId))
-        .map(s => s.id)
-    );
-  }, [shapes, activeCommentId]);
+  // ★ CRITICAL: editableIds は activeShapes を元に作る
+  const editableIds = useMemo(
+    () => new Set(activeShapes.map((s) => s.id)),
+    [activeShapes]
+  );
 
   // CRITICAL: 編集可能かをcomment_id一致で判定（editableIds依存をやめる）
   const isEditableShape = (shape) => {
@@ -672,8 +675,15 @@ const ViewerCanvas = forwardRef(({
         paintMode,
         isDrawMode,
         isDrawing,
-        textEditorVisible: textEditor.visible
+        textEditorVisible: textEditor.visible,
+        activeCommentId,
       });
+    }
+
+    // ★ CRITICAL: activeCommentIdがnullなら描画開始をブロック（方針①）
+    if (activeCommentId == null && tool !== 'select') {
+      console.warn('[ViewerCanvas] Drawing blocked: activeCommentId is null');
+      return;
     }
 
     // CRITICAL: tool='text' のときは最優先で処理（paintMode不問）
@@ -998,14 +1008,22 @@ const ViewerCanvas = forwardRef(({
       // 正規化データを作成
       const normalizedShape = {
         id: shape.id,
-        comment_id: shape.comment_id || activeCommentId, // ★shapeから取得 or activeCommentId
-        commentId: shape.comment_id || activeCommentId,  // ★両方のキーで入れる
+        comment_id: activeCommentId, // ★ CRITICAL: 必ず activeCommentId を入れる
+        commentId: activeCommentId,  // ★両方のキーで入れる
         tool: shapeTool,
         stroke: shape.stroke,
         strokeWidth: shape.strokeWidth,
         bgWidth: bgSize.width,
         bgHeight: bgSize.height,
       };
+      
+      // ★ console.log：描画確定直後に comment_id が入ってるか確認
+      console.log("[paint] normalizedShape ids:", {
+        id: normalizedShape?.id,
+        comment_id: normalizedShape?.comment_id,
+        commentId: normalizedShape?.commentId,
+        activeCommentId,
+      });
 
         if (shapeTool === 'pen' && shape.points) {
           const normalizedPoints = [];
@@ -1451,8 +1469,8 @@ const ViewerCanvas = forwardRef(({
   const renderShape = (shape, isExisting = false) => {
     const isSelected = selectedId === shape.id;
     const canTransform = shape.tool === 'rect' || shape.tool === 'circle' || shape.tool === 'text' || shape.tool === 'arrow';
-    // CRITICAL: isEditable の条件を「activeCommentId を truthy で見ない」に統一
-    const isEditable = canEdit && activeCommentId != null && sameId(getShapeCommentId(shape), activeCommentId);
+    // ★ CRITICAL: isEditable の条件を「activeCommentId を truthy で見ない」に統一
+    const isEditable = canEdit && activeCommentId != null && sameId(shapeCommentId(shape), activeCommentId);
 
     const commonProps = {
       key: shape.id,
@@ -1936,6 +1954,28 @@ const ViewerCanvas = forwardRef(({
             <Transformer ref={transformerRef} />
           </Group>
         </Layer>
+        
+        {/* ★ DEBUGオーバーレイ Layer（最前面） */}
+        {DEBUG_MODE && (
+          <Layer listening={false}>
+            <Rect x={5} y={5} width={220} height={100} fill="rgba(0,0,0,0.8)" cornerRadius={4} />
+            <Text 
+              x={10} 
+              y={10} 
+              text={[
+                `paintMode: ${paintMode}`,
+                `tool: ${tool}`,
+                `canEdit: ${canEdit}`,
+                `activeCommentId: ${String(activeCommentId ?? 'null')}`,
+                `activeShapes: ${activeShapes?.length ?? 0}`,
+                `renderedShapes: ${renderedShapes?.length ?? 0}`,
+              ].join('\n')}
+              fontSize={12} 
+              fill="white" 
+              lineHeight={1.4}
+            />
+          </Layer>
+        )}
       </Stage>
       
       {/* デバッグオーバーレイ（拡張版） */}
