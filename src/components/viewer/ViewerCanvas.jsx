@@ -148,12 +148,14 @@ const ViewerCanvas = forwardRef(({
   // CRITICAL: 編集操作（drag/transform/delete）はpaintMode中のみ許可
   const canEdit = paintMode && isEditMode;
   
-  // CRITICAL: commentIdを確定させる（描画開始前に必ず呼ぶ）
-  const ensureCommentId = async (imgX, imgY) => {
+  // CRITICAL: 描画に使うcomment_idを取得（仮IDまたはactiveCommentId）
+  const getCommentIdForDrawing = () => {
     if (activeCommentId) return activeCommentId;
-    if (!onBeginPaint) return null;
-    const id = await onBeginPaint(imgX, imgY, bgSize.width, bgSize.height);
-    return id;
+    // 仮ID生成（onBeginPaintは非同期で投げるだけ）
+    if (!draftCommentIdRef.current) {
+      draftCommentIdRef.current = generateUUID();
+    }
+    return draftCommentIdRef.current;
   };
   
   // CRITICAL: existingShapes + shapes を1本にマージ（ローカル優先）
@@ -189,14 +191,14 @@ const ViewerCanvas = forwardRef(({
     }
   }, [fileUrl]);
 
-  // CRITICAL: activeCommentId変化時のリセット（描画開始による null→id は除外）
+  // CRITICAL: activeCommentId変化時のリセット（描画中は絶対にリセットしない）
   useEffect(() => {
     const prev = prevActiveCommentIdRef.current;
     prevActiveCommentIdRef.current = activeCommentId;
     
-    // ★重要: 描画開始により null -> id になった直後は、描画中ならリセットしない
-    if (prev == null && activeCommentId != null && isDrawingRef2.current) {
-      if (DEBUG_MODE) console.log('[ViewerCanvas] skip reset (comment created during drawing)');
+    // ★超重要: 描画中 or currentShapeがある場合は絶対にリセットしない
+    if (isDrawing || currentShape) {
+      if (DEBUG_MODE) console.log('[ViewerCanvas] skip reset (drawing in progress)');
       return;
     }
     
@@ -216,7 +218,7 @@ const ViewerCanvas = forwardRef(({
         transformerRef.current.getLayer()?.batchDraw();
       }
     });
-  }, [activeCommentId]);
+  }, [activeCommentId, isDrawing, currentShape]);
   
   // CRITICAL: 仮commentIdで描いたshapeを、activeCommentId確定後に付け替える
   useEffect(() => {
@@ -611,7 +613,7 @@ const ViewerCanvas = forwardRef(({
   };
 
   // PointerDown: 描画開始（描画モード時のみ）
-  const handlePointerDown = async (e) => {
+  const handlePointerDown = (e) => {
     if (DEBUG_MODE) {
       console.log('[ViewerCanvas] handlePointerDown called', {
         tool,
@@ -678,22 +680,15 @@ const ViewerCanvas = forwardRef(({
         setImgPos({ x: imgCoords.x, y: imgCoords.y });
       }
       
-      // ★超重要：先にコメントIDを確定（await必須）
-      const commentId = await ensureCommentId(imgCoords.x, imgCoords.y);
-      if (!commentId) {
-        console.error('[ViewerCanvas] Failed to ensure comment ID');
-        return;
-      }
-      
-      // CRITICAL: この描画セッション中はactiveCommentIdリセットを抑止
-      suppressResetRef.current = true;
-      
       setIsDrawing(true);
+
+      // CRITICAL: comment_idを取得（仮IDまたはactiveCommentId）
+      const commentId = getCommentIdForDrawing();
 
       // CRITICAL: clientShapeId は1回だけ発行して固定（移動・編集で絶対に再生成しない）
       const newShape = {
         id: generateUUID(),
-        comment_id: commentId, // ★確定したcommentIdを必ず紐づける
+        comment_id: commentId,
         tool,
         stroke: strokeColor,
         strokeWidth: strokeWidth,
@@ -708,12 +703,15 @@ const ViewerCanvas = forwardRef(({
         setCurrentShape(newShape);
       }
 
-      // 抑止解除（commentId確定後なので即座に）
-      suppressResetRef.current = false;
+      // onBeginPaintは非同期で投げるだけ（awaitしない）
+      if (onBeginPaint && !activeCommentId) {
+        queueMicrotask(() => {
+          onBeginPaint(imgCoords.x, imgCoords.y, bgSize.width, bgSize.height);
+        });
+      }
     } catch (err) {
       console.error('PointerDown Error:', err);
       setError(`PointerDown Error: ${err.message}`);
-      suppressResetRef.current = false;
     }
   };
   
