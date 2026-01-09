@@ -148,11 +148,12 @@ const ViewerCanvas = forwardRef(({
   // CRITICAL: 編集操作（drag/transform/delete）はpaintMode中のみ許可
   const canEdit = paintMode && isEditMode;
   
-  // CRITICAL: 描画に使うcomment_idを取得（null時は仮IDで）
-  const ensureCommentIdForDrawing = () => {
+  // CRITICAL: commentIdを確定させる（描画開始前に必ず呼ぶ）
+  const ensureCommentId = async (imgX, imgY) => {
     if (activeCommentId) return activeCommentId;
-    if (!draftCommentIdRef.current) draftCommentIdRef.current = generateUUID();
-    return draftCommentIdRef.current;
+    if (!onBeginPaint) return null;
+    const id = await onBeginPaint(imgX, imgY, bgSize.width, bgSize.height);
+    return id;
   };
   
   // CRITICAL: existingShapes + shapes を1本にマージ（ローカル優先）
@@ -163,23 +164,22 @@ const ViewerCanvas = forwardRef(({
     return Array.from(map.values());
   }, [existingShapes, shapes]);
   
-  // CRITICAL: 実際に描画するshape配列
+  // CRITICAL: 実際に描画するshape配列（互換性対策: comment_id ?? commentId）
   const renderedShapes = useMemo(() => {
     if (showAllPaint) return mergedShapes;
     
-    // activeCommentIdがある時はそれだけ
-    if (activeCommentId) return mergedShapes.filter(s => s.comment_id === activeCommentId);
-    
-    // activeCommentIdが無いけど描き始めてる時は draft を見せる
-    if (draftCommentIdRef.current) return mergedShapes.filter(s => s.comment_id === draftCommentIdRef.current);
+    // activeCommentIdがある時はそれだけ（互換性対策）
+    if (activeCommentId) {
+      return mergedShapes.filter(s => (s.comment_id ?? s.commentId) === activeCommentId);
+    }
     
     return [];
   }, [mergedShapes, showAllPaint, activeCommentId]);
   
-  // CRITICAL: 編集可能なIDセット
+  // CRITICAL: 編集可能なIDセット（互換性対策: comment_id ?? commentId）
   const editableIds = useMemo(() => {
     if (!activeCommentId) return new Set();
-    return new Set(renderedShapes.filter(s => s.comment_id === activeCommentId).map(s => s.id));
+    return new Set(renderedShapes.filter(s => (s.comment_id ?? s.commentId) === activeCommentId).map(s => s.id));
   }, [renderedShapes, activeCommentId]);
   
   // fileUrl安定化（最後の有効URLを保持）
@@ -611,7 +611,7 @@ const ViewerCanvas = forwardRef(({
   };
 
   // PointerDown: 描画開始（描画モード時のみ）
-  const handlePointerDown = (e) => {
+  const handlePointerDown = async (e) => {
     if (DEBUG_MODE) {
       console.log('[ViewerCanvas] handlePointerDown called', {
         tool,
@@ -678,18 +678,22 @@ const ViewerCanvas = forwardRef(({
         setImgPos({ x: imgCoords.x, y: imgCoords.y });
       }
       
+      // ★超重要：先にコメントIDを確定（await必須）
+      const commentId = await ensureCommentId(imgCoords.x, imgCoords.y);
+      if (!commentId) {
+        console.error('[ViewerCanvas] Failed to ensure comment ID');
+        return;
+      }
+      
       // CRITICAL: この描画セッション中はactiveCommentIdリセットを抑止
       suppressResetRef.current = true;
       
       setIsDrawing(true);
 
-      // CRITICAL: comment_idを必ず付ける（null時は仮IDで）
-      const commentIdForShape = ensureCommentIdForDrawing();
-
       // CRITICAL: clientShapeId は1回だけ発行して固定（移動・編集で絶対に再生成しない）
       const newShape = {
         id: generateUUID(),
-        comment_id: commentIdForShape,
+        comment_id: commentId, // ★確定したcommentIdを必ず紐づける
         tool,
         stroke: strokeColor,
         strokeWidth: strokeWidth,
@@ -704,20 +708,12 @@ const ViewerCanvas = forwardRef(({
         setCurrentShape(newShape);
       }
 
-      // CRITICAL: 描画状態をセットしてから onBeginPaint（親stateが動いても描画が死なない）
-      if (onBeginPaint && !isDrawing) {
-        queueMicrotask(() => {
-          onBeginPaint(imgCoords.x, imgCoords.y, bgSize.width, bgSize.height);
-          // onBeginPaint完了後に抑止解除
-          suppressResetRef.current = false;
-        });
-      } else {
-        // onBeginPaintが無い場合は即座に解除
-        suppressResetRef.current = false;
-      }
+      // 抑止解除（commentId確定後なので即座に）
+      suppressResetRef.current = false;
     } catch (err) {
       console.error('PointerDown Error:', err);
       setError(`PointerDown Error: ${err.message}`);
+      suppressResetRef.current = false;
     }
   };
   
@@ -811,11 +807,9 @@ const ViewerCanvas = forwardRef(({
       }
     } else {
       // 新規テキスト作成
-      const commentIdForShape = ensureCommentIdForDrawing();
-
       const normalizedShape = {
         id: generateUUID(),
-        comment_id: commentIdForShape,
+        comment_id: activeCommentId, // ★activeCommentIdを必ず付ける
         tool: 'text',
         stroke: strokeColor,
         strokeWidth: strokeWidth,
@@ -941,13 +935,10 @@ const ViewerCanvas = forwardRef(({
         }
       }
 
-      // CRITICAL: comment_idを確定（activeCommentIdがあればそれ、なければdraft）
-      const commentIdForShape = activeCommentId || draftCommentIdRef.current;
-
       // 正規化データを作成
       const normalizedShape = {
         id: shape.id,
-        comment_id: commentIdForShape,
+        comment_id: shape.comment_id || activeCommentId, // ★shapeから取得 or activeCommentId
         tool: shapeTool,
         stroke: shape.stroke,
         strokeWidth: shape.strokeWidth,
