@@ -757,10 +757,17 @@ const ViewerCanvas = forwardRef(({
         isDrawing,
         textEditorVisible: textEditor.visible,
         activeCommentId,
+        hidePaintUntilSelect,
       });
     }
 
-    // ★ CRITICAL: activeCommentIdがnくonBeginPaintも無い場合のみブロック（方針②）
+    // ★ CRITICAL: 描画開始時にhidePaintUntilSelectを解除（新規描画を許可）
+    if (hidePaintUntilSelect && paintMode && tool !== 'select') {
+      if (DEBUG_MODE) console.log('[ViewerCanvas] Clearing hidePaintUntilSelect on draw start');
+      setHidePaintUntilSelect(false);
+    }
+
+    // ★ CRITICAL: activeCommentIdがnullでもonBeginPaintがあれば描画を許可
     if (activeCommentId == null && tool !== 'select' && !onBeginPaint) {
       console.warn('[ViewerCanvas] Drawing blocked: activeCommentId is null and onBeginPaint is missing');
       return;
