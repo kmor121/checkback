@@ -49,12 +49,17 @@ function FileViewContent() {
   // CRITICAL: 送信完了後のキャンバスクリア用nonce & 連打防止
   const [clearAfterSubmitNonce, setClearAfterSubmitNonce] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const submitLockRef = useRef(false);
+  const inFlightRef = useRef(null); // ★Promiseロック方式
   
   const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
 
-  // DEBUG: Trace ReviewComment.create calls
+  // DEBUG: Trace ReviewComment.create calls + mount/unmount log
+  useEffect(() => {
+    console.log("[FileView] mounted");
+    return () => console.log("[FileView] unmounted");
+  }, []);
+
   useEffect(() => {
     const DEBUG_MODE = import.meta.env.VITE_DEBUG === 'true';
     if (DEBUG_MODE && base44.entities.ReviewComment) {
@@ -306,102 +311,112 @@ function FileViewContent() {
     }
   };
 
-  const handleSendComment = async (e) => {
+  const handleSendComment = (e) => {
     e?.preventDefault?.();
     e?.stopPropagation?.();
     
+    console.count("[submit] handler called");
+    console.log("[submit] inFlight:", !!inFlightRef.current, "isSubmitting:", isSubmitting);
+    
     if (!commentBody.trim() || !user) return;
     
-    // CRITICAL: 連打防止（lockチェック）
-    if (submitLockRef.current || isSubmitting) return;
-    submitLockRef.current = true;
-    setIsSubmitting(true);
+    // ★Promiseロック：すでに送信中なら同じPromiseを返す（=二重送信ゼロ）
+    if (inFlightRef.current) {
+      console.log("[submit] blocked by inFlightRef");
+      return inFlightRef.current;
+    }
     
-    console.count("[submit] called"); // ★二重起動検出
-    
-    try {
-      // CRITICAL: 編集モード or activeCommentIdがある場合は「更新」
-      if ((composerMode === 'edit' && composerTargetCommentId) || activeCommentId) {
-        const targetId = composerTargetCommentId || activeCommentId;
+    const p = (async () => {
+      try {
+        setIsSubmitting(true);
+        console.count("[submit] api called");
         
-        await base44.entities.ReviewComment.update(targetId, {
-          body: commentBody,
-          has_paint: draftShapes.length > 0,
-        });
-        
-        showToast('コメントを更新しました', 'success');
-      } else {
-        // 新規モード: 新しいコメントを作成（通常このパスは通らない想定）
-        const existingComments = await base44.entities.ReviewComment.filter({ file_id: fileId });
-        const maxSeqNo = existingComments.reduce((max, c) => Math.max(max, c.seq_no || 0), 0);
-
-        // アンカー位置の計算（draftShapesがあればその中心）
-        let anchor_nx = 0.5;
-        let anchor_ny = 0.5;
-        
-        if (draftShapes.length > 0) {
-          const allPoints = [];
-          draftShapes.forEach(shape => {
-            if (shape.nx !== undefined) {
-              allPoints.push({ x: shape.nx, y: shape.ny });
-              if (shape.nw !== undefined) {
-                allPoints.push({ x: shape.nx + shape.nw, y: shape.ny + shape.nh });
-              }
-            }
-            if (shape.normalizedPoints) {
-              for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
-                allPoints.push({ x: shape.normalizedPoints[i], y: shape.normalizedPoints[i + 1] });
-              }
-            }
+        // CRITICAL: 編集モード or activeCommentIdがある場合は「更新」
+        if ((composerMode === 'edit' && composerTargetCommentId) || activeCommentId) {
+          const targetId = composerTargetCommentId || activeCommentId;
+          
+          await base44.entities.ReviewComment.update(targetId, {
+            body: commentBody,
+            has_paint: draftShapes.length > 0,
           });
           
-          if (allPoints.length > 0) {
-            const xs = allPoints.map(p => p.x);
-            const ys = allPoints.map(p => p.y);
-            anchor_nx = (Math.min(...xs) + Math.max(...xs)) / 2;
-            anchor_ny = (Math.min(...ys) + Math.max(...ys)) / 2;
+          showToast('コメントを更新しました', 'success');
+        } else {
+          // 新規モード: 新しいコメントを作成
+          const existingComments = await base44.entities.ReviewComment.filter({ file_id: fileId });
+          const maxSeqNo = existingComments.reduce((max, c) => Math.max(max, c.seq_no || 0), 0);
+
+          // アンカー位置の計算（draftShapesがあればその中心）
+          let anchor_nx = 0.5;
+          let anchor_ny = 0.5;
+          
+          if (draftShapes.length > 0) {
+            const allPoints = [];
+            draftShapes.forEach(shape => {
+              if (shape.nx !== undefined) {
+                allPoints.push({ x: shape.nx, y: shape.ny });
+                if (shape.nw !== undefined) {
+                  allPoints.push({ x: shape.nx + shape.nw, y: shape.ny + shape.nh });
+                }
+              }
+              if (shape.normalizedPoints) {
+                for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
+                  allPoints.push({ x: shape.normalizedPoints[i], y: shape.normalizedPoints[i + 1] });
+                }
+              }
+            });
+            
+            if (allPoints.length > 0) {
+              const xs = allPoints.map(p => p.x);
+              const ys = allPoints.map(p => p.y);
+              anchor_nx = (Math.min(...xs) + Math.max(...xs)) / 2;
+              anchor_ny = (Math.min(...ys) + Math.max(...ys)) / 2;
+            }
           }
+
+          await base44.entities.ReviewComment.create({
+            file_id: fileId,
+            page_no: 1,
+            seq_no: maxSeqNo + 1,
+            anchor_nx,
+            anchor_ny,
+            author_type: 'user',
+            author_user_id: user?.id,
+            author_name: user?.full_name,
+            body: commentBody,
+            resolved: false,
+            has_paint: draftShapes.length > 0,
+          });
+          
+          showToast('コメントを送信しました', 'success');
         }
 
-        await base44.entities.ReviewComment.create({
-          file_id: fileId,
-          page_no: 1,
-          seq_no: maxSeqNo + 1,
-          anchor_nx,
-          anchor_ny,
-          author_type: 'user',
-          author_user_id: user?.id,
-          author_name: user?.full_name,
-          body: commentBody,
-          resolved: false,
-          has_paint: draftShapes.length > 0,
-        });
+        // CRITICAL: 送信成功後は必ず状態を完全リセット
+        setCommentBody('');
+        setDraftShapes([]);
+        setComposerMode('new');
+        setComposerTargetCommentId(null);
+        setPaintSessionCommentId(null);
+        setActiveCommentId(null);
+        setPaintMode(false);
+        setTool('select');
         
-        showToast('コメントを送信しました', 'success');
+        // CRITICAL: ViewerCanvasの描画もクリア（nonce方式）
+        setClearAfterSubmitNonce(n => n + 1);
+        viewerCanvasRef.current?.clear();
+        
+        await queryClient.invalidateQueries(['comments']);
+        await queryClient.invalidateQueries(['paintShapes']);
+      } catch (error) {
+        showToast(`送信失敗: ${error.message}`, 'error');
+      } finally {
+        setIsSubmitting(false);
+        inFlightRef.current = null;
       }
-
-      // CRITICAL: 送信成功後は必ず状態を完全リセット
-      setCommentBody('');
-      setDraftShapes([]);
-      setComposerMode('new');
-      setComposerTargetCommentId(null);
-      setPaintSessionCommentId(null);
-      setActiveCommentId(null);
-      setPaintMode(false);
-      
-      // CRITICAL: ViewerCanvasの描画もクリア（nonce方式）
-      setClearAfterSubmitNonce(n => n + 1);
-      viewerCanvasRef.current?.clear();
-      
-      await queryClient.invalidateQueries(['comments']);
-      await queryClient.invalidateQueries(['paintShapes']);
-    } catch (error) {
-      showToast(`送信失敗: ${error.message}`, 'error');
-    } finally {
-      // CRITICAL: 連打防止解除
-      submitLockRef.current = false;
-      setIsSubmitting(false);
-    }
+    })();
+    
+    inFlightRef.current = p;
+    return p;
   };
 
   const handleCommentClick = (comment) => {
@@ -720,6 +735,7 @@ function FileViewContent() {
               type="submit"
               disabled={isSubmitting || (!commentBody.trim() && draftShapes.length === 0)}
               className="w-full bg-blue-600 hover:bg-blue-700"
+              style={{ pointerEvents: isSubmitting ? "none" : "auto" }}
             >
               <Send className="w-4 h-4 mr-2" />
               {composerMode === 'edit' ? '保存' : '送信'}
