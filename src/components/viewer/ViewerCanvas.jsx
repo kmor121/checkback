@@ -1116,9 +1116,11 @@ const ViewerCanvas = forwardRef(({
       // Undo履歴に追加
       addToUndoStack({ type: 'add', shapeId: normalizedShape.id });
 
-      // CRITICAL: Optimistic update は追加（新規描画のみ）+ dirty/localTs付与
+      // CRITICAL: Map方式でupsert（追加）+ dirty/localTs付与
       const shapeWithDirty = { ...normalizedShape, _dirty: true, _localTs: Date.now() };
-      setShapes(prev => [...prev, shapeWithDirty]);
+      shapesMapRef.current.set(shapeWithDirty.id, shapeWithDirty);
+      bump();
+      onShapesChange?.(getAllShapes()); // ★ 常に全量を渡す
       setCurrentShape(null);
 
       // ✅ 描画直後に選択状態にする
