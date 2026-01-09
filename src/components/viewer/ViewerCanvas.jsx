@@ -81,6 +81,9 @@ const ViewerCanvas = forwardRef(({
   const shapeRefs = useRef({});
   const shapesRef = useRef([]); // CRITICAL: 常に最新shapesを参照（stale回避）
   const drawViewRef = useRef(null); // CRITICAL: 描画中のview固定（ジャンプ防止）
+  const isDraggingRef = useRef(false); // CRITICAL: ドラッグ中フラグ（残像防止）
+  const dragRafRef = useRef(null); // RAF間引き用
+  const pendingDragRef = useRef(null); // ドラッグ座標バッファ
   
   // shapesRefを常に最新に保つ
   useEffect(() => {
@@ -703,8 +706,11 @@ const ViewerCanvas = forwardRef(({
       const imgCoords = pointerToImageCoords(stage, view);
       if (!imgCoords) return;
       
-      setPointerPos(stage.getPointerPosition());
-      setImgPos(imgCoords);
+      // CRITICAL: デバッグ用座標更新はドラッグ中は止める（残像防止）
+      if (DEBUG_MODE && !isDraggingRef.current) {
+        setPointerPos(stage.getPointerPosition());
+        setImgPos(imgCoords);
+      }
       
       if (!isDrawMode || !isDrawing || !currentShape) return;
       
@@ -1005,23 +1011,61 @@ const ViewerCanvas = forwardRef(({
         }
         };
   
+  // CRITICAL: ドラッグ開始（残像防止）
+  const handleDragStart = (shape, e) => {
+    isDraggingRef.current = true;
+    e.cancelBubble = true;
+  };
+
+  // CRITICAL: ドラッグ中の追従更新（残像防止）
+  const handleDragMove = (shape, e) => {
+    if (!canEdit) return;
+    const node = e.target;
+
+    // RAF間引き
+    pendingDragRef.current = { shape, x: node.x(), y: node.y() };
+    if (dragRafRef.current) return;
+
+    dragRafRef.current = requestAnimationFrame(() => {
+      const p = pendingDragRef.current;
+      dragRafRef.current = null;
+      if (!p) return;
+
+      const { shape, x, y } = p;
+
+      // tool別に「stateを追従」させる（保存はしない）
+      if (shape.tool === 'rect' || shape.tool === 'circle' || shape.tool === 'text') {
+        const { nx, ny } = normalizeCoords(x, y);
+        setShapes(prev => prev.map(s => s.id === shape.id ? { ...s, nx, ny } : s));
+      } else if (shape.tool === 'pen' || shape.tool === 'arrow') {
+        // pen/arrowはdragX/dragYでReact制御
+        setShapes(prev => prev.map(s => s.id === shape.id ? { ...s, dragX: x, dragY: y } : s));
+        node.x(0);
+        node.y(0);
+      }
+    });
+  };
+
   // ドラッグ終了時の更新（CRITICAL: 増殖防止のため置換処理）
   const handleDragEnd = async (shape, e) => {
     // CRITICAL: 編集不可なら即return
     if (!editableIds.has(shape.id)) {
       console.log('[ViewerCanvas] DragEnd blocked: not editable');
+      isDraggingRef.current = false;
       return;
     }
 
     // 多重保存防止
     if (isSaving[shape.id]) {
       console.log('[ViewerCanvas] Already saving:', shape.id);
+      isDraggingRef.current = false;
       return;
     }
     
     const node = e.target;
-    const x = node.x();
-    const y = node.y();
+    // CRITICAL: dragX/dragY を優先（RAF更新済みなら node.x/y は0）
+    const dx = shape.dragX || node.x();
+    const dy = shape.dragY || node.y();
     
     const updatedShape = { ...shape };
     
@@ -1030,21 +1074,22 @@ const ViewerCanvas = forwardRef(({
       const newPoints = [];
       for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
         const { x: px, y: py } = denormalizeCoords(shape.normalizedPoints[i], shape.normalizedPoints[i + 1]);
-        const { nx, ny } = normalizeCoords(px + x, py + y);
+        const { nx, ny } = normalizeCoords(px + dx, py + dy);
         newPoints.push(nx, ny);
       }
       updatedShape.normalizedPoints = newPoints;
-      // Pen/Arrowのみリセット
+      updatedShape.dragX = 0;
+      updatedShape.dragY = 0;
       node.x(0);
       node.y(0);
       } else if (shape.tool === 'rect') {
       // Rect: 絶対座標として直接保存
-      const { nx, ny } = normalizeCoords(x, y);
+      const { nx, ny } = normalizeCoords(dx, dy);
       updatedShape.nx = nx;
       updatedShape.ny = ny;
       } else if (shape.tool === 'circle') {
       // Circle: 絶対座標として直接保存
-      const { nx, ny } = normalizeCoords(x, y);
+      const { nx, ny } = normalizeCoords(dx, dy);
       updatedShape.nx = nx;
       updatedShape.ny = ny;
       } else if (shape.tool === 'arrow' && shape.normalizedPoints) {
@@ -1052,16 +1097,17 @@ const ViewerCanvas = forwardRef(({
       const newPoints = [];
       for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
         const { x: px, y: py } = denormalizeCoords(shape.normalizedPoints[i], shape.normalizedPoints[i + 1]);
-        const { nx, ny } = normalizeCoords(px + x, py + y);
+        const { nx, ny } = normalizeCoords(px + dx, py + dy);
         newPoints.push(nx, ny);
       }
       updatedShape.normalizedPoints = newPoints;
-      // Pen/Arrowのみリセット
+      updatedShape.dragX = 0;
+      updatedShape.dragY = 0;
       node.x(0);
       node.y(0);
     } else if (shape.tool === 'text') {
       // Text: 絶対座標として直接保存
-      const { nx, ny } = normalizeCoords(x, y);
+      const { nx, ny } = normalizeCoords(dx, dy);
       updatedShape.nx = nx;
       updatedShape.ny = ny;
     }
@@ -1070,6 +1116,9 @@ const ViewerCanvas = forwardRef(({
     
     // CRITICAL: Optimistic update は「同じidを置換」（追加ではない）
     setShapes(prev => prev.map(s => s.id === updatedShape.id ? updatedShape : s));
+    
+    // ドラッグ終了
+    isDraggingRef.current = false;
     
     // DB更新（upsertモード）
     if (onSaveShape) {
@@ -1342,13 +1391,8 @@ const ViewerCanvas = forwardRef(({
         }
       },
       draggable: isEditable,
-      onDragStart: isEditable ? (e) => {
-        e.cancelBubble = true;
-      } : undefined,
-      onDragMove: isEditable ? (e) => {
-        // ドラッグ中も選択枠を追従させるために再レンダリング強制
-        setDragTick(prev => prev + 1);
-      } : undefined,
+      onDragStart: isEditable ? (e) => handleDragStart(shape, e) : undefined,
+      onDragMove: isEditable ? (e) => handleDragMove(shape, e) : undefined,
       onDragEnd: isEditable ? (e) => handleDragEnd(shape, e) : undefined,
       // TransformEndはRect/Circle/Arrow/Textのみ＋編集可能な時のみ
       onTransformEnd: (isEditable && canTransform) ? (e) => handleTransformEnd(shape, e) : undefined,
@@ -1436,6 +1480,8 @@ const ViewerCanvas = forwardRef(({
         <React.Fragment key={shape.id}>
           <Group
             ref={(node) => { if (node) shapeRefs.current[shape.id] = node; }}
+            x={shape.dragX || 0}
+            y={shape.dragY || 0}
             draggable={canEdit && editableIds.has(shape.id)}
             onMouseDown={canEdit ? (e) => {
               if (!editableIds.has(shape.id)) return;
@@ -1451,12 +1497,8 @@ const ViewerCanvas = forwardRef(({
               if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
               if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
             } : undefined}
-            onDragStart={canEdit && editableIds.has(shape.id) ? (e) => {
-              e.cancelBubble = true;
-            } : undefined}
-            onDragMove={canEdit && editableIds.has(shape.id) ? (e) => {
-              setDragTick(prev => prev + 1);
-            } : undefined}
+            onDragStart={canEdit && editableIds.has(shape.id) ? (e) => handleDragStart(shape, e) : undefined}
+            onDragMove={canEdit && editableIds.has(shape.id) ? (e) => handleDragMove(shape, e) : undefined}
             onDragEnd={canEdit && editableIds.has(shape.id) ? (e) => handleDragEnd(shape, e) : undefined}
           >
             <Line 
@@ -1560,6 +1602,8 @@ const ViewerCanvas = forwardRef(({
           <React.Fragment key={shape.id}>
             <Group
               ref={(node) => { if (node) shapeRefs.current[shape.id] = node; }}
+              x={shape.dragX || 0}
+              y={shape.dragY || 0}
               draggable={canEdit && editableIds.has(shape.id)}
               onMouseDown={canEdit ? (e) => {
                 if (!editableIds.has(shape.id)) return;
@@ -1575,12 +1619,8 @@ const ViewerCanvas = forwardRef(({
                 if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
                 if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
               } : undefined}
-              onDragStart={canEdit && editableIds.has(shape.id) ? (e) => {
-                e.cancelBubble = true;
-              } : undefined}
-              onDragMove={canEdit && editableIds.has(shape.id) ? (e) => {
-                setDragTick(prev => prev + 1);
-              } : undefined}
+              onDragStart={canEdit && editableIds.has(shape.id) ? (e) => handleDragStart(shape, e) : undefined}
+              onDragMove={canEdit && editableIds.has(shape.id) ? (e) => handleDragMove(shape, e) : undefined}
               onDragEnd={canEdit && editableIds.has(shape.id) ? (e) => handleDragEnd(shape, e) : undefined}
             >
               <Arrow 
@@ -1651,13 +1691,8 @@ const ViewerCanvas = forwardRef(({
               }
             }}
             draggable={canEdit && editableIds.has(shape.id)}
-            onDragStart={canEdit && editableIds.has(shape.id) ? (e) => {
-              e.cancelBubble = true;
-            } : undefined}
-            onDragMove={canEdit && editableIds.has(shape.id) ? (e) => {
-              // ドラッグ中も選択枠を追従させるために再レンダリング強制
-              setDragTick(prev => prev + 1);
-            } : undefined}
+            onDragStart={canEdit && editableIds.has(shape.id) ? (e) => handleDragStart(shape, e) : undefined}
+            onDragMove={canEdit && editableIds.has(shape.id) ? (e) => handleDragMove(shape, e) : undefined}
             onDragEnd={canEdit && editableIds.has(shape.id) ? (e) => handleDragEnd(shape, e) : undefined}
             onDblClick={canEdit ? () => handleTextDblClick(shape) : undefined}
           />
