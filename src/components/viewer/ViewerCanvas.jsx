@@ -252,18 +252,39 @@ const ViewerCanvas = forwardRef(({
 
   // CRITICAL: existingShapes を常に反映（source-of-truth を props に寄せる）
   useEffect(() => {
-    // CRITICAL: ローカルで追加した新規shapeを保持（描画完了直後の消失防止）
-    const existingIds = new Set((existingShapes ?? []).map(s => s.id));
+    // CRITICAL: 描画中は編集状態をリセットしない（描画継続を許可）
+    if (isDrawing || currentShape) {
+      // 描画中でもexistingShapesは反映
+      const existingIds = new Set((existingShapes ?? []).map(s => s.id));
+      const localOnlyShapes = shapes.filter(s => !existingIds.has(s.id));
+      const merged = [...(existingShapes ?? []), ...localOnlyShapes];
+      setShapes(merged);
+      return;
+    }
+
+    // CRITICAL: existingShapesが空配列の場合は完全リセット（送信後のクリア対応）
+    if (!existingShapes || existingShapes.length === 0) {
+      setShapes([]);
+      setSelectedId(null);
+      setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
+      draftCommentIdRef.current = null;
+      
+      requestAnimationFrame(() => {
+        if (transformerRef.current) {
+          transformerRef.current.nodes([]);
+          transformerRef.current.getLayer()?.batchDraw();
+        }
+      });
+      return;
+    }
+
+    // ローカルで追加した新規shapeを保持（描画完了直後の消失防止）
+    const existingIds = new Set(existingShapes.map(s => s.id));
     const localOnlyShapes = shapes.filter(s => !existingIds.has(s.id));
     
     // existingShapesとローカルのみのshapeをマージ
-    const merged = [...(existingShapes ?? []), ...localOnlyShapes];
+    const merged = [...existingShapes, ...localOnlyShapes];
     setShapes(merged);
-
-    // CRITICAL: 描画中は編集状態をリセットしない（描画継続を許可）
-    if (isDrawing || currentShape) {
-      return;
-    }
 
     // 編集状態を完全リセット（残留編集防止）
     setSelectedId(null);
