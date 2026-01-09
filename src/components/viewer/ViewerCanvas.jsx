@@ -933,6 +933,8 @@ const ViewerCanvas = forwardRef(({
         ny,
         text,
         fontSize,
+        boxResized: false,  // 初期状態はautoサイズ
+        // boxW, boxH は作成時には入れない（undefinedのまま）
       };
       
       // 仮IDでコメント作成をトリガー
@@ -1870,13 +1872,14 @@ const ViewerCanvas = forwardRef(({
         tempText.destroy();
 
         // ボックスサイズ（リサイズ済みならそれを使用、なければグリフ実測ベースで自動計算）
-        const minH = 16; // 最小高さ
-        const boxW = shape.boxW ? shape.boxW * bgSize.width : tw + padL + padR;
-        const boxH = shape.boxH ? shape.boxH * bgSize.height : Math.max(minH, glyphH + padY * 2);
+        const hasManualBoxW = shape.boxW != null && shape.boxResized === true;
+        const hasManualBoxH = shape.boxH != null && shape.boxResized === true;
+        const boxW = hasManualBoxW ? shape.boxW * bgSize.width : tw + padL + padR;
+        const boxH = hasManualBoxH ? shape.boxH * bgSize.height : glyphH + padY * 2;
 
         // テキスト配置（autoサイズ時はグリフ上端がpadYに来るように、リサイズ済みは中央配置）
         const textX = padL;
-        const textY = shape.boxH 
+        const textY = hasManualBoxH 
           ? padY + (boxH - padY * 2 - glyphH) / 2 - glyphTop  // リサイズ済み：中央配置
           : padY - glyphTop;  // auto：グリフ上端をpadYに固定
 
