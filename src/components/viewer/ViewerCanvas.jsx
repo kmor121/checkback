@@ -1085,8 +1085,10 @@ const ViewerCanvas = forwardRef(({
       setShapes(prev => [...prev, normalizedShape]);
       setCurrentShape(null);
 
-      // CRITICAL: 連続描画のためツールは維持（自動で select に戻さない）
-      setSelectedId(null);
+      // ✅ 描画直後に選択状態にする
+      setSelectedId(normalizedShape.id);
+      // ✅ ハンドル表示＆すぐ移動したいなら select に戻す
+      if (onToolChange) onToolChange('select');
 
       // DB保存前の検証（一時フィールドが残っていないことを確認）
       if (DEBUG_MODE) {
