@@ -23,10 +23,6 @@ import FloatingToolbar from '../components/viewer/FloatingToolbar';
 import ShareLinkModal from '../components/viewer/ShareLinkModal';
 import DebugOverlay from '../components/DebugOverlay';
 
-// CRITICAL: モジュールスコープでロック管理（コンポーネント再レンダリングで消えない）
-let globalSubmitLock = false;
-let globalMutationId = null;
-
 function FileViewContent() {
   const [user, setUser] = useState(null);
   const [commentFilter, setCommentFilter] = useState('all');
