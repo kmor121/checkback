@@ -1825,7 +1825,7 @@ const ViewerCanvas = forwardRef(({
       } else if (shape.tool === 'text') {
         // Text描画
         let x = 0, y = 0;
-        
+
         // 正規化座標を優先
         if (shape.nx !== undefined) {
           const pos = denormalizeCoords(shape.nx, shape.ny);
@@ -1835,10 +1835,11 @@ const ViewerCanvas = forwardRef(({
           x = shape.x;
           y = shape.y;
         }
-        
+
         const fontSize = shape.fontSize || Math.max(12, (shape.strokeWidth || 2) * 6);
-        
+
         // テキストの場合は stroke を使わず fill のみ使用
+        // verticalAlign: 'top' でTransformer枠とテキスト位置を一致させる
         return (
           <Text
             key={shape.id}
@@ -1848,6 +1849,7 @@ const ViewerCanvas = forwardRef(({
             fontSize={fontSize}
             fill={shape.stroke}
             fontFamily="Arial, sans-serif"
+            verticalAlign="top"
             onPointerDown={canEdit ? (e) => {
               if (!isEditable) return;
               e.cancelBubble = true;
