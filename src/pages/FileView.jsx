@@ -714,7 +714,7 @@ function FileViewContent() {
           </div>
 
           {/* 入力ドック */}
-          <form onSubmit={handleSendComment} className="border-t p-4 space-y-2">
+          <div className="border-t p-4 space-y-2">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium">
                 {composerMode === 'edit' ? 'コメント編集' : 'コメント追加'}
@@ -732,15 +732,16 @@ function FileViewContent() {
               rows={3}
             />
             <Button
-              type="submit"
-              disabled={isSubmitting || (!commentBody.trim() && draftShapes.length === 0)}
+              type="button"
+              disabled={isSubmitting || globalSubmitLock || (!commentBody.trim() && draftShapes.length === 0)}
               className="w-full bg-blue-600 hover:bg-blue-700"
-              style={{ pointerEvents: isSubmitting ? "none" : "auto" }}
+              style={{ pointerEvents: (isSubmitting || globalSubmitLock) ? "none" : "auto" }}
+              onClick={handleSendComment}
             >
               <Send className="w-4 h-4 mr-2" />
               {composerMode === 'edit' ? '保存' : '送信'}
             </Button>
-          </form>
+          </div>
         </div>
       </div>
 
