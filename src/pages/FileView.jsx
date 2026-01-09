@@ -396,40 +396,56 @@ function FileViewContent() {
     },
   });
 
-  const handleSendComment = (e) => {
+  // CRITICAL: 送信処理（完全同期的なロック管理）
+  const handleSendComment = React.useCallback((e) => {
     e?.preventDefault?.();
     e?.stopPropagation?.();
     
-    // CRITICAL: refでロックチェック（useStateより確実）
-    if (submitLockRef.current) {
-      console.log("[submit] BLOCKED by submitLockRef");
+    // CRITICAL: 全ての条件を同期的にチェック
+    // 1. refロック（最速・最も確実）
+    if (submitLockRef.current === true) {
+      console.log("[submit] BLOCKED by submitLockRef.current === true");
       return;
     }
     
-    // mutation実行中もブロック
+    // 2. stateロック（UIと連動）
+    if (isSubmitting === true) {
+      console.log("[submit] BLOCKED by isSubmitting === true");
+      return;
+    }
+    
+    // 3. mutation状態（React Queryの内部状態）
     if (createCommentMutation.isPending || updateCommentMutation.isPending) {
-      console.log("[submit] BLOCKED by mutation isPending");
+      console.log("[submit] BLOCKED by mutation.isPending");
       return;
     }
     
+    // 4. 入力チェック
     if (!commentBody.trim() || !user) {
       console.log("[submit] BLOCKED: empty body or no user");
       return;
     }
     
-    // ★即座にロック
+    // ★★★ CRITICAL: ここで即座に全てのロックを取得 ★★★
+    // これ以降のコードが実行される前に、他のクリックをブロック
     submitLockRef.current = true;
     setIsSubmitting(true);
     
-    console.log("[submit] lock acquired, executing mutation");
+    console.log("[submit] === LOCK ACQUIRED ===", new Date().toISOString());
+    
+    // 現在の値をキャプチャ（クロージャの問題を避ける）
+    const currentBody = commentBody;
+    const currentDraftShapes = [...draftShapes];
+    const currentComposerMode = composerMode;
+    const currentTargetId = composerTargetCommentId || activeCommentId;
     
     // CRITICAL: 編集モード or activeCommentIdがある場合は「更新」
-    if ((composerMode === 'edit' && composerTargetCommentId) || activeCommentId) {
-      const targetId = composerTargetCommentId || activeCommentId;
+    if ((currentComposerMode === 'edit' && currentTargetId) || activeCommentId) {
       updateCommentMutation.mutate(
-        { targetId, body: commentBody, hasShapes: draftShapes.length > 0 },
+        { targetId: currentTargetId, body: currentBody, hasShapes: currentDraftShapes.length > 0 },
         {
           onSettled: () => {
+            console.log("[submit] === LOCK RELEASED (update) ===", new Date().toISOString());
             submitLockRef.current = false;
             setIsSubmitting(false);
           },
@@ -438,16 +454,27 @@ function FileViewContent() {
     } else {
       // 新規モード
       createCommentMutation.mutate(
-        { body: commentBody, shapes: draftShapes },
+        { body: currentBody, shapes: currentDraftShapes },
         {
           onSettled: () => {
+            console.log("[submit] === LOCK RELEASED (create) ===", new Date().toISOString());
             submitLockRef.current = false;
             setIsSubmitting(false);
           },
         }
       );
     }
-  };
+  }, [
+    isSubmitting,
+    commentBody,
+    user,
+    draftShapes,
+    composerMode,
+    composerTargetCommentId,
+    activeCommentId,
+    createCommentMutation,
+    updateCommentMutation,
+  ]);
 
   const handleCommentClick = (comment) => {
     if (paintMode) {
