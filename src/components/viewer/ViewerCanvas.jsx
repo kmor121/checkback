@@ -369,8 +369,9 @@ const ViewerCanvas = forwardRef(({
       }
       
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        // CRITICAL: 編集可能なIDのみ削除を許可（paintMode必須）
-        if (canEdit && selectedId && editableIds.has(selectedId)) {
+        // CRITICAL: 編集可能なIDのみ削除を許可（isEditableShape関数で判定）
+        const selectedShape = shapes.find(s => s.id === selectedId);
+        if (canEdit && selectedId && selectedShape && isEditableShape(selectedShape)) {
           e.preventDefault();
           handleDelete();
         }
