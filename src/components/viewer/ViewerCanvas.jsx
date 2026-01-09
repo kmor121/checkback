@@ -1444,6 +1444,7 @@ const ViewerCanvas = forwardRef(({
       key: shape.id,
       stroke: shape.stroke,
       strokeWidth: shape.strokeWidth,
+      listening: isEditable, // ★編集できる時だけ当たり判定ON
       onMouseDown: canEdit ? (e) => {
         // CRITICAL: 編集不可の描画は選択させない
         if (!isEditable) return;
@@ -1594,7 +1595,7 @@ const ViewerCanvas = forwardRef(({
               width={bboxW} 
               height={bboxH} 
               fill="transparent"
-              listening={isEditMode}
+              listening={isEditable}
             />
             {isSelected && (
               <Rect 
@@ -1714,7 +1715,7 @@ const ViewerCanvas = forwardRef(({
                 width={bboxW} 
                 height={bboxH} 
                 fill="transparent"
-                listening={canEdit}
+                listening={isEditable}
               />
             </Group>
             {boundingBox && <Rect x={boundingBox.x} y={boundingBox.y} width={boundingBox.width} height={boundingBox.height} stroke="rgba(255,0,0,0.3)" strokeWidth={1} dash={[5,5]} fill={undefined} listening={false} />}
