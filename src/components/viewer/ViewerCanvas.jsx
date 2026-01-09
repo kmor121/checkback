@@ -318,16 +318,24 @@ const ViewerCanvas = forwardRef(({
     }
 
     // ★ CRITICAL: ローカル優先マージ（ドラッグ後の位置を守る）
-    setShapes(prev => {
+    const mergedShapesLocal = (() => {
       const map = new Map();
       (existingShapes ?? []).forEach(s => map.set(s.id, s));
-      // ★同じidがある場合はローカルを優先（ドラッグ後の位置を守る）
-      (prev ?? []).forEach(s => map.set(s.id, s));
+      (shapes ?? []).forEach(s => map.set(s.id, s));
       return Array.from(map.values());
-    });
+    })();
+    setShapes(mergedShapesLocal);
 
-    // 編集状態を完全リセット（残留編集防止）
-    setSelectedId(null);
+    // ✅ 選択は「存在していて同じコメントなら維持」、そうでなければ解除
+    setSelectedId(prevSel => {
+      if (!prevSel) return null;
+      const sel = mergedShapesLocal.find(s => s.id === prevSel);
+      if (!sel) return null;
+      const effId = activeCommentId ?? draftCommentIdRef.current ?? null;
+      if (effId == null) return null;
+      return sameId(shapeCommentId(sel), effId) ? prevSel : null;
+    });
+    
     setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
 
     requestAnimationFrame(() => {
