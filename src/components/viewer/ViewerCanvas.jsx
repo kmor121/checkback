@@ -285,10 +285,10 @@ const ViewerCanvas = forwardRef(({
     draftCommentIdRef.current = null;
   }, [activeCommentId]);
 
-  // CRITICAL: fileUrl/pageNumber/zoom変更時にリセット
+  // CRITICAL: fileUrl/pageNumber変更時のみリセット（zoomではリセットしない）
   useEffect(() => {
     if (DEBUG_MODE) {
-      console.log('[ViewerCanvas] fileUrl/pageNumber/zoom changed, resetting state');
+      console.log('[ViewerCanvas] fileUrl/pageNumber changed, resetting state');
     }
     setShapes([]);
     setSelectedId(null);
@@ -296,7 +296,15 @@ const ViewerCanvas = forwardRef(({
     setUndoStack([]);
     setRedoStack([]);
     setPan({ x: 0, y: 0 });
-  }, [fileUrl, pageNumber, zoom]);
+  }, [fileUrl, pageNumber]);
+
+  // zoom変更時はpanのクランプのみ（shapesは触らない）
+  useEffect(() => {
+    if (DEBUG_MODE) {
+      console.log('[ViewerCanvas] zoom changed:', zoom);
+    }
+    setPan(p => clampPan(p.x, p.y));
+  }, [zoom]);
 
   // CRITICAL: existingShapes を常に反映（source-of-truth を props に寄せる）
   useEffect(() => {
