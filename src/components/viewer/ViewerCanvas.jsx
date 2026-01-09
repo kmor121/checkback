@@ -389,17 +389,10 @@ const ViewerCanvas = forwardRef(({
 
       if (canTransform) {
         transformerRef.current.nodes([shapeRefs.current[selectedId]]);
-        // テキストの場合：非対称paddingで中央寄せ（上を大きく、下を小さく）
+        // テキストの場合：シンプルなpadding
         if (selectedShape.tool === 'text') {
-          // paddingは0にして、boundBoxFuncで非対称に調整
-          transformerRef.current.padding(0);
-          transformerRef.current.boundBoxFunc((oldBox, newBox) => {
-            // 下の余白を大幅に縮小
-            return {
-              ...newBox,
-              height: newBox.height - 24, // 下を24px縮小
-            };
-          });
+          transformerRef.current.padding(4);
+          transformerRef.current.boundBoxFunc(null);
         } else {
           transformerRef.current.padding(0);
           transformerRef.current.boundBoxFunc(null);
@@ -1854,14 +1847,17 @@ const ViewerCanvas = forwardRef(({
         const fontSize = shape.fontSize || Math.max(12, (shape.strokeWidth || 2) * 6);
 
         // テキストの場合は stroke を使わず fill のみ使用
+        // offsetYでテキストを垂直中央に調整（日本語フォントの下部余白を補正）
+        const verticalOffset = fontSize * 0.15; // フォントサイズの15%分下にずらす
+
         return (
           <Text
             key={shape.id}
             x={x}
-            y={y}
+            y={y + verticalOffset}
             text={shape.text || ''}
             fontSize={fontSize}
-            lineHeight={1.2}
+            lineHeight={1.0}
             fill={shape.stroke}
             fontFamily="Arial, sans-serif"
             onPointerDown={canEdit ? (e) => {
