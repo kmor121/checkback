@@ -393,15 +393,17 @@ function FileViewContent() {
     // 同じコメントを再クリック → 選択解除＆新規モードに戻す
     if (activeCommentId === comment.id) {
       setActiveCommentId(null);
+      setPaintSessionCommentId(null); // CRITICAL: paintSessionも解除
       setComposerMode('new');
       setComposerTargetCommentId(null);
       setCommentBody('');
-      setPaintMode(false); // CRITICAL: ペイントモードも解除
+      setPaintMode(false);
       return;
     }
     
     // 別のコメントをクリック → 編集モードに切替
     setActiveCommentId(comment.id);
+    setPaintSessionCommentId(comment.id); // CRITICAL: paintSessionも設定して描画を表示
     setComposerMode('edit');
     setComposerTargetCommentId(comment.id);
     setCommentBody(comment.body);
