@@ -1870,12 +1870,15 @@ const ViewerCanvas = forwardRef(({
         tempText.destroy();
 
         // ボックスサイズ（リサイズ済みならそれを使用、なければグリフ実測ベースで自動計算）
+        const minH = 16; // 最小高さ
         const boxW = shape.boxW ? shape.boxW * bgSize.width : tw + padL + padR;
-        const boxH = shape.boxH ? shape.boxH * bgSize.height : glyphH + padY * 2;
+        const boxH = shape.boxH ? shape.boxH * bgSize.height : Math.max(minH, glyphH + padY * 2);
 
-        // テキストをボックス内で中央配置（グリフbboxベース）
+        // テキスト配置（autoサイズ時はグリフ上端がpadYに来るように、リサイズ済みは中央配置）
         const textX = padL;
-        const textY = padY + (boxH - padY * 2 - glyphH) / 2 - glyphTop;
+        const textY = shape.boxH 
+          ? padY + (boxH - padY * 2 - glyphH) / 2 - glyphTop  // リサイズ済み：中央配置
+          : padY - glyphTop;  // auto：グリフ上端をpadYに固定
 
         return (
           <Group
