@@ -1390,6 +1390,8 @@ const ViewerCanvas = forwardRef(({
       setUndoStack([]);
       setRedoStack([]);
       setSelectedId(null);
+      setIsDrawing(false);
+      draftCommentIdRef.current = null; // CRITICAL: 仮IDもリセット
     },
     delete: handleDelete,
     canUndo: undoStack.length > 0,
