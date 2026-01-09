@@ -549,7 +549,7 @@ const ViewerCanvas = forwardRef(({
     setRedoStack([]); // 新しい操作でredoスタックはクリア
   };
 
-  // Undo実行
+  // Undo実行（Map方式）
   const performUndo = () => {
     if (undoStack.length === 0) return;
     
@@ -558,19 +558,17 @@ const ViewerCanvas = forwardRef(({
     setRedoStack(prev => [...prev, action]);
     
     if (action.type === 'add') {
-      setShapes(prev => prev.filter(s => s.id !== action.shapeId));
+      shapesMapRef.current.delete(action.shapeId);
     } else if (action.type === 'update') {
-      setShapes(prev => prev.map(s => s.id === action.shapeId ? action.before : s));
+      shapesMapRef.current.set(action.shapeId, action.before);
     } else if (action.type === 'delete') {
-      setShapes(prev => {
-        const newShapes = [...prev];
-        newShapes.splice(action.index, 0, action.shape);
-        return newShapes;
-      });
+      shapesMapRef.current.set(action.shape.id, action.shape);
     }
+    bump();
+    onShapesChange?.(getAllShapes());
   };
 
-  // Redo実行
+  // Redo実行（Map方式）
   const performRedo = () => {
     if (redoStack.length === 0) return;
     
@@ -581,10 +579,12 @@ const ViewerCanvas = forwardRef(({
     if (action.type === 'add') {
       // 再追加は困難なので省略
     } else if (action.type === 'update') {
-      setShapes(prev => prev.map(s => s.id === action.shapeId ? action.after : s));
+      shapesMapRef.current.set(action.shapeId, action.after);
     } else if (action.type === 'delete') {
-      setShapes(prev => prev.filter(s => s.id !== action.shape.id));
+      shapesMapRef.current.delete(action.shape.id);
     }
+    bump();
+    onShapesChange?.(getAllShapes());
   };
 
   // CRITICAL: 削除（Map方式）
