@@ -541,8 +541,9 @@ const ViewerCanvas = forwardRef(({
   const handleDelete = async () => {
     if (!canEdit || !selectedId) return;
     
-    // CRITICAL: 編集可能なIDのみ削除を許可
-    if (!editableIds.has(selectedId)) {
+    // CRITICAL: 編集可能なIDのみ削除を許可（isEditableShape関数で判定）
+    const selectedShape = shapes.find(s => s.id === selectedId);
+    if (!selectedShape || !isEditableShape(selectedShape)) {
       console.log('[ViewerCanvas] Delete blocked: not editable');
       return;
     }
