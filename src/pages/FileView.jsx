@@ -157,44 +157,22 @@ function FileViewContent() {
     }
   }, [file, user, fileId]);
 
+  // CRITICAL: onBeginPaintではコメントを作成しない（送信時のみ作成に統一）
+  // これにより二重作成を防止
   const handleBeginPaint = async (imgX, imgY, bgW, bgH) => {
-    // すでに編集中コメントがあるなら作らない
+    console.log('[handleBeginPaint] called, activeCommentId:', activeCommentId);
+    
+    // すでに編集中コメントがあるならそれを使う
     if (activeCommentId) {
       setPaintSessionCommentId(activeCommentId);
       return activeCommentId;
     }
 
-    // 空コメントを作成（本文なしでもOK）
-    try {
-      const existingComments = await base44.entities.ReviewComment.filter({ file_id: fileId });
-      const maxSeqNo = existingComments.reduce((max, c) => Math.max(max, c.seq_no || 0), 0);
-
-      const comment = await base44.entities.ReviewComment.create({
-        file_id: fileId,
-        page_no: 1,
-        seq_no: maxSeqNo + 1,
-        anchor_nx: imgX / bgW,
-        anchor_ny: imgY / bgH,
-        author_type: 'user',
-        author_user_id: user?.id,
-        author_name: user?.full_name,
-        body: '', // 空コメント
-        resolved: false,
-        has_paint: false,
-      });
-
-      // コメントID確定
-      setActiveCommentId(comment.id);
-      setPaintSessionCommentId(comment.id);
-      
-      await queryClient.invalidateQueries(['comments']);
-      
-      return comment.id;
-    } catch (error) {
-      console.error('Begin paint error:', error);
-      showToast(`コメント作成失敗: ${error.message}`, 'error');
-      return null;
-    }
+    // CRITICAL: ここではコメントを作成しない
+    // 描画開始位置だけ記録して、送信時にコメントを作成する
+    // draftShapesに追加されるので、送信時にアンカー位置を計算する
+    console.log('[handleBeginPaint] no activeCommentId, draft mode');
+    return null;
   };
 
   const handleSaveShape = async (shape, mode) => {
