@@ -386,7 +386,7 @@ const ViewerCanvas = forwardRef(({
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [selectedId, shapes, undoStack, redoStack, canEdit, editableIds]);
+    }, [selectedId, shapes, undoStack, redoStack, canEdit]);
 
   // ResizeObserver
   useEffect(() => {
