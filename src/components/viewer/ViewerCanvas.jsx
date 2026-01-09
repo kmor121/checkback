@@ -120,12 +120,49 @@ const ViewerCanvas = forwardRef(({
   const isEditMode = tool === 'select';
   const isDrawMode = !isEditMode && (paintMode || tool === 'text');
   
+  // CRITICAL: activeCommentId ベースで表示・編集を厳密に分離
+  const activeShapes = useMemo(() => {
+    if (!existingShapes || existingShapes.length === 0) return [];
+    if (!activeCommentId) return [];
+    return existingShapes.filter(s => s.comment_id === activeCommentId);
+  }, [existingShapes, activeCommentId]);
+  
+  const visibleShapes = useMemo(() => {
+    if (!existingShapes || existingShapes.length === 0) return [];
+    return showAllPaint ? existingShapes : activeShapes;
+  }, [existingShapes, activeShapes, showAllPaint]);
+  
+  const editableIds = useMemo(() => {
+    return new Set(activeShapes.map(s => s.id));
+  }, [activeShapes]);
+  
   // fileUrl安定化（最後の有効URLを保持）
   useEffect(() => {
     if (fileUrl) {
       stableFileUrlRef.current = fileUrl;
     }
   }, [fileUrl]);
+
+  // CRITICAL: activeCommentId変化時に強制リセット（最重要）
+  useEffect(() => {
+    if (DEBUG_MODE) {
+      console.log('[ViewerCanvas] activeCommentId changed, force reset:', activeCommentId);
+    }
+    
+    // 前の編集状態を完全に破棄
+    setSelectedId(null);
+    setCurrentShape(null);
+    setIsDrawing(false);
+    setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
+    
+    // Transformer強制解除（非同期で確実に）
+    requestAnimationFrame(() => {
+      if (transformerRef.current) {
+        transformerRef.current.nodes([]);
+        transformerRef.current.getLayer()?.batchDraw();
+      }
+    });
+  }, [activeCommentId]);
 
   // CRITICAL: fileUrl/pageNumber/zoom変更時にリセット（hydrateより先に実行）
   useEffect(() => {
@@ -141,18 +178,22 @@ const ViewerCanvas = forwardRef(({
     setPan({ x: 0, y: 0 });
   }, [fileUrl, pageNumber, zoom]);
 
-  // existingShapesからの初回hydrate（resetより後に実行）
+  // existingShapesからの初回hydrate（activeShapesのみ）
   useEffect(() => {
-    if (!existingShapes) return;
-    // 空配列では hydrate しない（後から非空が届く可能性がある）
-    if (existingShapes.length === 0) return;
+    if (!activeShapes) return;
+    if (activeShapes.length === 0) {
+      // activeCommentId が null または描画が無い場合は shapes をクリア
+      setShapes([]);
+      hydratedRef.current = false;
+      return;
+    }
     // 未hydrate または 現在のshapesが空の時だけ反映（ローカル編集を上書きしない）
     if (!hydratedRef.current || shapes.length === 0) {
-      console.log('[ViewerCanvas] Hydrating shapes:', existingShapes.length);
-      setShapes(existingShapes);
+      console.log('[ViewerCanvas] Hydrating activeShapes:', activeShapes.length);
+      setShapes(activeShapes);
       hydratedRef.current = true;
     }
-  }, [existingShapes]);
+  }, [activeShapes]);
 
   // マウント検知（デバッグ用）
   useEffect(() => {
@@ -212,7 +253,8 @@ const ViewerCanvas = forwardRef(({
       }
       
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (isEditMode && selectedId) {
+        // CRITICAL: 編集可能なIDのみ削除を許可
+        if (isEditMode && selectedId && editableIds.has(selectedId)) {
           e.preventDefault();
           handleDelete();
         }
@@ -227,7 +269,7 @@ const ViewerCanvas = forwardRef(({
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedId, shapes, undoStack, redoStack, isEditMode]);
+  }, [selectedId, shapes, undoStack, redoStack, isEditMode, editableIds]);
 
   // ResizeObserver
   useEffect(() => {
@@ -893,6 +935,12 @@ const ViewerCanvas = forwardRef(({
   
   // ドラッグ終了時の更新（CRITICAL: 増殖防止のため置換処理）
   const handleDragEnd = async (shape, e) => {
+    // CRITICAL: 編集不可なら即return
+    if (!editableIds.has(shape.id)) {
+      console.log('[ViewerCanvas] DragEnd blocked: not editable');
+      return;
+    }
+
     // 多重保存防止
     if (isSaving[shape.id]) {
       console.log('[ViewerCanvas] Already saving:', shape.id);
@@ -982,6 +1030,12 @@ const ViewerCanvas = forwardRef(({
 
   // Transform終了時の更新（CRITICAL: 増殖防止のため置換処理、Rect/Circle/Arrowに対応）
   const handleTransformEnd = async (shape, e) => {
+    // CRITICAL: 編集不可なら即return
+    if (!editableIds.has(shape.id)) {
+      console.log('[ViewerCanvas] TransformEnd blocked: not editable');
+      return;
+    }
+
     // 多重保存防止
     if (isSaving[shape.id]) {
       console.log('[ViewerCanvas] Already saving:', shape.id);
@@ -1682,7 +1736,10 @@ const ViewerCanvas = forwardRef(({
             scaleX={contentScale}
             scaleY={contentScale}
           >
-            {shapes.map(s => renderShape(s, false))}
+            {/* CRITICAL: visibleShapes を描画（activeCommentId ベースでフィルタ済み） */}
+            {visibleShapes.map(s => renderShape(s, true))}
+            {/* CRITICAL: shapes（ローカル編集中）は activeShapes に含まれるものだけ描画 */}
+            {shapes.filter(s => editableIds.has(s.id)).map(s => renderShape(s, false))}
             {currentShape && renderShape(currentShape, false)}
             <Transformer ref={transformerRef} />
           </Group>
