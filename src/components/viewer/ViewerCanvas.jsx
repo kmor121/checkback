@@ -339,12 +339,29 @@ const ViewerCanvas = forwardRef(({
     }
   }, [clearAfterSubmitNonce]);
 
-  // CRITICAL: コメント選択で表示復帰
+  // CRITICAL: コメント選択で表示復帰 + existingShapesをMapに取り込み
   useEffect(() => {
     if (activeCommentId != null) {
+      if (DEBUG_MODE) console.log('[ViewerCanvas] activeCommentId set, clearing hidePaintUntilSelect:', activeCommentId);
       setHidePaintUntilSelect(false);
+      
+      // ★ CRITICAL: activeCommentId変化時にexistingShapesを再度Mapに取り込む
+      // （hidePaintUntilSelect中にMapがクリアされている可能性があるため）
+      if (existingShapes && existingShapes.length > 0) {
+        let changed = false;
+        for (const s of existingShapes) {
+          if (!shapesMapRef.current.has(s.id)) {
+            shapesMapRef.current.set(s.id, s);
+            changed = true;
+          }
+        }
+        if (changed) {
+          if (DEBUG_MODE) console.log('[ViewerCanvas] Re-imported existingShapes to Map on activeCommentId change');
+          bump();
+        }
+      }
     }
-  }, [activeCommentId]);
+  }, [activeCommentId, existingShapes]);
 
   // CRITICAL: 仮commentIdで描いたshapeを、activeCommentId確定後に付け替える
   useEffect(() => {
