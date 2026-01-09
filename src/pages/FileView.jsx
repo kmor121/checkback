@@ -146,10 +146,43 @@ function FileViewContent() {
     }
   }, [file, user, fileId]);
 
-  const handleBeginPaint = () => {
-    setPaintSessionCommentId(activeCommentId ?? null);
-    if (!activeCommentId) {
-      setDraftShapes([]);
+  const handleBeginPaint = async (imgX, imgY, bgW, bgH) => {
+    // すでに編集中コメントがあるなら作らない
+    if (activeCommentId) {
+      setPaintSessionCommentId(activeCommentId);
+      return activeCommentId;
+    }
+
+    // 空コメントを作成（本文なしでもOK）
+    try {
+      const existingComments = await base44.entities.ReviewComment.filter({ file_id: fileId });
+      const maxSeqNo = existingComments.reduce((max, c) => Math.max(max, c.seq_no || 0), 0);
+
+      const comment = await base44.entities.ReviewComment.create({
+        file_id: fileId,
+        page_no: 1,
+        seq_no: maxSeqNo + 1,
+        anchor_nx: imgX / bgW,
+        anchor_ny: imgY / bgH,
+        author_type: 'user',
+        author_user_id: user?.id,
+        author_name: user?.full_name,
+        body: '', // 空コメント
+        resolved: false,
+        has_paint: false,
+      });
+
+      // コメントID確定
+      setActiveCommentId(comment.id);
+      setPaintSessionCommentId(comment.id);
+      
+      await queryClient.invalidateQueries(['comments']);
+      
+      return comment.id;
+    } catch (error) {
+      console.error('Begin paint error:', error);
+      showToast(`コメント作成失敗: ${error.message}`, 'error');
+      return null;
     }
   };
 
@@ -272,15 +305,18 @@ function FileViewContent() {
     if (!commentBody.trim() || !user) return;
     
     try {
-      if (composerMode === 'edit' && composerTargetCommentId) {
-        // 編集モード: 既存コメントを更新
-        await base44.entities.ReviewComment.update(composerTargetCommentId, {
+      // CRITICAL: 編集モード or activeCommentIdがある場合は「更新」
+      if ((composerMode === 'edit' && composerTargetCommentId) || activeCommentId) {
+        const targetId = composerTargetCommentId || activeCommentId;
+        
+        await base44.entities.ReviewComment.update(targetId, {
           body: commentBody,
+          has_paint: draftShapes.length > 0,
         });
         
         showToast('コメントを更新しました', 'success');
       } else {
-        // 新規モード: 新しいコメントを作成
+        // 新規モード: 新しいコメントを作成（通常このパスは通らない想定）
         const existingComments = await base44.entities.ReviewComment.filter({ file_id: fileId });
         const maxSeqNo = existingComments.reduce((max, c) => Math.max(max, c.seq_no || 0), 0);
 
@@ -312,7 +348,7 @@ function FileViewContent() {
           }
         }
 
-        const comment = await base44.entities.ReviewComment.create({
+        await base44.entities.ReviewComment.create({
           file_id: fileId,
           page_no: 1,
           seq_no: maxSeqNo + 1,
@@ -325,33 +361,6 @@ function FileViewContent() {
           resolved: false,
           has_paint: draftShapes.length > 0,
         });
-
-        // DraftShapesをDBに保存
-        if (draftShapes.length > 0) {
-          for (const shape of draftShapes) {
-            await base44.entities.PaintShape.create({
-              file_id: fileId,
-              comment_id: comment.id,
-              page_no: 1,
-              client_shape_id: shape.id,
-              shape_type: shape.tool,
-              data_json: JSON.stringify({
-                stroke: shape.stroke,
-                strokeWidth: shape.strokeWidth,
-                normalizedPoints: shape.normalizedPoints,
-                nx: shape.nx,
-                ny: shape.ny,
-                nw: shape.nw,
-                nh: shape.nh,
-                nr: shape.nr,
-                bgWidth: shape.bgWidth,
-                bgHeight: shape.bgHeight,
-              }),
-              author_key: user.id,
-              author_name: user.full_name,
-            });
-          }
-        }
         
         showToast('コメントを送信しました', 'success');
       }
@@ -428,11 +437,14 @@ function FileViewContent() {
     }
   }).filter(Boolean);
 
-  // CRITICAL: 親側でフィルタリング（showAllPaint=false のため）
+  // CRITICAL: ViewerCanvasに渡すshapes（activeCommentIdがある時のみ）
   const shapesForCanvas = React.useMemo(() => {
+    // activeCommentIdが無い場合は空配列（描画を表示しない）
     if (!activeCommentId) return [];
-    return [...allShapes.filter(s => s.comment_id === (paintSessionCommentId || activeCommentId)), ...draftShapes];
-  }, [allShapes, activeCommentId, paintSessionCommentId, draftShapes]);
+    
+    // allShapesとdraftShapesをマージして返す
+    return [...allShapes.filter(s => s.comment_id === activeCommentId), ...draftShapes];
+  }, [allShapes, activeCommentId, draftShapes]);
 
   const filteredComments = comments.filter(c => {
     if (commentFilter === 'resolved' && !c.resolved) return false;
