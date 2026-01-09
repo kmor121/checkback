@@ -1603,6 +1603,7 @@ const ViewerCanvas = forwardRef(({
     undo: performUndo,
     redo: performRedo,
     clear: () => {
+      if (DEBUG_MODE) console.log('[ViewerCanvas] clear() called');
       shapesMapRef.current = new Map(); // ★ Mapをクリア
       bump();
       setCurrentShape(null);
@@ -1611,6 +1612,8 @@ const ViewerCanvas = forwardRef(({
       setSelectedId(null);
       setIsDrawing(false);
       draftCommentIdRef.current = null; // CRITICAL: 仮IDもリセット
+      lastStableCommentIdRef.current = null; // CRITICAL: lastStableもリセット
+      setHidePaintUntilSelect(true); // CRITICAL: 強制非表示
     },
     // CRITICAL: 送信完了後の強制クリア（ref経由で確実に実行）
     afterSubmitClear: () => {
