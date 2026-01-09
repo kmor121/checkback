@@ -155,7 +155,7 @@ const ViewerCanvas = forwardRef(({
   
   // CRITICAL: 描画に使うcomment_idを取得（仮IDまたはactiveCommentId）
   const getCommentIdForDrawing = () => {
-    if (activeCommentId) return activeCommentId;
+    if (activeCommentId != null) return activeCommentId;
     // 仮ID生成（onBeginPaintは非同期で投げるだけ）
     if (!draftCommentIdRef.current) {
       draftCommentIdRef.current = generateUUID();
@@ -176,11 +176,11 @@ const ViewerCanvas = forwardRef(({
     if (showAllPaint) return mergedShapes;
     
     // activeCommentIdがある時はそれだけ（互換性対策＋String化で一致判定）
-    if (activeCommentId) {
+    if (activeCommentId != null) {
       const targetId = String(activeCommentId);
       return mergedShapes.filter(s => {
-        const shapeCommentId = s.comment_id ?? s.commentId;
-        return shapeCommentId && String(shapeCommentId) === targetId;
+        const cid = s.comment_id ?? s.commentId;
+        return cid != null && String(cid) === targetId;
       });
     }
     
@@ -209,11 +209,11 @@ const ViewerCanvas = forwardRef(({
     [activeShapes]
   );
 
-  // CRITICAL: 編集可能かをcomment_id一致で判定（editableIds依存をやめる）
+  // CRITICAL: 編集可能かをcomment_id一致で判定（sameId使用）
   const isEditableShape = (shape) => {
     if (!canEdit) return false;                  // paintMode && tool==='select' の時だけ編集OK
     if (activeCommentId == null) return false;   // 0を弾かないために == null を使う
-    return norm(getCommentId(shape)) === norm(activeCommentId);
+    return sameId(shapeCommentId(shape), activeCommentId);
   };
   
   // fileUrl安定化（最後の有効URLを保持）
@@ -680,9 +680,9 @@ const ViewerCanvas = forwardRef(({
       });
     }
 
-    // ★ CRITICAL: activeCommentIdがnullなら描画開始をブロック（方針①）
-    if (activeCommentId == null && tool !== 'select') {
-      console.warn('[ViewerCanvas] Drawing blocked: activeCommentId is null');
+    // ★ CRITICAL: activeCommentIdがnくonBeginPaintも無い場合のみブロック（方針②）
+    if (activeCommentId == null && tool !== 'select' && !onBeginPaint) {
+      console.warn('[ViewerCanvas] Drawing blocked: activeCommentId is null and onBeginPaint is missing');
       return;
     }
 
@@ -1005,11 +1005,12 @@ const ViewerCanvas = forwardRef(({
         }
       }
 
-      // 正規化データを作成
+      // 正規化データを作成（描画開始時のcomment_idを優先）
+      const resolvedCommentId = shape.comment_id ?? activeCommentId ?? draftCommentIdRef.current;
       const normalizedShape = {
         id: shape.id,
-        comment_id: activeCommentId, // ★ CRITICAL: 必ず activeCommentId を入れる
-        commentId: activeCommentId,  // ★両方のキーで入れる
+        comment_id: resolvedCommentId,
+        commentId: resolvedCommentId,
         tool: shapeTool,
         stroke: shape.stroke,
         strokeWidth: shape.strokeWidth,
@@ -1023,6 +1024,7 @@ const ViewerCanvas = forwardRef(({
         comment_id: normalizedShape?.comment_id,
         commentId: normalizedShape?.commentId,
         activeCommentId,
+        draftCommentId: draftCommentIdRef.current,
       });
 
         if (shapeTool === 'pen' && shape.points) {
