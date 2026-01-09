@@ -160,6 +160,9 @@ const ViewerCanvas = forwardRef(({
   });
   const [isComposing, setIsComposing] = useState(false);
   const textInputRef = useRef(null);
+
+  // CRITICAL: 送信後の強制非表示フラグ
+  const [hidePaintUntilSelect, setHidePaintUntilSelect] = useState(false);
   
   // Undo/Redo
   const [undoStack, setUndoStack] = useState([]);
@@ -212,8 +215,11 @@ const ViewerCanvas = forwardRef(({
   // ★ CRITICAL: Mapが唯一の真実（mergedShapesはMap由来）
   const mergedShapes = useMemo(() => getAllShapes(), [shapesVersion]);
   
-  // CRITICAL: 実際に描画するshape配列（lastStableCommentIdRef使用で一瞬null対策）
+  // CRITICAL: 実際に描画するshape配列（hidePaintUntilSelectで強制非表示）
   const renderedShapes = useMemo(() => {
+    // ★送信完了後は強制非表示（これが本丸）
+    if (hidePaintUntilSelect) return [];
+
     if (showAllPaint) return mergedShapes;
 
     // renderTargetId: activeCommentId → draftCommentIdRef → lastStableCommentIdRef の優先順
@@ -227,7 +233,7 @@ const ViewerCanvas = forwardRef(({
       const cid = s.comment_id ?? s.commentId ?? s.commentID;
       return cid != null && String(cid) === target;
     });
-  }, [mergedShapes, showAllPaint, activeCommentId]);
+  }, [mergedShapes, showAllPaint, activeCommentId, hidePaintUntilSelect]);
   
   // ★ CRITICAL: activeShapes を existingShapes から抽出（comment_id統一判定）
   const activeShapes = useMemo(() => {
@@ -308,6 +314,9 @@ const ViewerCanvas = forwardRef(({
       prevNonceRef.current = clearAfterSubmitNonce;
       if (DEBUG_MODE) console.log('[ViewerCanvas] clearAfterSubmitNonce changed, clearing display state');
 
+      // CRITICAL: 強制非表示フラグON
+      setHidePaintUntilSelect(true);
+
       // 描画表示をクリア（existingShapesは消さない）
       lastStableCommentIdRef.current = null;
       draftCommentIdRef.current = null;
@@ -323,6 +332,13 @@ const ViewerCanvas = forwardRef(({
       }
     }
   }, [clearAfterSubmitNonce]);
+
+  // CRITICAL: コメント選択で表示復帰
+  useEffect(() => {
+    if (activeCommentId != null) {
+      setHidePaintUntilSelect(false);
+    }
+  }, [activeCommentId]);
 
   // CRITICAL: 仮commentIdで描いたshapeを、activeCommentId確定後に付け替える
   useEffect(() => {

@@ -306,13 +306,18 @@ function FileViewContent() {
     }
   };
 
-  const handleSendComment = async () => {
+  const handleSendComment = async (e) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    
     if (!commentBody.trim() || !user) return;
     
     // CRITICAL: 連打防止（lockチェック）
     if (submitLockRef.current || isSubmitting) return;
     submitLockRef.current = true;
     setIsSubmitting(true);
+    
+    console.count("[submit] called"); // ★二重起動検出
     
     try {
       // CRITICAL: 編集モード or activeCommentIdがある場合は「更新」
@@ -694,13 +699,13 @@ function FileViewContent() {
           </div>
 
           {/* 入力ドック */}
-          <div className="border-t p-4 space-y-2">
+          <form onSubmit={handleSendComment} className="border-t p-4 space-y-2">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium">
                 {composerMode === 'edit' ? 'コメント編集' : 'コメント追加'}
               </span>
               {composerMode === 'edit' && (
-                <Button variant="ghost" size="sm" onClick={handleCancelEdit}>
+                <Button type="button" variant="ghost" size="sm" onClick={handleCancelEdit}>
                   キャンセル
                 </Button>
               )}
@@ -712,14 +717,14 @@ function FileViewContent() {
               rows={3}
             />
             <Button
-              onClick={handleSendComment}
+              type="submit"
               disabled={isSubmitting || (!commentBody.trim() && draftShapes.length === 0)}
               className="w-full bg-blue-600 hover:bg-blue-700"
             >
               <Send className="w-4 h-4 mr-2" />
               {composerMode === 'edit' ? '保存' : '送信'}
             </Button>
-          </div>
+          </form>
         </div>
       </div>
 
