@@ -1507,7 +1507,8 @@ const ViewerCanvas = forwardRef(({
     undo: performUndo,
     redo: performRedo,
     clear: () => {
-      setShapes([]);
+      shapesMapRef.current = new Map(); // ★ Mapをクリア
+      bump();
       setCurrentShape(null);
       setUndoStack([]);
       setRedoStack([]);
