@@ -338,102 +338,31 @@ const ViewerCanvas = forwardRef(({
     setPan(p => clampPan(p.x, p.y));
   }, [zoom]);
 
-  // CRITICAL: existingShapes を常に反映（dirty優先マージで位置巻き戻り防止）
+  // ★ CRITICAL: existingShapesはupsert入力として取り込むだけ（絶対にクリアしない）
   useEffect(() => {
-    // CRITICAL: 描画中は編集状態をリセットしない（描画継続を許可）
-    if (isDrawing || currentShape) {
-      // 描画中でもexistingShapesは反映（ただしdirty優先）
-      setShapes(prev => {
-        const prevMap = new Map((prev ?? []).map(s => [s.id, s]));
-        const out = new Map();
-        
-        (existingShapes ?? []).forEach(s => out.set(s.id, s));
-        (prev ?? []).forEach(local => {
-          const server = out.get(local.id);
-          if (!server) {
-            out.set(local.id, local);
-            return;
-          }
-          // dirty or localTsが新しければローカル優先
-          if (local._dirty || (local._localTs && local._localTs > (server._localTs ?? 0))) {
-            out.set(local.id, { ...server, ...local });
-          } else {
-            out.set(local.id, { ...local, ...server });
-          }
-        });
-        
-        return Array.from(out.values());
-      });
-      return;
-    }
-
-    // CRITICAL: existingShapesが空配列でも、保存中や一瞬の[]は無視する
-    const anySaving = Object.values(isSaving ?? {}).some(Boolean);
-    const prevLen = shapesRef.current?.length ?? 0;
-    const nextLen = existingShapes?.length ?? 0;
+    if (!existingShapes || existingShapes.length === 0) return; // 空配列では何もしない（クリア禁止）
     
-    if (nextLen === 0) {
-      // 本当のクリア（前に何かあった＆保存中でない）のみ全消し
-      if (prevLen > 0 && !anySaving && !isDrawing && !currentShape) {
-        setShapes([]);
-        setSelectedId(null);
-        setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
-        draftCommentIdRef.current = null;
-        
-        requestAnimationFrame(() => {
-          if (transformerRef.current) {
-            transformerRef.current.nodes([]);
-            transformerRef.current.getLayer()?.batchDraw();
-          }
-        });
-      }
-      return;
+    let changed = false;
+    for (const s of existingShapes) {
+      const prev = shapesMapRef.current.get(s.id);
+      // dirtyローカルがあるならローカルを優先（巻き戻り防止）
+      if (prev?._dirty) continue;
+      
+      // それ以外はserverを取り込む（upsert）
+      const next = prev ? { ...prev, ...s } : s;
+      shapesMapRef.current.set(s.id, next);
+      changed = true;
     }
-
-    // ★ CRITICAL: dirty優先マージ（ローカル更新が巻き戻らない）
-    setShapes(prev => {
-      const out = new Map();
-      
-      // 1) まず existingShapes を入れる
-      (existingShapes ?? []).forEach(s => out.set(s.id, s));
-      
-      // 2) 次に prev を重ねる：dirtyは必ず勝つ、dirtyでなくてもlocalTsが新しければ勝つ
-      (prev ?? []).forEach(local => {
-        const server = out.get(local.id);
-        if (!server) {
-          out.set(local.id, local);
-          return;
-        }
-        const localTs = local._localTs ?? 0;
-        const serverTs = server._localTs ?? 0;
-        if (local._dirty || localTs > serverTs) {
-          out.set(local.id, { ...server, ...local }); // local優先
-        } else {
-          out.set(local.id, { ...local, ...server }); // server優先
-        }
-      });
-      
-      return Array.from(out.values());
-    });
-
-    // ✅ 選択は「存在しているなら維持」（shapesRefベースで判定）
-    setSelectedId(prevSel => {
-      if (!prevSel) return null;
-      // existingShapesとローカルshapesの両方をチェック
-      const allIds = new Set([
-        ...(existingShapes ?? []).map(s => s.id),
-        ...(shapesRef.current ?? []).map(s => s.id),
-      ]);
-      return allIds.has(prevSel) ? prevSel : null;
-    });
-
-    requestAnimationFrame(() => {
-      if (transformerRef.current) {
-        transformerRef.current.nodes([]);
-        transformerRef.current.getLayer()?.batchDraw();
-      }
-    });
+    if (changed) bump();
   }, [existingShapes]);
+
+  // ✅ 選択維持（Mapに存在するか確認）
+  useEffect(() => {
+    if (!selectedId) return;
+    if (!shapesMapRef.current.has(selectedId)) {
+      setSelectedId(null);
+    }
+  }, [shapesVersion, selectedId]);
 
   // マウント検知（デバッグ用）
   useEffect(() => {
