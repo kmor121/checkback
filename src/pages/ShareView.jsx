@@ -262,6 +262,13 @@ function ShareViewContent() {
     }
 
     if (isEditSession) {
+      // 既存コメント編集時：対応済みかどうか確認
+      const editingComment = comments.find(c => c.id === composerTargetCommentId);
+      if (editingComment?.resolved) {
+        showToast('対応済みのコメントはペイント編集できません（未対応に戻すと編集できます）', 'error');
+        return;
+      }
+
       // 既存コメント編集: そのコメントの描画を表示・編集可能
       setPaintSessionCommentId(composerTargetCommentId);
       setActiveCommentId(composerTargetCommentId);
