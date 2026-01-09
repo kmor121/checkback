@@ -531,23 +531,41 @@ function FileViewContent() {
   });
 
   // PaintShapeをViewerCanvas用の形式に変換（CRITICAL: comment_idを必ず含める、commentIdも吸収）
-  const allShapes = paintShapes.map(ps => {
-    try {
-      const data = JSON.parse(ps.data_json);
-      // CRITICAL: DBのcomment_id、またはdata内のcomment_id/commentIdを優先的に使う
-      const commentId = ps.comment_id || data.comment_id || data.commentId;
-      return {
-        id: ps.id,
-        comment_id: commentId, // CRITICAL: comment_idを必ず含める
-        tool: ps.shape_type,
-        ...data,
-        comment_id: commentId, // スプレッド後に上書きで確実に設定
-      };
-    } catch (e) {
-      console.error('Failed to parse shape:', e);
-      return null;
-    }
-  }).filter(Boolean);
+  const allShapes = React.useMemo(() => {
+    const result = paintShapes.map(ps => {
+      try {
+        const data = JSON.parse(ps.data_json);
+        // CRITICAL: DBのcomment_id、またはdata内のcomment_id/commentIdを優先的に使う
+        const commentId = ps.comment_id || data.comment_id || data.commentId;
+        
+        console.log('[FileView] parsing shape:', {
+          psId: ps.id,
+          psCommentId: ps.comment_id,
+          dataCommentId: data.comment_id,
+          dataCommentId2: data.commentId,
+          resolvedCommentId: commentId,
+        });
+        
+        return {
+          id: ps.id,
+          comment_id: commentId, // CRITICAL: comment_idを必ず含める
+          tool: ps.shape_type,
+          ...data,
+          comment_id: commentId, // スプレッド後に上書きで確実に設定
+        };
+      } catch (e) {
+        console.error('Failed to parse shape:', e);
+        return null;
+      }
+    }).filter(Boolean);
+    
+    console.log('[FileView] allShapes parsed:', {
+      count: result.length,
+      commentIds: result.map(s => s.comment_id),
+    });
+    
+    return result;
+  }, [paintShapes]);
 
   // CRITICAL: ViewerCanvasに渡すshapes（activeCommentIdがある時のみ）
   const shapesForCanvas = React.useMemo(() => {
