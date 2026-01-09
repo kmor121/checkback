@@ -372,6 +372,7 @@ function FileViewContent() {
       setComposerMode('new');
       setComposerTargetCommentId(null);
       setCommentBody('');
+      setPaintMode(false); // CRITICAL: ペイントモードも解除
       return;
     }
     
@@ -389,6 +390,7 @@ function FileViewContent() {
     setDraftShapes([]);
     setPaintSessionCommentId(null);
     setActiveCommentId(null);
+    setPaintMode(false); // CRITICAL: ペイントモードも解除
   };
 
   const toggleResolveMutation = useMutation({
@@ -398,12 +400,13 @@ function FileViewContent() {
     },
   });
 
-  // PaintShapeをViewerCanvas用の形式に変換
+  // PaintShapeをViewerCanvas用の形式に変換（CRITICAL: comment_idを必ず含める）
   const existingShapes = paintShapes.map(ps => {
     try {
       const data = JSON.parse(ps.data_json);
       return {
         id: ps.id,
+        comment_id: ps.comment_id, // CRITICAL: comment_idを含める
         tool: ps.shape_type,
         ...data,
       };
@@ -413,11 +416,8 @@ function FileViewContent() {
     }
   }).filter(Boolean);
 
-  // ActiveCommentのshapesを表示（draft含む）
-  const activeCommentShapes = [
-    ...existingShapes.filter(s => s.comment_id === (paintSessionCommentId || activeCommentId)),
-    ...draftShapes
-  ];
+  // CRITICAL: existingShapes全体を渡す（ViewerCanvas側でフィルタリング）
+  // draftShapes は comment_id = null として扱う
 
   const filteredComments = comments.filter(c => {
     if (commentFilter === 'resolved' && !c.resolved) return false;
@@ -534,7 +534,9 @@ function FileViewContent() {
             fileUrl={file?.file_url}
             mimeType={file?.mime_type}
             pageNumber={1}
-            existingShapes={activeCommentShapes}
+            existingShapes={existingShapes}
+            activeCommentId={activeCommentId}
+            showAllPaint={false}
             onSaveShape={handleSaveShape}
             onDeleteShape={handleDeleteShape}
             onBeginPaint={handleBeginPaint}
