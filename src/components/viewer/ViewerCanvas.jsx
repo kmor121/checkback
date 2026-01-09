@@ -194,6 +194,17 @@ const ViewerCanvas = forwardRef(({
   // CRITICAL: 正規化ユーティリティ（0や空文字を弾かない）
   const norm = (v) => (v == null ? null : String(v));
   const getCommentId = (s) => s.comment_id ?? s.commentId ?? s.commentID;
+  const getShapeCommentId = (s) => s?.comment_id ?? s?.commentId ?? s?.commentID ?? null;
+  const sameId = (a, b) => String(a ?? '') === String(b ?? '');
+  
+  // CRITICAL: editableIds を shapes(state) から作る（描いた直後のshapeも含む）
+  const editableIds = useMemo(() => {
+    return new Set(
+      shapes
+        .filter(s => sameId(getShapeCommentId(s), activeCommentId))
+        .map(s => s.id)
+    );
+  }, [shapes, activeCommentId]);
 
   // CRITICAL: 編集可能かをcomment_id一致で判定（editableIds依存をやめる）
   const isEditableShape = (shape) => {
@@ -851,6 +862,7 @@ const ViewerCanvas = forwardRef(({
       const normalizedShape = {
         id: generateUUID(),
         comment_id: commentIdForText,
+        commentId: commentIdForText,  // ★両方のキーで入れる
         tool: 'text',
         stroke: strokeColor,
         strokeWidth: strokeWidth,
@@ -987,6 +999,7 @@ const ViewerCanvas = forwardRef(({
       const normalizedShape = {
         id: shape.id,
         comment_id: shape.comment_id || activeCommentId, // ★shapeから取得 or activeCommentId
+        commentId: shape.comment_id || activeCommentId,  // ★両方のキーで入れる
         tool: shapeTool,
         stroke: shape.stroke,
         strokeWidth: shape.strokeWidth,
@@ -1445,34 +1458,18 @@ const ViewerCanvas = forwardRef(({
       stroke: shape.stroke,
       strokeWidth: shape.strokeWidth,
       listening: isEditable, // ★編集できる時だけ当たり判定ON
-      onMouseDown: canEdit ? (e) => {
-        // CRITICAL: 編集不可の描画は選択させない
+      onPointerDown: canEdit ? (e) => {
         if (!isEditable) return;
         e.cancelBubble = true;
         setSelectedId(shape.id);
-        // 選択図形の色/太さをツールバーに反映
         if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
         if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
       } : undefined,
-      onTouchStart: canEdit ? (e) => {
-        // CRITICAL: 編集不可の描画は選択させない
-        if (!isEditable) return;
-        e.cancelBubble = true;
-        setSelectedId(shape.id);
-        // 選択図形の色/太さをツールバーに反映
-        if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
-        if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
-      } : undefined,
-      ref: (node) => {
-        if (node) {
-          shapeRefs.current[shape.id] = node;
-        }
-      },
+      ref: (node) => { if (node) shapeRefs.current[shape.id] = node; },
       draggable: isEditable,
       onDragStart: isEditable ? (e) => handleDragStart(shape, e) : undefined,
       onDragMove: isEditable ? (e) => handleDragMove(shape, e) : undefined,
       onDragEnd: isEditable ? (e) => handleDragEnd(shape, e) : undefined,
-      // TransformEndはRect/Circle/Arrow/Textのみ＋編集可能な時のみ
       onTransformEnd: (isEditable && canTransform) ? (e) => handleTransformEnd(shape, e) : undefined,
     };
 
@@ -1561,14 +1558,7 @@ const ViewerCanvas = forwardRef(({
             x={shape.dragX || 0}
             y={shape.dragY || 0}
             draggable={isEditable}
-            onMouseDown={canEdit ? (e) => {
-              if (!isEditable) return;
-              e.cancelBubble = true;
-              setSelectedId(shape.id);
-              if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
-              if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
-            } : undefined}
-            onTouchStart={canEdit ? (e) => {
+            onPointerDown={canEdit ? (e) => {
               if (!isEditable) return;
               e.cancelBubble = true;
               setSelectedId(shape.id);
@@ -1683,14 +1673,7 @@ const ViewerCanvas = forwardRef(({
               x={shape.dragX || 0}
               y={shape.dragY || 0}
               draggable={isEditable}
-              onMouseDown={canEdit ? (e) => {
-                if (!isEditable) return;
-                e.cancelBubble = true;
-                setSelectedId(shape.id);
-                if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
-                if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
-              } : undefined}
-              onTouchStart={canEdit ? (e) => {
+              onPointerDown={canEdit ? (e) => {
                 if (!isEditable) return;
                 e.cancelBubble = true;
                 setSelectedId(shape.id);
@@ -1747,27 +1730,14 @@ const ViewerCanvas = forwardRef(({
             fontSize={fontSize}
             fill={shape.stroke}
             fontFamily="Arial, sans-serif"
-            onMouseDown={canEdit ? (e) => {
+            onPointerDown={canEdit ? (e) => {
               if (!isEditable) return;
               e.cancelBubble = true;
               setSelectedId(shape.id);
-              // 選択図形の色/太さをツールバーに反映
               if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
               if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
             } : undefined}
-            onTouchStart={canEdit ? (e) => {
-              if (!isEditable) return;
-              e.cancelBubble = true;
-              setSelectedId(shape.id);
-              // 選択図形の色/太さをツールバーに反映
-              if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
-              if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
-            } : undefined}
-            ref={(node) => {
-              if (node) {
-                shapeRefs.current[shape.id] = node;
-              }
-            }}
+            ref={(node) => { if (node) shapeRefs.current[shape.id] = node; }}
             draggable={isEditable}
             onDragStart={isEditable ? (e) => handleDragStart(shape, e) : undefined}
             onDragMove={isEditable ? (e) => handleDragMove(shape, e) : undefined}
