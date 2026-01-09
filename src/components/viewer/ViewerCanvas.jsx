@@ -1847,18 +1847,32 @@ const ViewerCanvas = forwardRef(({
         const fontSize = shape.fontSize || Math.max(12, (shape.strokeWidth || 2) * 6);
 
         // テキストの場合：Group + Rect + Text で中央配置
-        // ボックスサイズを計算（テキスト幅・高さ + パディング）
         const textContent = shape.text || '';
-        const charWidth = fontSize * 0.6; // 概算
-        const textWidth = Math.max(textContent.length * charWidth, 50);
-        const textHeight = fontSize;
-        const boxPadding = 8;
-        const boxW = shape.boxW ? shape.boxW * bgSize.width : textWidth + boxPadding * 2;
-        const boxH = shape.boxH ? shape.boxH * bgSize.height : textHeight + boxPadding * 2;
 
-        // テキストをボックス内で中央配置するためのオフセット
-        const textY = (boxH - textHeight) / 2;
-        const textX = boxPadding;
+        // パディング設定（右余白を小さく）
+        const padL = 4;  // 左
+        const padR = 4;  // 右
+        const padY = 3;  // 上下
+
+        // テキストサイズを実測（Konva Textを一時作成）
+        const tempText = new window.Konva.Text({
+          text: textContent,
+          fontSize: fontSize,
+          fontFamily: 'Arial, sans-serif',
+          lineHeight: 1.0,
+          padding: 0,
+        });
+        const tw = tempText.getTextWidth();
+        const th = tempText.height();
+        tempText.destroy();
+
+        // ボックスサイズ（リサイズ済みならそれを使用、なければ自動計算）
+        const boxW = shape.boxW ? shape.boxW * bgSize.width : tw + padL + padR;
+        const boxH = shape.boxH ? shape.boxH * bgSize.height : th + padY * 2;
+
+        // テキストをボックス内で中央配置
+        const textX = padL;
+        const textY = padY + (boxH - padY * 2 - th) / 2;
 
         return (
           <Group
@@ -1894,6 +1908,7 @@ const ViewerCanvas = forwardRef(({
               text={textContent}
               fontSize={fontSize}
               lineHeight={1.0}
+              padding={0}
               fill={shape.stroke}
               fontFamily="Arial, sans-serif"
               listening={false}
