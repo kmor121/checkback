@@ -763,9 +763,9 @@ function FileViewContent() {
             />
             <Button
               type="button"
-              disabled={isSubmitting || globalSubmitLock || (!commentBody.trim() && draftShapes.length === 0)}
+              disabled={isSubmitting || createCommentMutation.isPending || updateCommentMutation.isPending || (!commentBody.trim() && draftShapes.length === 0)}
               className="w-full bg-blue-600 hover:bg-blue-700"
-              style={{ pointerEvents: (isSubmitting || globalSubmitLock) ? "none" : "auto" }}
+              style={{ pointerEvents: isSubmitting ? "none" : "auto" }}
               onClick={handleSendComment}
             >
               <Send className="w-4 h-4 mr-2" />
