@@ -116,10 +116,21 @@ const ViewerCanvas = forwardRef(({
   const draftCommentIdRef = useRef(null); // 仮コメントID（描画開始時にactiveCommentIdが無い場合）
   const lastStableCommentIdRef = useRef(activeCommentId ?? null); // 最後に有効だったコメントID（一瞬null対策）
   
-  // shapesRefを常に最新に保つ
-  useEffect(() => {
-    shapesRef.current = shapes;
-  }, [shapes]);
+  // ★ Map方式では shapes state は不要（getAllShapes()を使う）
+  // 後方互換のためのダミー（実際はMapを参照）
+  const shapes = useMemo(() => getAllShapes(), [shapesVersion]);
+  
+  // setShapes互換関数（Mapを更新してbump）
+  const setShapes = (updater) => {
+    if (typeof updater === 'function') {
+      const current = getAllShapes();
+      const next = updater(current);
+      shapesMapRef.current = new Map(next.map(s => [s.id, s]));
+    } else {
+      shapesMapRef.current = new Map((updater ?? []).map(s => [s.id, s]));
+    }
+    bump();
+  };
   
   // CRITICAL: 描画状態をrefに同期（activeCommentIdリセットガード用）
   useEffect(() => {
