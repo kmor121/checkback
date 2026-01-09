@@ -49,7 +49,10 @@ function FileViewContent() {
   // CRITICAL: 送信完了後のキャンバスクリア用nonce & 連打防止
   const [clearAfterSubmitNonce, setClearAfterSubmitNonce] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // NOTE: inFlightRef/mutationIdRefはモジュールスコープのglobalSubmitLock/globalMutationIdに移行
+  
+  // CRITICAL: useRefでロック管理（コンポーネント内で確実に保持）
+  const submitLockRef = useRef(false);
+  const mutationIdRef = useRef(null);
   
   const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
