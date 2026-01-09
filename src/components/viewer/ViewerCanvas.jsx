@@ -392,7 +392,13 @@ const ViewerCanvas = forwardRef(({
         // テキストの場合：上に余白を追加して中央寄せ
         if (selectedShape.tool === 'text') {
           transformerRef.current.padding(12);
-          transformerRef.current.boundBoxFunc(null);
+          // 下の余白を縮小して中央寄せ
+          transformerRef.current.boundBoxFunc((oldBox, newBox) => {
+            return {
+              ...newBox,
+              height: newBox.height - 8, // 下の余白を8px縮小
+            };
+          });
         } else {
           transformerRef.current.padding(0);
           transformerRef.current.boundBoxFunc(null);
