@@ -1880,6 +1880,7 @@ const ViewerCanvas = forwardRef(({
           lineHeight: 1,
           letterSpacing: 0,
           padding: 0,
+          wrap: 'none',  // ★ 折り返し禁止（bboxが太らないように）
         };
 
         // パディング設定
