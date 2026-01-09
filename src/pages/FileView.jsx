@@ -591,17 +591,28 @@ function FileViewContent() {
     const targetId = activeCommentId || paintSessionCommentId;
     if (!targetId) return draftShapes;
     
-    // CRITICAL: 型を統一して比較（文字列に変換）
+    // ★★★ CRITICAL: 型を統一して比較（文字列に変換）★★★
     const targetIdStr = String(targetId);
     const filtered = allShapes.filter(s => {
-      const shapeCommentId = s.comment_id ?? s.commentId ?? s.commentID;
-      return shapeCommentId != null && String(shapeCommentId) === targetIdStr;
+      // s.comment_id は既にDBのReviewComment IDに修正済み
+      const shapeCommentId = s.comment_id;
+      const matches = shapeCommentId != null && String(shapeCommentId) === targetIdStr;
+      
+      console.log('[FileView] shape filter check:', {
+        shapeId: s.id,
+        shapeCommentId,
+        targetIdStr,
+        matches,
+      });
+      
+      return matches;
     });
     
     console.log('[FileView] shapesForCanvas result:', {
       targetId: targetIdStr,
       filteredCount: filtered.length,
       draftShapesCount: draftShapes.length,
+      filteredIds: filtered.map(s => s.id),
     });
     
     // allShapesとdraftShapesをマージして返す
