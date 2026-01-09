@@ -401,7 +401,7 @@ function FileViewContent() {
   });
 
   // PaintShapeをViewerCanvas用の形式に変換（CRITICAL: comment_idを必ず含める）
-  const existingShapes = paintShapes.map(ps => {
+  const allShapes = paintShapes.map(ps => {
     try {
       const data = JSON.parse(ps.data_json);
       return {
@@ -416,8 +416,11 @@ function FileViewContent() {
     }
   }).filter(Boolean);
 
-  // CRITICAL: existingShapes全体を渡す（ViewerCanvas側でフィルタリング）
-  // draftShapes は comment_id = null として扱う
+  // CRITICAL: 親側でフィルタリング（showAllPaint=false のため）
+  const shapesForCanvas = React.useMemo(() => {
+    if (!activeCommentId) return [];
+    return [...allShapes.filter(s => s.comment_id === (paintSessionCommentId || activeCommentId)), ...draftShapes];
+  }, [allShapes, activeCommentId, paintSessionCommentId, draftShapes]);
 
   const filteredComments = comments.filter(c => {
     if (commentFilter === 'resolved' && !c.resolved) return false;
@@ -534,7 +537,7 @@ function FileViewContent() {
             fileUrl={file?.file_url}
             mimeType={file?.mime_type}
             pageNumber={1}
-            existingShapes={existingShapes}
+            existingShapes={shapesForCanvas}
             activeCommentId={activeCommentId}
             showAllPaint={false}
             onSaveShape={handleSaveShape}

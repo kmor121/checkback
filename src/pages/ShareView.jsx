@@ -730,6 +730,8 @@ function ShareViewContent() {
       draftShapesRef.current = [];
       setPaintSessionCommentId(null);
       setIsDockOpen(false);
+      setPaintMode(false); // CRITICAL: ペイントも強制OFF
+      setTool('select');
       return;
     }
 
@@ -785,6 +787,7 @@ function ShareViewContent() {
   const resetEditorSession = () => {
     viewerCanvasRef.current?.clear();
     setPaintMode(false);
+    setTool('select'); // CRITICAL: ツールもリセット
     setIsDockOpen(false);
     setPaintSessionCommentId(null);
 
@@ -930,39 +933,33 @@ function ShareViewContent() {
 
 
 
-  // PaintShapeをViewerCanvas用の形式に変換（draft含む）
-  const existingShapes = React.useMemo(() => {
-    if (!isReady || !paintShapes) {
-      return [...draftShapes];
-    }
+  // PaintShapeをViewerCanvas用の形式に変換（CRITICAL: 親側でフィルタ）
+  const allShapes = React.useMemo(() => {
+    if (!isReady || !paintShapes) return [];
 
-    const targetCommentId = paintSessionCommentId || activeCommentId;
-    const filtered = showAllPaint 
-      ? paintShapes 
-      : targetCommentId 
-        ? paintShapes.filter(ps => ps.comment_id === targetCommentId)
-        : [];
+    return paintShapes.map(ps => {
+      try {
+        const data = JSON.parse(ps.data_json);
+        return {
+          id: ps.client_shape_id || ps.id,
+          dbId: ps.id,
+          tool: ps.shape_type,
+          comment_id: ps.comment_id, // CRITICAL: comment_idを含める
+          ...data,
+        };
+      } catch (e) {
+        console.error('[ShareView] Failed to parse shape:', e);
+        return null;
+      }
+    }).filter(Boolean);
+  }, [paintShapes, isReady]);
 
-    const result = filtered
-      .map(ps => {
-        try {
-          const data = JSON.parse(ps.data_json);
-          return {
-            id: ps.client_shape_id || ps.id,
-            dbId: ps.id,
-            tool: ps.shape_type,
-            commentId: ps.comment_id,
-            ...data,
-          };
-        } catch (e) {
-          console.error('[ShareView] Failed to parse shape:', e);
-          return null;
-        }
-      })
-      .filter(Boolean);
-
-    return [...result, ...draftShapes];
-  }, [paintShapes, isReady, activeCommentId, paintSessionCommentId, showAllPaint, draftShapes]);
+  // CRITICAL: 親側でフィルタリング（ViewerCanvasに渡すshapes）
+  const shapesForCanvas = React.useMemo(() => {
+    if (showAllPaint) return [...allShapes, ...draftShapes];
+    if (!activeCommentId) return draftShapes;
+    return [...allShapes.filter(s => s.comment_id === (paintSessionCommentId || activeCommentId)), ...draftShapes];
+  }, [allShapes, showAllPaint, activeCommentId, paintSessionCommentId, draftShapes]);
 
   // 親コメントと返信を分離（条件付きreturnの前に配置）
   const filteredComments = React.useMemo(() => {
@@ -1219,7 +1216,7 @@ function ShareViewContent() {
                 fileUrl={file?.file_url}
                 mimeType={file?.mime_type}
                 pageNumber={currentPage}
-                existingShapes={existingShapes}
+                existingShapes={shapesForCanvas}
                 comments={comments.filter(c => c.page_no === currentPage)}
                 activeCommentId={activeCommentId}
                 onCommentClick={(id) => {
@@ -1246,7 +1243,7 @@ function ShareViewContent() {
                   activeCommentId: activeCommentId,
                   queryKey: ['paintShapes', token, shareLink?.file_id, currentPage],
                   fetchedCount: paintShapes?.length || 0,
-                  filteredCount: existingShapes?.length || 0,
+                  filteredCount: shapesForCanvas?.length || 0,
                   showAllPaint: showAllPaint,
                   token: token,
                   fileId: shareLink?.file_id,

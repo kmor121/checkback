@@ -79,7 +79,6 @@ const ViewerCanvas = forwardRef(({
   const [selectedId, setSelectedId] = useState(null);
   const transformerRef = useRef(null);
   const shapeRefs = useRef({});
-  const hydratedRef = useRef(false);
   
   // パン状態
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -117,8 +116,9 @@ const ViewerCanvas = forwardRef(({
   const [dragTick, setDragTick] = useState(0);
   
   const isImage = mimeType?.startsWith('image/');
-  const isEditMode = tool === 'select';
-  const isDrawMode = !isEditMode && (paintMode || tool === 'text');
+  // CRITICAL: 編集モードはペイント中のみ
+  const isEditMode = paintMode && tool === 'select';
+  const isDrawMode = paintMode && tool !== 'select';
   
   // CRITICAL: activeCommentId ベースで表示・編集を厳密に分離
   const activeShapes = useMemo(() => {
@@ -164,12 +164,28 @@ const ViewerCanvas = forwardRef(({
     });
   }, [activeCommentId]);
 
-  // CRITICAL: fileUrl/pageNumber/zoom変更時にリセット（hydrateより先に実行）
+  // CRITICAL: activeCommentId が null の時の"安全停止"
+  useEffect(() => {
+    if (activeCommentId !== null) return;
+
+    // 選択解除時は完全に編集停止
+    setSelectedId(null);
+    setCurrentShape(null);
+    setIsDrawing(false);
+
+    requestAnimationFrame(() => {
+      if (transformerRef.current) {
+        transformerRef.current.nodes([]);
+        transformerRef.current.getLayer()?.batchDraw();
+      }
+    });
+  }, [activeCommentId]);
+
+  // CRITICAL: fileUrl/pageNumber/zoom変更時にリセット
   useEffect(() => {
     if (DEBUG_MODE) {
       console.log('[ViewerCanvas] fileUrl/pageNumber/zoom changed, resetting state');
     }
-    hydratedRef.current = false;
     setShapes([]);
     setSelectedId(null);
     setCurrentShape(null);
@@ -178,22 +194,24 @@ const ViewerCanvas = forwardRef(({
     setPan({ x: 0, y: 0 });
   }, [fileUrl, pageNumber, zoom]);
 
-  // existingShapesからの初回hydrate（activeShapesのみ）
+  // CRITICAL: existingShapes を常に反映（source-of-truth を props に寄せる）
   useEffect(() => {
-    if (!activeShapes) return;
-    if (activeShapes.length === 0) {
-      // activeCommentId が null または描画が無い場合は shapes をクリア
-      setShapes([]);
-      hydratedRef.current = false;
-      return;
-    }
-    // 未hydrate または 現在のshapesが空の時だけ反映（ローカル編集を上書きしない）
-    if (!hydratedRef.current || shapes.length === 0) {
-      console.log('[ViewerCanvas] Hydrating activeShapes:', activeShapes.length);
-      setShapes(activeShapes);
-      hydratedRef.current = true;
-    }
-  }, [activeShapes]);
+    // 重要：コメント切替/解除でも確実に同期
+    setShapes(existingShapes ?? []);
+
+    // ついでに編集状態を完全リセット（残留編集防止）
+    setSelectedId(null);
+    setCurrentShape(null);
+    setIsDrawing(false);
+    setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
+
+    requestAnimationFrame(() => {
+      if (transformerRef.current) {
+        transformerRef.current.nodes([]);
+        transformerRef.current.getLayer()?.batchDraw();
+      }
+    });
+  }, [existingShapes]);
 
   // マウント検知（デバッグ用）
   useEffect(() => {
