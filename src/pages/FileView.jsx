@@ -46,6 +46,11 @@ function FileViewContent() {
   const [composerMode, setComposerMode] = useState('new');
   const [composerTargetCommentId, setComposerTargetCommentId] = useState(null);
   
+  // CRITICAL: 送信完了後のキャンバスクリア用nonce & 連打防止
+  const [clearAfterSubmitNonce, setClearAfterSubmitNonce] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const submitLockRef = useRef(false);
+  
   const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
 
@@ -304,6 +309,11 @@ function FileViewContent() {
   const handleSendComment = async () => {
     if (!commentBody.trim() || !user) return;
     
+    // CRITICAL: 連打防止（lockチェック）
+    if (submitLockRef.current || isSubmitting) return;
+    submitLockRef.current = true;
+    setIsSubmitting(true);
+    
     try {
       // CRITICAL: 編集モード or activeCommentIdがある場合は「更新」
       if ((composerMode === 'edit' && composerTargetCommentId) || activeCommentId) {
@@ -374,13 +384,18 @@ function FileViewContent() {
       setActiveCommentId(null);
       setPaintMode(false);
       
-      // CRITICAL: ViewerCanvasの描画もクリア
+      // CRITICAL: ViewerCanvasの描画もクリア（nonce方式）
+      setClearAfterSubmitNonce(n => n + 1);
       viewerCanvasRef.current?.clear();
       
       await queryClient.invalidateQueries(['comments']);
       await queryClient.invalidateQueries(['paintShapes']);
     } catch (error) {
       showToast(`送信失敗: ${error.message}`, 'error');
+    } finally {
+      // CRITICAL: 連打防止解除
+      submitLockRef.current = false;
+      setIsSubmitting(false);
     }
   };
 
@@ -575,6 +590,7 @@ function FileViewContent() {
             existingShapes={shapesForCanvas}
             activeCommentId={activeCommentId}
             showAllPaint={false}
+            clearAfterSubmitNonce={clearAfterSubmitNonce}
             onShapesChange={(updated) => {
               // CRITICAL: ViewerCanvasからの更新を即座にdraftShapesに反映
               if (!paintSessionCommentId) {
@@ -697,7 +713,7 @@ function FileViewContent() {
             />
             <Button
               onClick={handleSendComment}
-              disabled={!commentBody.trim() && draftShapes.length === 0}
+              disabled={isSubmitting || (!commentBody.trim() && draftShapes.length === 0)}
               className="w-full bg-blue-600 hover:bg-blue-700"
             >
               <Send className="w-4 h-4 mr-2" />
