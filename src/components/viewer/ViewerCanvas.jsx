@@ -317,13 +317,14 @@ const ViewerCanvas = forwardRef(({
       return;
     }
 
-    // ローカルで追加した新規shapeを保持（描画完了直後の消失防止）
-    const existingIds = new Set(existingShapes.map(s => s.id));
-    const localOnlyShapes = shapes.filter(s => !existingIds.has(s.id));
-    
-    // existingShapesとローカルのみのshapeをマージ
-    const merged = [...existingShapes, ...localOnlyShapes];
-    setShapes(merged);
+    // ★ CRITICAL: ローカル優先マージ（ドラッグ後の位置を守る）
+    setShapes(prev => {
+      const map = new Map();
+      (existingShapes ?? []).forEach(s => map.set(s.id, s));
+      // ★同じidがある場合はローカルを優先（ドラッグ後の位置を守る）
+      (prev ?? []).forEach(s => map.set(s.id, s));
+      return Array.from(map.values());
+    });
 
     // 編集状態を完全リセット（残留編集防止）
     setSelectedId(null);
@@ -1235,10 +1236,14 @@ const ViewerCanvas = forwardRef(({
     }
     
     addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: updatedShape });
-    
-    // CRITICAL: Optimistic update は「同じidを置換」（追加ではない）
-    setShapes(prev => prev.map(s => s.id === updatedShape.id ? updatedShape : s));
-    
+
+    // CRITICAL: Optimistic update は「同じidを置換」（追加ではない）+ 親に即同期
+    setShapes(prev => {
+      const next = prev.map(s => s.id === updatedShape.id ? updatedShape : s);
+      onShapesChange?.(next); // ★親にも即同期（巻き戻り防止）
+      return next;
+    });
+
     // ドラッグ終了
     isDraggingRef.current = false;
     
@@ -1368,8 +1373,12 @@ const ViewerCanvas = forwardRef(({
 
       addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: updatedShape });
 
-      // CRITICAL: Optimistic update は「同じidを置換」（追加ではない）
-      setShapes(prev => prev.map(s => s.id === updatedShape.id ? updatedShape : s));
+      // CRITICAL: Optimistic update は「同じidを置換」（追加ではない）+ 親に即同期
+      setShapes(prev => {
+        const next = prev.map(s => s.id === updatedShape.id ? updatedShape : s);
+        onShapesChange?.(next); // ★親にも即同期（巻き戻り防止）
+        return next;
+      });
 
       // DB更新（upsertモード）
       if (onSaveShape) {
