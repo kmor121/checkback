@@ -1634,7 +1634,16 @@ const ViewerCanvas = forwardRef(({
     redo: performRedo,
     clear: () => {
       if (DEBUG_MODE) console.log('[ViewerCanvas] clear() called');
-      shapesMapRef.current = new Map(); // ★ Mapをクリア
+      // ★ CRITICAL: Mapはクリアしない（existingShapesは保持）
+      // draftShapesのみクリア（comment_idがdraftCommentIdRefのもの）
+      const draftId = draftCommentIdRef.current;
+      if (draftId) {
+        for (const [id, shape] of shapesMapRef.current.entries()) {
+          if (shape.comment_id === draftId || shape._dirty) {
+            shapesMapRef.current.delete(id);
+          }
+        }
+      }
       bump();
       setCurrentShape(null);
       setUndoStack([]);
@@ -1642,8 +1651,7 @@ const ViewerCanvas = forwardRef(({
       setSelectedId(null);
       setIsDrawing(false);
       draftCommentIdRef.current = null; // CRITICAL: 仮IDもリセット
-      lastStableCommentIdRef.current = null; // CRITICAL: lastStableもリセット
-      setHidePaintUntilSelect(true); // CRITICAL: 強制非表示
+      // ★ lastStableCommentIdRefとhidePaintUntilSelectはクリアしない（コメント選択状態を維持）
     },
     // CRITICAL: 送信完了後の強制クリア（ref経由で確実に実行）
     afterSubmitClear: () => {
