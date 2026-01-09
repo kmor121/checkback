@@ -23,6 +23,10 @@ import FloatingToolbar from '../components/viewer/FloatingToolbar';
 import ShareLinkModal from '../components/viewer/ShareLinkModal';
 import DebugOverlay from '../components/DebugOverlay';
 
+// CRITICAL: モジュールスコープでロック管理（コンポーネント再レンダリングで消えない）
+let globalSubmitLock = false;
+let globalMutationId = null;
+
 function FileViewContent() {
   const [user, setUser] = useState(null);
   const [commentFilter, setCommentFilter] = useState('all');
@@ -49,8 +53,7 @@ function FileViewContent() {
   // CRITICAL: 送信完了後のキャンバスクリア用nonce & 連打防止
   const [clearAfterSubmitNonce, setClearAfterSubmitNonce] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const inFlightRef = useRef(null); // ★Promiseロック方式
-  const mutationIdRef = useRef(null); // ★送信1回につき同じIDを使い回す
+  // NOTE: inFlightRef/mutationIdRefはモジュールスコープのglobalSubmitLock/globalMutationIdに移行
   
   const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
@@ -290,18 +293,18 @@ function FileViewContent() {
     }
   };
 
-  // CRITICAL: 送信ロック用のグローバルフラグ（useStateではなくモジュールスコープ）
+  // CRITICAL: 送信ロック用のグローバルフラグ（モジュールスコープで管理）
   const handleSendComment = (e) => {
     e?.preventDefault?.();
     e?.stopPropagation?.();
     
     console.count("[submit] handler called");
-    console.log("[submit] inFlight:", !!inFlightRef.current, "isSubmitting:", isSubmitting);
+    console.log("[submit] globalSubmitLock:", globalSubmitLock, "isSubmitting:", isSubmitting);
     
-    // ★最優先チェック：すでに送信中なら即座にreturn（同期的に判定）
-    if (inFlightRef.current) {
-      console.log("[submit] BLOCKED by inFlightRef");
-      return inFlightRef.current;
+    // ★最優先チェック：グローバルロックで即座にブロック（同期的に判定）
+    if (globalSubmitLock) {
+      console.log("[submit] BLOCKED by globalSubmitLock");
+      return;
     }
     
     if (!commentBody.trim() || !user) {
@@ -309,15 +312,13 @@ function FileViewContent() {
       return;
     }
     
-    // ★ここで即座にロックをかける（Promiseを作る前に）
-    // これにより同期的な連打を100%ブロック
-    const lockId = crypto.randomUUID();
-    inFlightRef.current = lockId; // 一時的にstringでロック
+    // ★ここで即座にロックをかける（非同期処理の前に同期的にロック）
+    globalSubmitLock = true;
     setIsSubmitting(true);
     
     console.count("[submit] lock acquired");
     
-    const p = (async () => {
+    (async () => {
       try {
         console.count("[submit] api called");
         
@@ -333,11 +334,11 @@ function FileViewContent() {
           showToast('コメントを更新しました', 'success');
         } else {
           // 新規モード: 新しいコメントを作成
-          // CRITICAL: idempotency用のclientMutationIdを使用（inFlight中は同じIDを再利用）
-          if (!mutationIdRef.current) {
-            mutationIdRef.current = crypto.randomUUID();
+          // CRITICAL: idempotency用のclientMutationIdを使用
+          if (!globalMutationId) {
+            globalMutationId = crypto.randomUUID();
           }
-          const clientMutationId = mutationIdRef.current;
+          const clientMutationId = globalMutationId;
           console.log(`[comment] create called mid=${clientMutationId}`);
           
           const existingComments = await base44.entities.ReviewComment.filter({ file_id: fileId });
@@ -412,14 +413,10 @@ function FileViewContent() {
       } finally {
         console.count("[submit] lock released");
         setIsSubmitting(false);
-        inFlightRef.current = null;
-        mutationIdRef.current = null; // ★完了したら次回用にクリア
+        globalSubmitLock = false;
+        globalMutationId = null; // ★完了したら次回用にクリア
       }
     })();
-    
-    // Promiseでロックを上書き（既にstringでロック済みなので連打は通らない）
-    inFlightRef.current = p;
-    return p;
   };
 
   const handleCommentClick = (comment) => {
