@@ -389,10 +389,11 @@ const ViewerCanvas = forwardRef(({
 
       if (canTransform) {
         transformerRef.current.nodes([shapeRefs.current[selectedId]]);
-        // テキストの場合：シンプルなpadding
+        // テキストの場合：Transformerを使わない（カスタム選択枠を使用）
         if (selectedShape.tool === 'text') {
-          transformerRef.current.padding(4);
-          transformerRef.current.boundBoxFunc(null);
+          transformerRef.current.nodes([]);
+          transformerRef.current.getLayer()?.batchDraw();
+          return; // 早期リターン
         } else {
           transformerRef.current.padding(0);
           transformerRef.current.boundBoxFunc(null);
@@ -1847,33 +1848,49 @@ const ViewerCanvas = forwardRef(({
         const fontSize = shape.fontSize || Math.max(12, (shape.strokeWidth || 2) * 6);
 
         // テキストの場合は stroke を使わず fill のみ使用
-        // offsetYでテキストを垂直中央に調整（日本語フォントの下部余白を補正）
-        const verticalOffset = fontSize * 0.15; // フォントサイズの15%分下にずらす
+        // カスタム選択枠を使用（Transformerではなく）
+        const textPadding = 6;
+        const textWidth = (shape.text || '').length * fontSize * 0.6; // 概算幅
+        const textHeight = fontSize;
 
         return (
-          <Text
-            key={shape.id}
-            x={x}
-            y={y + verticalOffset}
-            text={shape.text || ''}
-            fontSize={fontSize}
-            lineHeight={1.0}
-            fill={shape.stroke}
-            fontFamily="Arial, sans-serif"
-            onPointerDown={canEdit ? (e) => {
-              if (!isEditable) return;
-              e.cancelBubble = true;
-              setSelectedId(shape.id);
-              if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
-              if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
-            } : undefined}
-            ref={(node) => { if (node) shapeRefs.current[shape.id] = node; }}
-            draggable={isEditable}
-            onDragStart={isEditable ? (e) => handleDragStart(shape, e) : undefined}
-            onDragMove={isEditable ? (e) => handleDragMove(shape, e) : undefined}
-            onDragEnd={isEditable ? (e) => handleDragEnd(shape, e) : undefined}
-            onDblClick={canEdit ? () => handleTextDblClick(shape) : undefined}
-          />
+          <React.Fragment key={shape.id}>
+            <Text
+              x={x}
+              y={y}
+              text={shape.text || ''}
+              fontSize={fontSize}
+              lineHeight={1.0}
+              fill={shape.stroke}
+              fontFamily="Arial, sans-serif"
+              onPointerDown={canEdit ? (e) => {
+                if (!isEditable) return;
+                e.cancelBubble = true;
+                setSelectedId(shape.id);
+                if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
+                if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
+              } : undefined}
+              ref={(node) => { if (node) shapeRefs.current[shape.id] = node; }}
+              draggable={isEditable}
+              onDragStart={isEditable ? (e) => handleDragStart(shape, e) : undefined}
+              onDragMove={isEditable ? (e) => handleDragMove(shape, e) : undefined}
+              onDragEnd={isEditable ? (e) => handleDragEnd(shape, e) : undefined}
+              onDblClick={canEdit ? () => handleTextDblClick(shape) : undefined}
+            />
+            {/* カスタム選択枠（テキストの実際の位置に合わせる） */}
+            {isSelected && (
+              <Rect
+                x={x - textPadding}
+                y={y - textPadding}
+                width={Math.max(textWidth, 50) + textPadding * 2}
+                height={textHeight + textPadding * 2}
+                stroke="#3b82f6"
+                strokeWidth={1}
+                dash={[4, 4]}
+                listening={false}
+              />
+            )}
+          </React.Fragment>
         );
       }
       return null;
