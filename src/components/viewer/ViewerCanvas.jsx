@@ -85,10 +85,24 @@ const ViewerCanvas = forwardRef(({
   const dragRafRef = useRef(null); // RAF間引き用
   const pendingDragRef = useRef(null); // ドラッグ座標バッファ
   
+  // CRITICAL: 描画中の強制リセット防止用ref
+  const isDrawingRef2 = useRef(false);
+  const currentShapeRef2 = useRef(null);
+  const suppressResetRef = useRef(false);
+  
   // shapesRefを常に最新に保つ
   useEffect(() => {
     shapesRef.current = shapes;
   }, [shapes]);
+  
+  // CRITICAL: 描画状態をrefに同期（activeCommentIdリセットガード用）
+  useEffect(() => {
+    isDrawingRef2.current = isDrawing;
+  }, [isDrawing]);
+  
+  useEffect(() => {
+    currentShapeRef2.current = currentShape;
+  }, [currentShape]);
   
   // パン状態
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -155,6 +169,18 @@ const ViewerCanvas = forwardRef(({
 
   // CRITICAL: activeCommentId変化時に強制リセット（最重要）
   useEffect(() => {
+    // CRITICAL: 描画開始直後 or 描画中はリセットしない（onBeginPaint→activeCommentId変更で死ぬのを防ぐ）
+    if (suppressResetRef.current || isDrawingRef2.current || currentShapeRef2.current) {
+      if (DEBUG_MODE) {
+        console.log('[ViewerCanvas] skip reset while drawing', {
+          suppress: suppressResetRef.current,
+          isDrawing: isDrawingRef2.current,
+          hasShape: !!currentShapeRef2.current
+        });
+      }
+      return;
+    }
+    
     if (DEBUG_MODE) {
       console.log('[ViewerCanvas] activeCommentId changed, force reset:', activeCommentId);
     }
@@ -177,6 +203,14 @@ const ViewerCanvas = forwardRef(({
   // CRITICAL: activeCommentId が null の時の"安全停止"
   useEffect(() => {
     if (activeCommentId !== null) return;
+    
+    // CRITICAL: 描画中はリセットしない（選択解除の瞬間に描画を殺さない）
+    if (suppressResetRef.current || isDrawingRef2.current || currentShapeRef2.current) {
+      if (DEBUG_MODE) {
+        console.log('[ViewerCanvas] skip reset on null activeCommentId while drawing');
+      }
+      return;
+    }
 
     // 選択解除時は完全に編集停止
     setSelectedId(null);
@@ -618,6 +652,9 @@ const ViewerCanvas = forwardRef(({
         setImgPos({ x: imgCoords.x, y: imgCoords.y });
       }
       
+      // CRITICAL: この描画セッション中はactiveCommentIdリセットを抑止
+      suppressResetRef.current = true;
+      
       setIsDrawing(true);
 
       // CRITICAL: clientShapeId は1回だけ発行して固定（移動・編集で絶対に再生成しない）
@@ -637,11 +674,16 @@ const ViewerCanvas = forwardRef(({
         setCurrentShape(newShape);
       }
 
-      // CRITICAL: onBeginPaint を遅延実行（描画中に親 state が揺れても影響を受けない）
+      // CRITICAL: 描画状態をセットしてから onBeginPaint（親stateが動いても描画が死なない）
       if (onBeginPaint && !isDrawing) {
         queueMicrotask(() => {
           onBeginPaint(imgCoords.x, imgCoords.y, bgSize.width, bgSize.height);
+          // onBeginPaint完了後に抑止解除
+          suppressResetRef.current = false;
         });
+      } else {
+        // onBeginPaintが無い場合は即座に解除
+        suppressResetRef.current = false;
       }
     } catch (err) {
       console.error('PointerDown Error:', err);
@@ -649,7 +691,7 @@ const ViewerCanvas = forwardRef(({
     }
   };
   
-  // PointerMove: 描画中（CRITICAL: currentShape.toolを参照、props.toolに依存しない）
+  // PointerMove: 描画中（CRITICAL: refベースで判定、propsに依存しない）
   const handlePointerMove = (e) => {
     // テキスト編集中は処理しない
     if (textEditor.visible) return;
@@ -659,34 +701,35 @@ const ViewerCanvas = forwardRef(({
       if (!imgCoords) return;
       
       // CRITICAL: デバッグ用座標更新はドラッグ中・描画中は止める（残像防止）
-      if (DEBUG_MODE && !isDraggingRef.current && !isDrawing) {
+      if (DEBUG_MODE && !isDraggingRef.current && !isDrawingRef2.current) {
         setPointerPos({ x: imgCoords.stageX, y: imgCoords.stageY });
         setImgPos({ x: imgCoords.x, y: imgCoords.y });
       }
       
-      // CRITICAL: 描画中は currentShape の存在のみで判定（props.tool/isDrawMode に依存しない）
-      if (!isDrawing || !currentShape) return;
+      // CRITICAL: refベースで判定（親stateが揺れても描画継続）
+      const shape = currentShapeRef2.current;
+      if (!isDrawingRef2.current || !shape) return;
       
       setLastEvent('move');
       
-      const newShape = { ...currentShape };
-      const shapeTool = currentShape.tool; // CRITICAL: props.tool ではなく currentShape.tool
+      const newShape = { ...shape };
+      const shapeTool = shape.tool; // CRITICAL: refから取得したshape.tool
       
       if (shapeTool === 'pen') {
-        newShape.points = [...currentShape.points, imgCoords.x, imgCoords.y];
+        newShape.points = [...(shape.points || []), imgCoords.x, imgCoords.y];
       } else if (shapeTool === 'rect') {
-        newShape.x = Math.min(currentShape.startX, imgCoords.x);
-        newShape.y = Math.min(currentShape.startY, imgCoords.y);
-        newShape.width = Math.abs(imgCoords.x - currentShape.startX);
-        newShape.height = Math.abs(imgCoords.y - currentShape.startY);
+        newShape.x = Math.min(shape.startX, imgCoords.x);
+        newShape.y = Math.min(shape.startY, imgCoords.y);
+        newShape.width = Math.abs(imgCoords.x - shape.startX);
+        newShape.height = Math.abs(imgCoords.y - shape.startY);
       } else if (shapeTool === 'circle') {
-        const dx = imgCoords.x - currentShape.startX;
-        const dy = imgCoords.y - currentShape.startY;
+        const dx = imgCoords.x - shape.startX;
+        const dy = imgCoords.y - shape.startY;
         newShape.radius = Math.sqrt(dx * dx + dy * dy);
-        newShape.x = currentShape.startX;
-        newShape.y = currentShape.startY;
+        newShape.x = shape.startX;
+        newShape.y = shape.startY;
       } else if (shapeTool === 'arrow') {
-        newShape.points = [currentShape.startX, currentShape.startY, imgCoords.x, imgCoords.y];
+        newShape.points = [shape.startX, shape.startY, imgCoords.x, imgCoords.y];
       }
 
       setCurrentShape(newShape);
@@ -819,85 +862,89 @@ const ViewerCanvas = forwardRef(({
     });
   };
 
-  // PointerUp: 描画終了（CRITICAL: currentShape.toolを参照、props.toolに依存しない）
+  // PointerUp: 描画終了（CRITICAL: refベースで判定、propsに依存しない）
   const handlePointerUp = async () => {
-    // CRITICAL: 描画中は currentShape の存在のみで判定（props.tool/isDrawMode に依存しない）
-    if (!isDrawing || !currentShape) return;
+    // CRITICAL: refベースで判定（親stateが揺れても描画完了）
+    const shape = currentShapeRef2.current;
+    if (!isDrawingRef2.current || !shape) return;
     
     try {
       setLastEvent('up');
       setIsDrawing(false);
       
-      const shapeTool = currentShape.tool; // CRITICAL: props.tool ではなく currentShape.tool
+      // CRITICAL: 描画終了時に抑止解除
+      suppressResetRef.current = false;
+      
+      const shapeTool = shape.tool; // CRITICAL: refから取得したshape.tool
       
       // しきい値チェック（誤クリック対策）
       if (shapeTool === 'rect') {
-        if (!currentShape.width || !currentShape.height || currentShape.width < 5 || currentShape.height < 5) {
+        if (!shape.width || !shape.height || shape.width < 5 || shape.height < 5) {
           setCurrentShape(null);
           setIsDrawing(false);
           return;
-          }
-          } else if (shapeTool === 'circle') {
-          if (!currentShape.radius || currentShape.radius < 3) {
+        }
+      } else if (shapeTool === 'circle') {
+        if (!shape.radius || shape.radius < 3) {
           setCurrentShape(null);
           setIsDrawing(false);
           return;
-          }
-          } else if (shapeTool === 'arrow' && currentShape.points) {
-        const dx = currentShape.points[2] - currentShape.points[0];
-        const dy = currentShape.points[3] - currentShape.points[1];
+        }
+      } else if (shapeTool === 'arrow' && shape.points) {
+        const dx = shape.points[2] - shape.points[0];
+        const dy = shape.points[3] - shape.points[1];
         const length = Math.sqrt(dx * dx + dy * dy);
         if (length < 5) {
           setCurrentShape(null);
           setIsDrawing(false);
           return;
-          }
-          } else if (shapeTool === 'pen' && currentShape.points) {
-          // Penは最低2点（4座標）必要
-          if (currentShape.points.length < 4) {
+        }
+      } else if (shapeTool === 'pen' && shape.points) {
+        // Penは最低2点（4座標）必要
+        if (shape.points.length < 4) {
           setCurrentShape(null);
           setIsDrawing(false);
           return;
-          }
-          }
+        }
+      }
 
-          // 正規化データを作成
-          const normalizedShape = {
-          id: currentShape.id,
-          tool: shapeTool,
-        stroke: currentShape.stroke,
-        strokeWidth: currentShape.strokeWidth,
+      // 正規化データを作成
+      const normalizedShape = {
+        id: shape.id,
+        tool: shapeTool,
+        stroke: shape.stroke,
+        strokeWidth: shape.strokeWidth,
         bgWidth: bgSize.width,
         bgHeight: bgSize.height,
         };
 
-        if (shapeTool === 'pen' && currentShape.points) {
-        const normalizedPoints = [];
-        for (let i = 0; i < currentShape.points.length; i += 2) {
-          const { nx, ny } = normalizeCoords(currentShape.points[i], currentShape.points[i + 1]);
-          normalizedPoints.push(nx, ny);
-        }
-        normalizedShape.normalizedPoints = normalizedPoints;
+        if (shapeTool === 'pen' && shape.points) {
+          const normalizedPoints = [];
+          for (let i = 0; i < shape.points.length; i += 2) {
+            const { nx, ny } = normalizeCoords(shape.points[i], shape.points[i + 1]);
+            normalizedPoints.push(nx, ny);
+          }
+          normalizedShape.normalizedPoints = normalizedPoints;
         } else if (shapeTool === 'rect') {
-        const { nx: nx1, ny: ny1 } = normalizeCoords(currentShape.x, currentShape.y);
-        const { nx: nx2, ny: ny2 } = normalizeCoords(currentShape.x + currentShape.width, currentShape.y + currentShape.height);
-        normalizedShape.nx = nx1;
-        normalizedShape.ny = ny1;
-        normalizedShape.nw = nx2 - nx1;
-        normalizedShape.nh = ny2 - ny1;
+          const { nx: nx1, ny: ny1 } = normalizeCoords(shape.x, shape.y);
+          const { nx: nx2, ny: ny2 } = normalizeCoords(shape.x + shape.width, shape.y + shape.height);
+          normalizedShape.nx = nx1;
+          normalizedShape.ny = ny1;
+          normalizedShape.nw = nx2 - nx1;
+          normalizedShape.nh = ny2 - ny1;
         } else if (shapeTool === 'circle') {
-        const { nx, ny } = normalizeCoords(currentShape.x, currentShape.y);
-        normalizedShape.nx = nx;
-        normalizedShape.ny = ny;
-        normalizedShape.nr = currentShape.radius / bgSize.width;
-        } else if (shapeTool === 'arrow' && currentShape.points) {
-        const normalizedPoints = [];
-        for (let i = 0; i < currentShape.points.length; i += 2) {
-          const { nx, ny } = normalizeCoords(currentShape.points[i], currentShape.points[i + 1]);
-          normalizedPoints.push(nx, ny);
+          const { nx, ny } = normalizeCoords(shape.x, shape.y);
+          normalizedShape.nx = nx;
+          normalizedShape.ny = ny;
+          normalizedShape.nr = shape.radius / bgSize.width;
+        } else if (shapeTool === 'arrow' && shape.points) {
+          const normalizedPoints = [];
+          for (let i = 0; i < shape.points.length; i += 2) {
+            const { nx, ny } = normalizeCoords(shape.points[i], shape.points[i + 1]);
+            normalizedPoints.push(nx, ny);
+          }
+          normalizedShape.normalizedPoints = normalizedPoints;
         }
-        normalizedShape.normalizedPoints = normalizedPoints;
-      }
 
       // CRITICAL: 一時フィールドを完全削除（正規化データのみ保存）
       delete normalizedShape.points;
