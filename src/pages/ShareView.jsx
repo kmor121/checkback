@@ -1758,7 +1758,8 @@ function ShareViewContent() {
                               size="sm"
                               className="bg-blue-600 hover:bg-blue-700 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                               onClick={handleSendComment}
-                              disabled={!composerText.trim()}
+                              disabled={!composerText.trim() || isSubmitting}
+                              style={{ pointerEvents: isSubmitting ? 'none' : 'auto' }}
                             >
                               <Send className="w-3 h-3 mr-1" />
                               送信
