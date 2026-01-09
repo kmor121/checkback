@@ -987,9 +987,11 @@ const ViewerCanvas = forwardRef(({
         });
       }
 
+      // CRITICAL: dirty/localTs付与で巻き戻り防止
+      const shapeWithDirty = { ...normalizedShape, _dirty: true, _localTs: Date.now() };
       addToUndoStack({ type: 'add', shapeId: normalizedShape.id });
       setShapes(prev => {
-        const next = [...prev, normalizedShape];
+        const next = [...prev, shapeWithDirty];
         onShapesChange?.(next); // ★親にも即反映（巻き戻り防止）
         return next;
       });
@@ -998,9 +1000,8 @@ const ViewerCanvas = forwardRef(({
       if (onSaveShape) {
         try {
           const result = await onSaveShape(normalizedShape, 'create');
-          if (result?.dbId) {
-            setShapes(prev => prev.map(s => s.id === normalizedShape.id ? { ...s, dbId: result.dbId } : s));
-          }
+          // CRITICAL: dirty解除
+          setShapes(prev => prev.map(s => s.id === normalizedShape.id ? { ...s, dbId: result?.dbId, _dirty: false } : s));
         } catch (err) {
           console.error('Save text error:', err);
         }
