@@ -90,6 +90,10 @@ const ViewerCanvas = forwardRef(({
   const currentShapeRef2 = useRef(null);
   const suppressResetRef = useRef(false);
   
+  // CRITICAL: activeCommentId変化検知用
+  const prevActiveCommentIdRef = useRef(activeCommentId);
+  const draftCommentIdRef = useRef(null); // 仮コメントID（描画開始時にactiveCommentIdが無い場合）
+  
   // shapesRefを常に最新に保つ
   useEffect(() => {
     shapesRef.current = shapes;
@@ -144,21 +148,39 @@ const ViewerCanvas = forwardRef(({
   // CRITICAL: 編集操作（drag/transform/delete）はpaintMode中のみ許可
   const canEdit = paintMode && isEditMode;
   
-  // CRITICAL: activeCommentId ベースで表示・編集を厳密に分離
-  const activeShapes = useMemo(() => {
-    if (!existingShapes || existingShapes.length === 0) return [];
-    if (!activeCommentId) return [];
-    return existingShapes.filter(s => s.comment_id === activeCommentId);
-  }, [existingShapes, activeCommentId]);
+  // CRITICAL: 描画に使うcomment_idを取得（null時は仮IDで）
+  const ensureCommentIdForDrawing = () => {
+    if (activeCommentId) return activeCommentId;
+    if (!draftCommentIdRef.current) draftCommentIdRef.current = generateUUID();
+    return draftCommentIdRef.current;
+  };
   
-  const visibleShapes = useMemo(() => {
-    if (!existingShapes || existingShapes.length === 0) return [];
-    return showAllPaint ? existingShapes : activeShapes;
-  }, [existingShapes, activeShapes, showAllPaint]);
+  // CRITICAL: existingShapes + shapes を1本にマージ（ローカル優先）
+  const mergedShapes = useMemo(() => {
+    const map = new Map();
+    (existingShapes ?? []).forEach(s => map.set(s.id, s));
+    (shapes ?? []).forEach(s => map.set(s.id, s)); // ローカルの方を優先
+    return Array.from(map.values());
+  }, [existingShapes, shapes]);
   
+  // CRITICAL: 実際に描画するshape配列
+  const renderedShapes = useMemo(() => {
+    if (showAllPaint) return mergedShapes;
+    
+    // activeCommentIdがある時はそれだけ
+    if (activeCommentId) return mergedShapes.filter(s => s.comment_id === activeCommentId);
+    
+    // activeCommentIdが無いけど描き始めてる時は draft を見せる
+    if (draftCommentIdRef.current) return mergedShapes.filter(s => s.comment_id === draftCommentIdRef.current);
+    
+    return [];
+  }, [mergedShapes, showAllPaint, activeCommentId]);
+  
+  // CRITICAL: 編集可能なIDセット
   const editableIds = useMemo(() => {
-    return new Set(activeShapes.map(s => s.id));
-  }, [activeShapes]);
+    if (!activeCommentId) return new Set();
+    return new Set(renderedShapes.filter(s => s.comment_id === activeCommentId).map(s => s.id));
+  }, [renderedShapes, activeCommentId]);
   
   // fileUrl安定化（最後の有効URLを保持）
   useEffect(() => {
@@ -167,31 +189,27 @@ const ViewerCanvas = forwardRef(({
     }
   }, [fileUrl]);
 
-  // CRITICAL: activeCommentId変化時に強制リセット（最重要）
+  // CRITICAL: activeCommentId変化時のリセット（描画開始による null→id は除外）
   useEffect(() => {
-    // CRITICAL: 描画開始直後 or 描画中はリセットしない（onBeginPaint→activeCommentId変更で死ぬのを防ぐ）
-    if (suppressResetRef.current || isDrawingRef2.current || currentShapeRef2.current) {
-      if (DEBUG_MODE) {
-        console.log('[ViewerCanvas] skip reset while drawing', {
-          suppress: suppressResetRef.current,
-          isDrawing: isDrawingRef2.current,
-          hasShape: !!currentShapeRef2.current
-        });
-      }
+    const prev = prevActiveCommentIdRef.current;
+    prevActiveCommentIdRef.current = activeCommentId;
+    
+    // ★重要: 描画開始により null -> id になった直後は、描画中ならリセットしない
+    if (prev == null && activeCommentId != null && isDrawingRef2.current) {
+      if (DEBUG_MODE) console.log('[ViewerCanvas] skip reset (comment created during drawing)');
       return;
     }
     
     if (DEBUG_MODE) {
-      console.log('[ViewerCanvas] activeCommentId changed, force reset:', activeCommentId);
+      console.log('[ViewerCanvas] activeCommentId changed, resetting', { prev, next: activeCommentId });
     }
     
-    // 前の編集状態を完全に破棄
+    // 通常のコメント切替/解除は安全にリセット
     setSelectedId(null);
     setCurrentShape(null);
     setIsDrawing(false);
     setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
     
-    // Transformer強制解除（非同期で確実に）
     requestAnimationFrame(() => {
       if (transformerRef.current) {
         transformerRef.current.nodes([]);
@@ -199,30 +217,17 @@ const ViewerCanvas = forwardRef(({
       }
     });
   }, [activeCommentId]);
-
-  // CRITICAL: activeCommentId が null の時の"安全停止"
+  
+  // CRITICAL: 仮commentIdで描いたshapeを、activeCommentId確定後に付け替える
   useEffect(() => {
-    if (activeCommentId !== null) return;
+    if (!activeCommentId) return;
+    if (!draftCommentIdRef.current) return;
     
-    // CRITICAL: 描画中はリセットしない（選択解除の瞬間に描画を殺さない）
-    if (suppressResetRef.current || isDrawingRef2.current || currentShapeRef2.current) {
-      if (DEBUG_MODE) {
-        console.log('[ViewerCanvas] skip reset on null activeCommentId while drawing');
-      }
-      return;
-    }
-
-    // 選択解除時は完全に編集停止
-    setSelectedId(null);
-    setCurrentShape(null);
-    setIsDrawing(false);
-
-    requestAnimationFrame(() => {
-      if (transformerRef.current) {
-        transformerRef.current.nodes([]);
-        transformerRef.current.getLayer()?.batchDraw();
-      }
-    });
+    const draftId = draftCommentIdRef.current;
+    if (DEBUG_MODE) console.log('[ViewerCanvas] attaching draft shapes to real comment', { draftId, activeCommentId });
+    
+    setShapes(prev => prev.map(s => s.comment_id === draftId ? { ...s, comment_id: activeCommentId } : s));
+    draftCommentIdRef.current = null;
   }, [activeCommentId]);
 
   // CRITICAL: fileUrl/pageNumber/zoom変更時にリセット
@@ -678,9 +683,13 @@ const ViewerCanvas = forwardRef(({
       
       setIsDrawing(true);
 
+      // CRITICAL: comment_idを必ず付ける（null時は仮IDで）
+      const commentIdForShape = ensureCommentIdForDrawing();
+
       // CRITICAL: clientShapeId は1回だけ発行して固定（移動・編集で絶対に再生成しない）
       const newShape = {
         id: generateUUID(),
+        comment_id: commentIdForShape,
         tool,
         stroke: strokeColor,
         strokeWidth: strokeWidth,
@@ -802,8 +811,11 @@ const ViewerCanvas = forwardRef(({
       }
     } else {
       // 新規テキスト作成
+      const commentIdForShape = ensureCommentIdForDrawing();
+
       const normalizedShape = {
         id: generateUUID(),
+        comment_id: commentIdForShape,
         tool: 'text',
         stroke: strokeColor,
         strokeWidth: strokeWidth,
@@ -929,15 +941,19 @@ const ViewerCanvas = forwardRef(({
         }
       }
 
+      // CRITICAL: comment_idを確定（activeCommentIdがあればそれ、なければdraft）
+      const commentIdForShape = activeCommentId || draftCommentIdRef.current;
+
       // 正規化データを作成
       const normalizedShape = {
         id: shape.id,
+        comment_id: commentIdForShape,
         tool: shapeTool,
         stroke: shape.stroke,
         strokeWidth: shape.strokeWidth,
         bgWidth: bgSize.width,
         bgHeight: bgSize.height,
-        };
+      };
 
         if (shapeTool === 'pen' && shape.points) {
           const normalizedPoints = [];
@@ -1903,10 +1919,8 @@ const ViewerCanvas = forwardRef(({
             scaleX={contentScale}
             scaleY={contentScale}
           >
-            {/* CRITICAL: visibleShapes を描画（activeCommentId ベースでフィルタ済み） */}
-            {visibleShapes.map(s => renderShape(s, true))}
-            {/* CRITICAL: shapes（ローカル編集中）は activeShapes に含まれるものだけ描画 */}
-            {shapes.filter(s => editableIds.has(s.id)).map(s => renderShape(s, false))}
+            {/* CRITICAL: mergedShapesから renderedShapes のみ描画 */}
+            {renderedShapes.map(s => renderShape(s, true))}
             {currentShape && renderShape(currentShape, false)}
             <Transformer ref={transformerRef} />
           </Group>
