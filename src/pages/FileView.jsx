@@ -530,28 +530,36 @@ function FileViewContent() {
     },
   });
 
-  // PaintShapeをViewerCanvas用の形式に変換（CRITICAL: comment_idを必ず含める、commentIdも吸収）
+  // PaintShapeをViewerCanvas用の形式に変換
+  // ★★★ CRITICAL: DBの comment_id フィールド（実際のReviewComment ID）を最優先で使う ★★★
+  // data_json 内の comment_id は仮のUUIDが入っている可能性があるため使わない
   const allShapes = React.useMemo(() => {
     const result = paintShapes.map(ps => {
       try {
         const data = JSON.parse(ps.data_json);
-        // CRITICAL: DBのcomment_id、またはdata内のcomment_id/commentIdを優先的に使う
-        const commentId = ps.comment_id || data.comment_id || data.commentId;
+        
+        // ★★★ CRITICAL: DBの ps.comment_id を最優先（これが実際のReviewComment ID）★★★
+        // data_json 内の comment_id/commentId は仮のUUIDなので使わない
+        const commentId = ps.comment_id;
         
         console.log('[FileView] parsing shape:', {
           psId: ps.id,
-          psCommentId: ps.comment_id,
-          dataCommentId: data.comment_id,
-          dataCommentId2: data.commentId,
+          psCommentId: ps.comment_id,  // ← これを使う（実際のReviewComment ID）
+          dataCommentId: data.comment_id,  // ← これは仮のUUID（使わない）
           resolvedCommentId: commentId,
         });
         
+        if (!commentId) {
+          console.warn('[FileView] Shape has no comment_id, skipping:', ps.id);
+          return null;
+        }
+        
         return {
           id: ps.id,
-          comment_id: commentId, // CRITICAL: comment_idを必ず含める
           tool: ps.shape_type,
           ...data,
-          comment_id: commentId, // スプレッド後に上書きで確実に設定
+          // ★★★ CRITICAL: DBのcomment_idで上書き（data_jsonの仮UUIDを無視）★★★
+          comment_id: commentId,
         };
       } catch (e) {
         console.error('Failed to parse shape:', e);
