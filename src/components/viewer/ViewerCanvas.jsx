@@ -343,10 +343,15 @@ const ViewerCanvas = forwardRef(({
       return Array.from(map.values());
     });
 
-    // ✅ 選択は「存在しているなら維持」（存在チェックのみ、強制解除しない）
+    // ✅ 選択は「存在しているなら維持」（shapesRefベースで判定）
     setSelectedId(prevSel => {
       if (!prevSel) return null;
-      return mergedShapesLocal.some(s => s.id === prevSel) ? prevSel : null;
+      // existingShapesとローカルshapesの両方をチェック
+      const allIds = new Set([
+        ...(existingShapes ?? []).map(s => s.id),
+        ...(shapesRef.current ?? []).map(s => s.id),
+      ]);
+      return allIds.has(prevSel) ? prevSel : null;
     });
     
     setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
