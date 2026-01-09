@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
+import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef, useMemo } from 'react';
 import { Stage, Layer, Line, Rect, Circle, Arrow, Image as KonvaImage, Group, Transformer, Text } from 'react-konva';
 import useImage from 'use-image';
 // CommentPin は使用しない（バッジ非表示）
