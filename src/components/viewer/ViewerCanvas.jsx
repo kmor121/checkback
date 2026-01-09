@@ -1440,6 +1440,9 @@ const ViewerCanvas = forwardRef(({
     // CRITICAL: 編集可能かどうかを厳密に判定（paintMode必須）
     const isEditable = editableIds.has(shape.id) && canEdit && activeCommentId;
     
+    // CRITICAL: isEditableShape関数で判定（editableIds依存をやめる）
+    const isEditable = isEditableShape(shape);
+
     const commonProps = {
       key: shape.id,
       stroke: shape.stroke,
