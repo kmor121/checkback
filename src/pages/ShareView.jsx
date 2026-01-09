@@ -976,18 +976,33 @@ function ShareViewContent() {
 
 
   // PaintShapeをViewerCanvas用の形式に変換（CRITICAL: 親側でフィルタ）
+  // ★★★ CRITICAL FIX: ...data のスプレッドが ps.comment_id を上書きしていた問題を修正 ★★★
   const allShapes = React.useMemo(() => {
     if (!isReady || !paintShapes) return [];
+
+    console.log('[ShareView] allShapes recalculating, paintShapes count:', paintShapes.length);
 
     return paintShapes.map(ps => {
       try {
         const data = JSON.parse(ps.data_json);
+        
+        // ★★★ CRITICAL: DBの ps.comment_id を最優先で使う ★★★
+        // data_json 内の comment_id/commentId は仮のUUIDなので、必ず最後に上書きする
+        const dbCommentId = ps.comment_id;  // DBに保存された正しいReviewComment ID
+        
+        console.log('[ShareView] parsing shape:', {
+          psId: ps.id,
+          psCommentId: ps.comment_id,  // これが正しいID
+          dataCommentId: data.comment_id,  // これは仮UUID（無視すべき）
+        });
+        
+        // ★★★ CRITICAL: スプレッドの後で comment_id を上書きして確定 ★★★
         return {
+          ...data,  // まずdata_jsonの中身を展開
           id: ps.client_shape_id || ps.id,
           dbId: ps.id,
           tool: ps.shape_type,
-          comment_id: ps.comment_id, // CRITICAL: comment_idを含める
-          ...data,
+          comment_id: dbCommentId,  // ★ DBのcomment_idで上書き（最重要）
         };
       } catch (e) {
         console.error('[ShareView] Failed to parse shape:', e);
@@ -997,10 +1012,43 @@ function ShareViewContent() {
   }, [paintShapes, isReady]);
 
   // CRITICAL: 親側でフィルタリング（ViewerCanvasに渡すshapes）
+  // ★★★ CRITICAL FIX: 型を統一して比較（文字列に変換）★★★
   const shapesForCanvas = React.useMemo(() => {
+    console.log('[ShareView] shapesForCanvas calculation:', {
+      showAllPaint,
+      activeCommentId,
+      paintSessionCommentId,
+      allShapesCount: allShapes.length,
+      draftShapesCount: draftShapes.length,
+    });
+    
     if (showAllPaint) return [...allShapes, ...draftShapes];
-    if (!activeCommentId) return draftShapes;
-    return [...allShapes.filter(s => s.comment_id === (paintSessionCommentId || activeCommentId)), ...draftShapes];
+    if (!activeCommentId && !paintSessionCommentId) return draftShapes;
+    
+    const targetId = paintSessionCommentId || activeCommentId;
+    const targetIdStr = String(targetId);
+    
+    const filtered = allShapes.filter(s => {
+      const shapeCommentId = s.comment_id;
+      const matches = shapeCommentId != null && String(shapeCommentId) === targetIdStr;
+      
+      console.log('[ShareView] shape filter check:', {
+        shapeId: s.id?.substring?.(0, 8),
+        shapeCommentId,
+        targetIdStr,
+        matches,
+      });
+      
+      return matches;
+    });
+    
+    console.log('[ShareView] shapesForCanvas result:', {
+      filteredCount: filtered.length,
+      draftShapesCount: draftShapes.length,
+      total: filtered.length + draftShapes.length,
+    });
+    
+    return [...filtered, ...draftShapes];
   }, [allShapes, showAllPaint, activeCommentId, paintSessionCommentId, draftShapes]);
 
   // 親コメントと返信を分離（条件付きreturnの前に配置）
