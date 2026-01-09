@@ -370,34 +370,13 @@ const ViewerCanvas = forwardRef(({
     }
   }, [clearAfterSubmitNonce]);
 
-  // CRITICAL: コメント選択で表示復帰 + existingShapesをMapに取り込み
+  // CRITICAL: activeCommentId変化時にhidePaintUntilSelectを解除（コメント選択で描画を表示）
   useEffect(() => {
     if (activeCommentId != null) {
-      console.log('[ViewerCanvas] activeCommentId set:', activeCommentId, 'existingShapes:', existingShapes?.length);
+      console.log('[ViewerCanvas] activeCommentId set, clearing hidePaintUntilSelect:', activeCommentId);
       setHidePaintUntilSelect(false);
-      
-      // ★★★ CRITICAL: activeCommentId変化時にexistingShapesを強制的にMapに取り込む ★★★
-      // 既存のMapをクリアして、existingShapesを全て取り込む
-      if (existingShapes && existingShapes.length > 0) {
-        // ★ 既存のMapから該当comment_idのshapeを一度クリア
-        for (const [id, shape] of shapesMapRef.current.entries()) {
-          const shapeCommentId = shape.comment_id ?? shape.commentId ?? shape.commentID;
-          if (shapeCommentId && String(shapeCommentId) === String(activeCommentId)) {
-            shapesMapRef.current.delete(id);
-          }
-        }
-        
-        // ★ existingShapesを全て取り込む
-        for (const s of existingShapes) {
-          console.log('[ViewerCanvas] Importing shape to Map:', s.id, 'comment_id:', s.comment_id);
-          shapesMapRef.current.set(s.id, s);
-        }
-        
-        console.log('[ViewerCanvas] Map updated, size:', shapesMapRef.current.size);
-        bump();
-      }
     }
-  }, [activeCommentId, existingShapes]);
+  }, [activeCommentId]);
 
   // CRITICAL: 仮commentIdで描いたshapeを、activeCommentId確定後に付け替える
   useEffect(() => {
