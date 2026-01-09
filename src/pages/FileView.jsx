@@ -534,6 +534,8 @@ function FileViewContent() {
   // ★★★ CRITICAL: DBの comment_id フィールド（実際のReviewComment ID）を最優先で使う ★★★
   // data_json 内の comment_id は仮のUUIDが入っている可能性があるため使わない
   const allShapes = React.useMemo(() => {
+    console.log('[FileView] allShapes recalculating, paintShapes count:', paintShapes.length);
+    
     const result = paintShapes.map(ps => {
       try {
         const data = JSON.parse(ps.data_json);
