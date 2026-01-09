@@ -443,11 +443,14 @@ function FileViewContent() {
   // CRITICAL: ViewerCanvasに渡すshapes（activeCommentIdがある時のみ）
   const shapesForCanvas = React.useMemo(() => {
     // activeCommentIdが無い場合は空配列（描画を表示しない）
-    if (!activeCommentId) return [];
+    if (!activeCommentId && !paintSessionCommentId && draftShapes.length === 0) return [];
+    
+    const targetId = activeCommentId || paintSessionCommentId;
+    if (!targetId) return draftShapes;
     
     // allShapesとdraftShapesをマージして返す
-    return [...allShapes.filter(s => s.comment_id === activeCommentId), ...draftShapes];
-  }, [allShapes, activeCommentId, draftShapes]);
+    return [...allShapes.filter(s => s.comment_id === targetId), ...draftShapes];
+  }, [allShapes, activeCommentId, paintSessionCommentId, draftShapes]);
 
   const filteredComments = comments.filter(c => {
     if (commentFilter === 'resolved' && !c.resolved) return false;
