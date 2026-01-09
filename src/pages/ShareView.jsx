@@ -716,6 +716,10 @@ function ShareViewContent() {
         showToast('コメントを送信しました', 'success');
       }
 
+      // ★★★ CRITICAL: 描画クリアを最優先で実行 ★★★
+      viewerCanvasRef.current?.afterSubmitClear();
+      viewerCanvasRef.current?.clear();
+      
       // CRITICAL: 送信成功後は必ず状態を完全リセット（ref含む）
       setComposerText('');
       setDraftShapes([]);
@@ -730,9 +734,12 @@ function ShareViewContent() {
       setReplyingThreadId(null);
       setIsDockOpen(false);
       
-      await queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id, token] });
-      await queryClient.invalidateQueries({ queryKey: ['commentAttachments', shareLink.file_id, token] });
-      await queryClient.invalidateQueries({ queryKey: ['paintShapes', token, shareLink?.file_id, currentPage] });
+      // invalidateは少し遅らせて描画クリアを確実に先に完了させる
+      setTimeout(async () => {
+        await queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id, token] });
+        await queryClient.invalidateQueries({ queryKey: ['commentAttachments', shareLink.file_id, token] });
+        await queryClient.invalidateQueries({ queryKey: ['paintShapes', token, shareLink?.file_id, currentPage] });
+      }, 100);
     } catch (error) {
       showToast(`送信失敗: ${error.message}`, 'error');
     } finally {
