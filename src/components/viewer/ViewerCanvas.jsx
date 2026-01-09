@@ -1612,6 +1612,22 @@ const ViewerCanvas = forwardRef(({
       setIsDrawing(false);
       draftCommentIdRef.current = null; // CRITICAL: 仮IDもリセット
     },
+    // CRITICAL: 送信完了後の強制クリア（ref経由で確実に実行）
+    afterSubmitClear: () => {
+      if (DEBUG_MODE) console.log('[ViewerCanvas] afterSubmitClear called');
+      setHidePaintUntilSelect(true);
+      lastStableCommentIdRef.current = null;
+      draftCommentIdRef.current = null;
+      setSelectedId(null);
+      setCurrentShape(null);
+      setIsDrawing(false);
+      setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
+      // Transformer解除
+      if (transformerRef.current) {
+        transformerRef.current.nodes([]);
+        transformerRef.current.getLayer()?.batchDraw();
+      }
+    },
     delete: handleDelete,
     canUndo: undoStack.length > 0,
     canRedo: redoStack.length > 0,

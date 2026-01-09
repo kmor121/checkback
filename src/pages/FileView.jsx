@@ -343,6 +343,10 @@ function FileViewContent() {
           showToast('コメントを更新しました', 'success');
         } else {
           // 新規モード: 新しいコメントを作成
+          // CRITICAL: idempotency用のclientMutationIdを生成
+          const clientMutationId = crypto.randomUUID();
+          console.log(`[comment] create called mid=${clientMutationId}`);
+          
           const existingComments = await base44.entities.ReviewComment.filter({ file_id: fileId });
           const maxSeqNo = existingComments.reduce((max, c) => Math.max(max, c.seq_no || 0), 0);
 
@@ -374,6 +378,7 @@ function FileViewContent() {
             }
           }
 
+          console.count(`[comment] network request`);
           await base44.entities.ReviewComment.create({
             file_id: fileId,
             page_no: 1,
@@ -386,6 +391,7 @@ function FileViewContent() {
             body: commentBody,
             resolved: false,
             has_paint: draftShapes.length > 0,
+            client_mutation_id: clientMutationId,
           });
           
           showToast('コメントを送信しました', 'success');
@@ -401,8 +407,9 @@ function FileViewContent() {
         setPaintMode(false);
         setTool('select');
         
-        // CRITICAL: ViewerCanvasの描画もクリア（nonce方式）
+        // CRITICAL: ViewerCanvasの描画もクリア（ref経由で確実に実行）
         setClearAfterSubmitNonce(n => n + 1);
+        viewerCanvasRef.current?.afterSubmitClear();
         viewerCanvasRef.current?.clear();
         
         await queryClient.invalidateQueries(['comments']);
