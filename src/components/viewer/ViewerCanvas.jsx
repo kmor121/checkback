@@ -221,6 +221,7 @@ const ViewerCanvas = forwardRef(({
   const mergedShapes = useMemo(() => getAllShapes(), [shapesVersion]);
   
   // CRITICAL: 実際に描画するshape配列（hidePaintUntilSelectで強制非表示）
+  // ★★★ CRITICAL FIX: mergedShapes（Map由来）ではなく、existingShapes（props）を直接使う ★★★
   const renderedShapes = useMemo(() => {
     console.log('[ViewerCanvas] renderedShapes calculation:', {
       hidePaintUntilSelect,
@@ -228,18 +229,24 @@ const ViewerCanvas = forwardRef(({
       activeCommentId,
       draftCommentId: draftCommentIdRef.current,
       lastStableId: lastStableCommentIdRef.current,
+      existingShapesCount: existingShapes?.length || 0,
       mergedShapesCount: mergedShapes.length,
-      mergedShapesIds: mergedShapes.map(s => ({ id: s.id?.substring(0, 8), cid: s.comment_id })),
     });
 
-    // ★送信完了後は強制非表示（これが本丸）
-    // ただし、activeCommentIdが設定されている場合は表示を許可
+    // ★送信完了後は強制非表示
     if (hidePaintUntilSelect && activeCommentId == null && !draftCommentIdRef.current) {
       console.log('[ViewerCanvas] renderedShapes: hidden (hidePaintUntilSelect)');
       return [];
     }
 
-    if (showAllPaint) return mergedShapes;
+    // ★★★ CRITICAL: existingShapesを直接使う（親から渡されたフィルタ済みデータ）★★★
+    // Map経由だと同期の問題が起きるので、propsを信頼する
+    const sourceShapes = existingShapes || [];
+    
+    if (showAllPaint) {
+      console.log('[ViewerCanvas] renderedShapes: showAllPaint mode, returning all', sourceShapes.length);
+      return sourceShapes;
+    }
 
     // renderTargetId: activeCommentId → draftCommentIdRef → lastStableCommentIdRef の優先順
     const renderTargetId =
@@ -250,27 +257,16 @@ const ViewerCanvas = forwardRef(({
       return [];
     }
 
-    const target = String(renderTargetId);
-    const filtered = mergedShapes.filter(s => {
-      const cid = s.comment_id ?? s.commentId ?? s.commentID;
-      const matches = cid != null && String(cid) === target;
-      console.log('[ViewerCanvas] shape filter:', {
-        shapeId: s.id?.substring(0, 8),
-        shapeCid: cid,
-        target,
-        matches,
-      });
-      return matches;
+    // ★★★ CRITICAL: 親側でフィルタ済みなら全て返す ★★★
+    // FileView/ShareViewで既にフィルタリングされている場合
+    console.log('[ViewerCanvas] renderedShapes: returning existingShapes directly', {
+      renderTargetId,
+      count: sourceShapes.length,
+      shapeIds: sourceShapes.map(s => ({ id: s.id?.substring?.(0, 8), cid: s.comment_id })),
     });
     
-    console.log('[ViewerCanvas] renderedShapes result:', {
-      renderTargetId: target,
-      filteredCount: filtered.length,
-      filteredIds: filtered.map(s => s.id?.substring(0, 8)),
-    });
-    
-    return filtered;
-  }, [mergedShapes, showAllPaint, activeCommentId, hidePaintUntilSelect]);
+    return sourceShapes;
+  }, [existingShapes, showAllPaint, activeCommentId, hidePaintUntilSelect]);
   
   // ★ CRITICAL: activeShapes を existingShapes から抽出（comment_id統一判定）
   const activeShapes = useMemo(() => {
