@@ -48,7 +48,7 @@ const ViewerCanvas = forwardRef(({
   comments = [],
   activeCommentId = null,
   onCommentClick,
-  onShapesChange,
+  onShapesChange, // CRITICAL: 親への同期コールバック
   onSaveShape,
   onDeleteShape,
   onBeginPaint,
@@ -79,6 +79,12 @@ const ViewerCanvas = forwardRef(({
   const [selectedId, setSelectedId] = useState(null);
   const transformerRef = useRef(null);
   const shapeRefs = useRef({});
+  const shapesRef = useRef([]); // CRITICAL: 常に最新shapesを参照（stale回避）
+  
+  // shapesRefを常に最新に保つ
+  useEffect(() => {
+    shapesRef.current = shapes;
+  }, [shapes]);
   
   // パン状態
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -1175,24 +1181,42 @@ const ViewerCanvas = forwardRef(({
     }
   };
 
-  // 選択図形にスタイルを適用
+  // 選択図形にスタイルを適用（CRITICAL: ref基準＆number正規化）
   const applyStyleToSelected = async (patch) => {
     if (!selectedId) return;
-    const prev = shapes.find(s => s.id === selectedId);
+
+    // CRITICAL: shapesRefから取得（stale回避）
+    const cur = shapesRef.current || [];
+    const prev = cur.find(s => s.id === selectedId);
     if (!prev) return;
 
-    // テキストに太さは適用しない
+    const nextStroke = patch.stroke ?? prev.stroke;
+
+    // strokeWidth は必ず number に正規化（Selectが文字列を返すケース潰し）
+    const rawSw = patch.strokeWidth ?? prev.strokeWidth;
+    const nextSw = typeof rawSw === 'string' ? Number(rawSw) : rawSw;
+
+    // NaN ガード
+    const safeSw = Number.isFinite(nextSw) ? nextSw : prev.strokeWidth;
+
+    // テキストは strokeWidth は保持
     const next = {
       ...prev,
-      stroke: patch.stroke ?? prev.stroke,
-      strokeWidth: (prev.tool === 'text') ? prev.strokeWidth : (patch.strokeWidth ?? prev.strokeWidth),
+      stroke: nextStroke,
+      strokeWidth: (prev.tool === 'text') ? prev.strokeWidth : safeSw,
     };
 
     // 差分が無ければ保存しない
     if (next.stroke === prev.stroke && next.strokeWidth === prev.strokeWidth) return;
 
     addToUndoStack({ type: 'update', shapeId: prev.id, before: prev, after: next });
-    setShapes(cur => cur.map(s => s.id === prev.id ? next : s));
+
+    // まずはローカル更新
+    const updated = cur.map(s => s.id === prev.id ? next : s);
+    setShapes(updated);
+
+    // ★重要：親にも同期（props巻き戻り防止）
+    onShapesChange?.(updated);
 
     // DB更新
     if (onSaveShape) {

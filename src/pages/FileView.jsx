@@ -185,6 +185,18 @@ function FileViewContent() {
         throw new Error(result.data.error);
       }
 
+      // CRITICAL: allShapesを即座に更新（ViewerCanvasのprops同期対策）
+      queryClient.setQueryData(['paintShapes', fileId, 1], (old) => {
+        if (!old) return old;
+        const exists = old.find(ps => ps.id === result.data.dbId || ps.client_shape_id === shape.id);
+        if (exists) {
+          return old.map(ps => (ps.id === result.data.dbId || ps.client_shape_id === shape.id) 
+            ? { ...ps, data_json: JSON.stringify(shape) } 
+            : ps);
+        }
+        return old;
+      });
+
       await queryClient.invalidateQueries(['paintShapes', fileId, 1]);
 
       return result.data;
@@ -540,6 +552,12 @@ function FileViewContent() {
             existingShapes={shapesForCanvas}
             activeCommentId={activeCommentId}
             showAllPaint={false}
+            onShapesChange={(updated) => {
+              // CRITICAL: ViewerCanvasからの更新を即座にdraftShapesに反映
+              if (!paintSessionCommentId) {
+                setDraftShapes(updated);
+              }
+            }}
             onSaveShape={handleSaveShape}
             onDeleteShape={handleDeleteShape}
             onBeginPaint={handleBeginPaint}

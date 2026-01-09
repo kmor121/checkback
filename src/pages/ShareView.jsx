@@ -411,6 +411,18 @@ function ShareViewContent() {
         if (DEBUG_MODE) console.log('[ShareView] Created new shape:', result.id);
       }
 
+      // CRITICAL: paintShapesを即座に更新（ViewerCanvasのprops同期対策）
+      queryClient.setQueryData(['paintShapes', token, shareLink?.file_id, currentPage], (old) => {
+        if (!old) return old;
+        const exists = old.find(ps => ps.id === result.id || ps.client_shape_id === shape.id);
+        if (exists) {
+          return old.map(ps => (ps.id === result.id || ps.client_shape_id === shape.id) 
+            ? { ...ps, data_json: JSON.stringify(shape) } 
+            : ps);
+        }
+        return old;
+      });
+
       await queryClient.invalidateQueries({ queryKey: ['paintShapes', token, shareLink?.file_id, currentPage] });
 
       return { ...result, dbId: result.id };
@@ -1223,6 +1235,13 @@ function ShareViewContent() {
                   const comment = comments.find(c => c.id === id);
                   if (!comment) return;
                   selectComment(comment);
+                }}
+                onShapesChange={(updated) => {
+                  // CRITICAL: ViewerCanvasからの更新を即座にdraftShapesに反映
+                  if (!paintSessionCommentId) {
+                    draftShapesRef.current = updated;
+                    setDraftShapes(updated);
+                  }
                 }}
                 onBeginPaint={handleBeginPaint}
                 onSaveShape={handleSaveShape}
