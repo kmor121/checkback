@@ -1150,8 +1150,13 @@ const ViewerCanvas = forwardRef(({
           setLastSuccessId(result?.dbId || normalizedShape.id);
           setLastError(null);
 
-          // CRITICAL: DBから返ってきた_idを既存shapeに上書き + dirty解除
-          setShapes(prev => prev.map(s => s.id === normalizedShape.id ? { ...s, dbId: result?.dbId, _dirty: false } : s));
+          // CRITICAL: DBから返ってきた_idを既存shapeに上書き + dirty解除（Map方式）
+          const cur = shapesMapRef.current.get(normalizedShape.id);
+          if (cur) {
+            shapesMapRef.current.set(normalizedShape.id, { ...cur, dbId: result?.dbId, _dirty: false });
+            bump();
+            onShapesChange?.(getAllShapes());
+          }
         } catch (err) {
           setLastSaveStatus('error');
           setLastError(err.message || String(err));
