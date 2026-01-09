@@ -13,6 +13,17 @@ function generateUUID() {
 
 const DEBUG_MODE = import.meta.env.VITE_DEBUG === 'true';
 
+// ★ CRITICAL: fileUrlを正規化（クエリ違いを同一ファイルとして扱う）
+function normalizeFileUrl(url) {
+  if (!url) return "";
+  try {
+    const u = new URL(url);
+    return `${u.origin}${u.pathname}`; // queryを無視
+  } catch {
+    return String(url).split("?")[0]; // フォールバック
+  }
+}
+
 // ★ CRITICAL: comment_id判定ユーティリティ（フィールド名/型ブレ吸収）
 const shapeCommentId = (s) => s?.comment_id ?? s?.commentId ?? s?.commentID ?? null;
 const sameId = (a, b) => String(a ?? '') === String(b ?? '');
