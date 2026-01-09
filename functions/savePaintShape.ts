@@ -6,6 +6,7 @@ Deno.serve(async (req) => {
     const { 
       token, 
       fileId, 
+      commentId, // ★★★ CRITICAL: commentIdを受け取る ★★★
       pageNo, 
       clientShapeId, 
       shapeType, 
@@ -15,7 +16,7 @@ Deno.serve(async (req) => {
       mode // 'create' or 'update' or 'delete' or 'upsert' or 'deleteAll'
     } = await req.json();
 
-    console.log('[savePaintShape] Request:', { token, fileId, pageNo, clientShapeId, shapeType, authorKey, mode });
+    console.log('[savePaintShape] Request:', { token, fileId, commentId, pageNo, clientShapeId, shapeType, authorKey, mode });
 
     // tokenがある場合はShareLink検証
     if (token) {
