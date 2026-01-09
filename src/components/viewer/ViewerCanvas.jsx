@@ -394,11 +394,11 @@ const ViewerCanvas = forwardRef(({
           // paddingは0にして、boundBoxFuncで非対称に調整
           transformerRef.current.padding(0);
           transformerRef.current.boundBoxFunc((oldBox, newBox) => {
-            // 上に16px、下に0pxの余白を追加（テキストを下に押し下げる効果）
+            // 上に8px、下に-8pxの余白（ボックスを上に縮小してテキストを相対的に下げる）
             return {
               ...newBox,
-              y: newBox.y - 16,      // 上に16px拡張
-              height: newBox.height + 16, // その分高さも追加
+              y: newBox.y - 8,       // 上に8px拡張
+              height: newBox.height - 8, // 下を16px縮小（差し引き下が小さくなる）
             };
           });
         } else {
