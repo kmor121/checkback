@@ -551,14 +551,35 @@ function FileViewContent() {
 
   // CRITICAL: ViewerCanvasに渡すshapes（activeCommentIdがある時のみ）
   const shapesForCanvas = React.useMemo(() => {
+    console.log('[FileView] shapesForCanvas calculation:', {
+      activeCommentId,
+      paintSessionCommentId,
+      draftShapesCount: draftShapes.length,
+      allShapesCount: allShapes.length,
+      allShapesCommentIds: allShapes.map(s => s.comment_id),
+    });
+    
     // activeCommentIdが無い場合は空配列（描画を表示しない）
     if (!activeCommentId && !paintSessionCommentId && draftShapes.length === 0) return [];
     
     const targetId = activeCommentId || paintSessionCommentId;
     if (!targetId) return draftShapes;
     
+    // CRITICAL: 型を統一して比較（文字列に変換）
+    const targetIdStr = String(targetId);
+    const filtered = allShapes.filter(s => {
+      const shapeCommentId = s.comment_id ?? s.commentId ?? s.commentID;
+      return shapeCommentId != null && String(shapeCommentId) === targetIdStr;
+    });
+    
+    console.log('[FileView] shapesForCanvas result:', {
+      targetId: targetIdStr,
+      filteredCount: filtered.length,
+      draftShapesCount: draftShapes.length,
+    });
+    
     // allShapesとdraftShapesをマージして返す
-    return [...allShapes.filter(s => s.comment_id === targetId), ...draftShapes];
+    return [...filtered, ...draftShapes];
   }, [allShapes, activeCommentId, paintSessionCommentId, draftShapes]);
 
   const filteredComments = comments.filter(c => {
