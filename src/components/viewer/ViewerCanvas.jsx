@@ -1683,24 +1683,24 @@ const ViewerCanvas = forwardRef(({
               ref={(node) => { if (node) shapeRefs.current[shape.id] = node; }}
               x={shape.dragX || 0}
               y={shape.dragY || 0}
-              draggable={canEdit && editableIds.has(shape.id)}
+              draggable={isEditable}
               onMouseDown={canEdit ? (e) => {
-                if (!editableIds.has(shape.id)) return;
+                if (!isEditable) return;
                 e.cancelBubble = true;
                 setSelectedId(shape.id);
                 if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
                 if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
               } : undefined}
               onTouchStart={canEdit ? (e) => {
-                if (!editableIds.has(shape.id)) return;
+                if (!isEditable) return;
                 e.cancelBubble = true;
                 setSelectedId(shape.id);
                 if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
                 if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
               } : undefined}
-              onDragStart={canEdit && editableIds.has(shape.id) ? (e) => handleDragStart(shape, e) : undefined}
-              onDragMove={canEdit && editableIds.has(shape.id) ? (e) => handleDragMove(shape, e) : undefined}
-              onDragEnd={canEdit && editableIds.has(shape.id) ? (e) => handleDragEnd(shape, e) : undefined}
+              onDragStart={isEditable ? (e) => handleDragStart(shape, e) : undefined}
+              onDragMove={isEditable ? (e) => handleDragMove(shape, e) : undefined}
+              onDragEnd={isEditable ? (e) => handleDragEnd(shape, e) : undefined}
             >
               <Arrow 
                 stroke={shape.stroke}
