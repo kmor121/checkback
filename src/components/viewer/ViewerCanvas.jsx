@@ -383,42 +383,23 @@ const ViewerCanvas = forwardRef(({
     return { x: nx, y: ny };
   };
   
-  // CRITICAL: viewスナップショット取得（描画中固定用）
-  const getView = () => {
-    const scrollLeft = containerRef.current?.scrollLeft ?? 0;
-    const scrollTop = containerRef.current?.scrollTop ?? 0;
-    return {
-      offsetX,
-      offsetY,
-      contentScale,
-      panX: pan.x,
-      panY: pan.y,
-      bgWidth: bgSize.width,
-      bgHeight: bgSize.height,
-      scrollLeft,
-      scrollTop,
-    };
-  };
 
-  // pointer座標 → 画像座標への変換（CRITICAL: view引数対応）
-  const pointerToImageCoords = (stage, viewOverride) => {
-    const pos = stage.getPointerPosition();
-    if (!pos) return null;
-    
-    const view = viewOverride ?? getView();
-    
-    // stageX/stageYはscrollを加味
-    const stageX = pos.x + view.scrollLeft;
-    const stageY = pos.y + view.scrollTop;
-    
-    // viewX/viewYを再計算
-    const vx = view.offsetX + view.panX;
-    const vy = view.offsetY + view.panY;
-    
-    const imgX = (stageX - vx) / view.contentScale;
-    const imgY = (stageY - vy) / view.contentScale;
-    
-    return { x: imgX, y: imgY };
+
+  // CRITICAL: Konva transform API を使った座標変換（手計算を廃止）
+  const stagePointToImagePoint = () => {
+    const stage = stageRef.current;
+    const group = contentGroupRef.current;
+    if (!stage || !group) return null;
+
+    const p = stage.getPointerPosition();
+    if (!p) return null;
+
+    // group(=画像レイヤー)の絶対変換を逆変換して、ローカル座標に戻す
+    const tr = group.getAbsoluteTransform().copy();
+    tr.invert();
+    const local = tr.point(p);
+
+    return { x: local.x, y: local.y, stageX: p.x, stageY: p.y };
   };
   
   // 正規化座標（0-1の範囲）
@@ -584,47 +565,24 @@ const ViewerCanvas = forwardRef(({
     // CRITICAL: tool='text' のときは最優先で処理（paintMode不問）
     if (tool === 'text' && !textEditor.visible) {
       try {
-        const stage = e.target.getStage();
-        if (!stage) {
-          console.error('[ViewerCanvas] Text tool: stage is null');
+        const imgCoords = stagePointToImagePoint();
+        if (!imgCoords) {
+          console.error('[ViewerCanvas] Text tool: coords unavailable');
           return;
         }
-        
-        // 座標を強制更新
-        if (e?.evt) stage.setPointersPositions(e.evt);
-        
-        // ★viewを固定
-        const fixedView = getView();
-        const imgCoords = pointerToImageCoords(stage, fixedView);
-        const pos = stage.getPointerPosition();
-        
-        if (!imgCoords || !pos) {
-          console.error('[ViewerCanvas] Text tool: coords unavailable', { imgCoords, pos });
-          return;
-        }
-        
-        const container = containerRef.current;
-        const scrollX = container ? container.scrollLeft : 0;
-        const scrollY = container ? container.scrollTop : 0;
 
         console.log('[ViewerCanvas] ✓ Text tool activated:', { 
           tool, 
           paintMode, 
           isDrawMode,
-          pos: { x: pos.x, y: pos.y },
+          stage: { x: imgCoords.stageX, y: imgCoords.stageY },
           img: { x: imgCoords.x, y: imgCoords.y }
         });
 
-        // スクリーン座標計算
-        const vx = fixedView.offsetX + fixedView.panX;
-        const vy = fixedView.offsetY + fixedView.panY;
-        const screenX = vx + imgCoords.x * fixedView.contentScale;
-        const screenY = vy + imgCoords.y * fixedView.contentScale;
-
         setTextEditor({
           visible: true,
-          x: screenX + scrollX,
-          y: screenY + scrollY,
+          x: imgCoords.stageX,
+          y: imgCoords.stageY,
           value: '',
           shapeId: null,
           imgX: Math.max(0, Math.min(bgSize.width, imgCoords.x)),
@@ -651,21 +609,14 @@ const ViewerCanvas = forwardRef(({
     if (textEditor.visible) return;
     
     try {
-      const stage = e.target.getStage();
-      if (!stage) return;
-      
-      // 座標を強制更新（pointer取得を確実にする）
-      if (e?.evt) stage.setPointersPositions(e.evt);
-      
-      // ★ここでviewをスナップショット
-      drawViewRef.current = getView();
-      
-      const imgCoords = pointerToImageCoords(stage, drawViewRef.current);
+      const imgCoords = stagePointToImagePoint();
       if (!imgCoords) return;
       
       setLastEvent('down');
-      setPointerPos(stage.getPointerPosition());
-      setImgPos(imgCoords);
+      if (DEBUG_MODE) {
+        setPointerPos({ x: imgCoords.stageX, y: imgCoords.stageY });
+        setImgPos({ x: imgCoords.x, y: imgCoords.y });
+      }
       
       // 描画開始時にコメント自動作成を通知（初回のみ）
       if (onBeginPaint && !isDrawing) {
@@ -702,21 +653,13 @@ const ViewerCanvas = forwardRef(({
     if (textEditor.visible) return;
     
     try {
-      const stage = e.target.getStage();
-      if (!stage) return;
-      
-      // 座標を強制更新
-      if (e?.evt) stage.setPointersPositions(e.evt);
-      
-      // ★描画中は固定view、描画していない時はlive view
-      const view = (isDrawMode && isDrawing) ? drawViewRef.current : null;
-      const imgCoords = pointerToImageCoords(stage, view);
+      const imgCoords = stagePointToImagePoint();
       if (!imgCoords) return;
       
       // CRITICAL: デバッグ用座標更新はドラッグ中・描画中は止める（残像防止）
       if (DEBUG_MODE && !isDraggingRef.current && !isDrawing) {
-        setPointerPos(stage.getPointerPosition());
-        setImgPos(imgCoords);
+        setPointerPos({ x: imgCoords.stageX, y: imgCoords.stageY });
+        setImgPos({ x: imgCoords.x, y: imgCoords.y });
       }
       
       if (!isDrawMode || !isDrawing || !currentShape) return;
@@ -850,20 +793,20 @@ const ViewerCanvas = forwardRef(({
     if (!isEditMode) return;
 
     const { x: imgX, y: imgY } = denormalizeCoords(shape.nx, shape.ny);
-    const screenX = viewX + imgX * contentScale;
-    const screenY = viewY + imgY * contentScale;
-
-    const container = containerRef.current;
-    const scrollX = container ? container.scrollLeft : 0;
-    const scrollY = container ? container.scrollTop : 0;
+    
+    // CRITICAL: transform API で画像座標→ステージ座標に変換
+    const group = contentGroupRef.current;
+    if (!group) return;
+    
+    const tr = group.getAbsoluteTransform().copy();
+    const stagePoint = tr.point({ x: imgX, y: imgY });
 
     console.log('[ViewerCanvas] Text double-click edit:', { shapeId: shape.id, text: shape.text });
 
-    // 編集時も現在のツールバー設定を使用
     setTextEditor({
       visible: true,
-      x: screenX + scrollX,
-      y: screenY + scrollY,
+      x: stagePoint.x,
+      y: stagePoint.y,
       value: shape.text || '',
       shapeId: shape.id,
       imgX,
@@ -1851,7 +1794,8 @@ const ViewerCanvas = forwardRef(({
         onPointerMove={handleStagePointerMove}
         onPointerUp={handleStagePointerUp}
         style={{ 
-          cursor: isDrawMode ? 'crosshair' : canPan ? (isPanning ? 'grabbing' : 'grab') : 'default' 
+          cursor: isDrawMode ? 'crosshair' : canPan ? (isPanning ? 'grabbing' : 'grab') : 'default',
+          touchAction: 'none'
         }}
       >
         {/* 背景Layer（非インタラクティブ） */}
