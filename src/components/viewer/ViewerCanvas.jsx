@@ -208,6 +208,11 @@ const ViewerCanvas = forwardRef(({
     // 仮ID生成（onBeginPaintは非同期で投げるだけ）
     if (!draftCommentIdRef.current) {
       draftCommentIdRef.current = generateUUID();
+      if (DEBUG_MODE) console.log('[ViewerCanvas] Generated new draftCommentId:', draftCommentIdRef.current);
+    }
+    // ★ CRITICAL: 仮ID生成時はhidePaintUntilSelectを解除
+    if (hidePaintUntilSelect) {
+      setHidePaintUntilSelect(false);
     }
     return draftCommentIdRef.current;
   };
