@@ -426,15 +426,18 @@ function FileViewContent() {
     },
   });
 
-  // PaintShapeをViewerCanvas用の形式に変換（CRITICAL: comment_idを必ず含める）
+  // PaintShapeをViewerCanvas用の形式に変換（CRITICAL: comment_idを必ず含める、commentIdも吸収）
   const allShapes = paintShapes.map(ps => {
     try {
       const data = JSON.parse(ps.data_json);
+      // CRITICAL: DBのcomment_id、またはdata内のcomment_id/commentIdを優先的に使う
+      const commentId = ps.comment_id || data.comment_id || data.commentId;
       return {
         id: ps.id,
-        comment_id: ps.comment_id, // CRITICAL: comment_idを含める
+        comment_id: commentId, // CRITICAL: comment_idを必ず含める
         tool: ps.shape_type,
         ...data,
+        comment_id: commentId, // スプレッド後に上書きで確実に設定
       };
     } catch (e) {
       console.error('Failed to parse shape:', e);
