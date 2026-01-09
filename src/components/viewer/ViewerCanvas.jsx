@@ -397,9 +397,22 @@ const ViewerCanvas = forwardRef(({
     setPan(p => clampPan(p.x, p.y));
   }, [zoom]);
 
-  // ★ CRITICAL: existingShapesはupsert入力として取り込むだけ（絶対にクリアしない）
+  // ★ CRITICAL: existingShapesはupsert入力として取り込む
   useEffect(() => {
-    if (!existingShapes || existingShapes.length === 0) return; // 空配列では何もしない（クリア禁止）
+    if (!existingShapes) return;
+    
+    if (DEBUG_MODE) {
+      console.log('[ViewerCanvas] existingShapes changed:', {
+        length: existingShapes.length,
+        activeCommentId,
+        hidePaintUntilSelect,
+        mapSize: shapesMapRef.current.size,
+      });
+    }
+    
+    // ★ CRITICAL: existingShapesが空でもMapから該当shapeを削除しない
+    // （送信後のクリア時に既存描画が消えないように）
+    if (existingShapes.length === 0) return;
     
     let changed = false;
     for (const s of existingShapes) {
@@ -412,8 +425,11 @@ const ViewerCanvas = forwardRef(({
       shapesMapRef.current.set(s.id, next);
       changed = true;
     }
-    if (changed) bump();
-  }, [existingShapes]);
+    if (changed) {
+      if (DEBUG_MODE) console.log('[ViewerCanvas] Imported existingShapes to Map, new size:', shapesMapRef.current.size);
+      bump();
+    }
+  }, [existingShapes, activeCommentId]);
 
   // ✅ 選択維持（Mapに存在するか確認）
   useEffect(() => {
