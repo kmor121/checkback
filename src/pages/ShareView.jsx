@@ -547,7 +547,14 @@ function ShareViewContent() {
     // ★★★ CRITICAL: DB保存は行わない（送信時にまとめて保存）★★★
     // P2 FIX: functional update で確実に追記（置き換えではなく追記）
     // ★★★ P2 FIX: _dirty=true を付与してViewerCanvasのFULL SYNCで消されないようにする ★★★
-    const shapeWithDirty = { ...shapeWithId, _dirty: true, _localTs: Date.now() };
+    // ★★★ A: 新規コメント用のdraftCommentId(=tempCommentId)を使用してcomment_idを統一 ★★★
+    const effectiveDraftCommentId = tempCommentId || shapeWithId.comment_id;
+    const shapeWithDirty = { 
+      ...shapeWithId, 
+      comment_id: effectiveDraftCommentId,
+      _dirty: true, 
+      _localTs: Date.now() 
+    };
     
     setDraftShapes(prev => {
       if (mode === 'create') {
@@ -570,6 +577,7 @@ function ShareViewContent() {
       shapeId: shapeWithId.id,
       mode,
       targetKey,
+      effectiveDraftCommentId,
       totalDraftCount: draftShapesRef.current.length,
     });
     
