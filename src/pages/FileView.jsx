@@ -588,41 +588,49 @@ function FileViewContent() {
   // ★★★ CRITICAL FIX: DBの comment_id フィールドを最優先で使い、スプレッドの後で上書き ★★★
   const allShapes = React.useMemo(() => {
     console.log('[FileView] allShapes recalculating, paintShapes count:', paintShapes.length);
-    
+
     const result = paintShapes.map(ps => {
       try {
         const data = JSON.parse(ps.data_json);
-        
+
         // ★★★ CRITICAL: DBの ps.comment_id を最優先（これが実際のReviewComment ID）★★★
         const dbCommentId = ps.comment_id;
-        
+
         console.log('[FileView] parsing shape:', {
           psId: ps.id,
           psCommentId: ps.comment_id,  // これが正しいID
           dataCommentId: data.comment_id,  // これは仮UUID（無視すべき）
         });
-        
-        // comment_idが無い場合でも表示は許可（古いデータ対応）
-        // ただし選択時のフィルタリングからは除外される
-        
-        // ★★★ CRITICAL: スプレッドの後で comment_id を上書きして確定 ★★★
+
+        // ★★★ CRITICAL: comment_idが無いshapeは除外（表示しない）★★★
+        if (dbCommentId == null || dbCommentId === '') {
+          console.log('[FileView] Skipping shape with empty comment_id:', ps.id);
+          return null;
+        }
+
+        // ★★★ CRITICAL: スプレッドの前にdata.comment_idを削除して混入防止 ★★★
+        const cleanData = { ...data };
+        delete cleanData.comment_id;
+        delete cleanData.commentId;
+        delete cleanData.commentID;
+
         return {
-          ...data,  // まずdata_jsonの中身を展開
+          ...cleanData,
           id: ps.id,
           tool: ps.shape_type,
-          comment_id: dbCommentId,  // ★ DBのcomment_idで上書き（最重要）
+          comment_id: String(dbCommentId),  // ★ String型で統一
         };
       } catch (e) {
         console.error('Failed to parse shape:', e);
         return null;
       }
     }).filter(Boolean);
-    
+
     console.log('[FileView] allShapes parsed:', {
       count: result.length,
       commentIds: result.map(s => s.comment_id),
     });
-    
+
     return result;
   }, [paintShapes]);
 
