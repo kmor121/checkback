@@ -107,6 +107,7 @@ const ViewerCanvas = forwardRef(({
   draftCommentId = null, // ★★★ A: ShareViewからの新規コメント用ID ★★★
   renderTargetCommentId = null, // ★★★ REQUIRED: 表示対象commentId（リロード後の下書き復元用） ★★★
   canvasContextKey = null, // ★★★ P1: 内部リセット用キー（paintContextId含む）★★★
+  isCanvasTransitioning = false, // ★★★ D: 遷移中フラグ（incoming empty時のMap保持用）★★★
 }, ref) => {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
@@ -509,18 +510,28 @@ const ViewerCanvas = forwardRef(({
     const prevMapSize = shapesMapRef.current.size;
     const ctx = canvasContextKey || 'no-ctx';
 
-    // ★★★ CRITICAL: incoming empty時も必ずMapをクリア（空＝意図的な空と判断）★★★
-    if (incomingEmpty && prevMapSize > 0) {
-      console.log('[ViewerCanvas] FULL SYNC: incoming empty, clearing Map', {
-        ctx,
-        prevMapSize,
-      });
-      shapesMapRef.current = new Map();
-      bump();
-      return;
-    }
-
+    // ★★★ D: incoming empty時の処理（遷移中はMap保持、確定時のみクリア）★★★
     if (incomingEmpty) {
+      if (isCanvasTransitioning) {
+        console.log('[ViewerCanvas] FULL SYNC SKIPPED: incoming empty during transition (Map preserved)', {
+          ctx,
+          prevMapSize,
+          isCanvasTransitioning,
+        });
+        return;
+      }
+      
+      if (prevMapSize > 0) {
+        console.log('[ViewerCanvas] FULL SYNC: incoming empty, clearing Map', {
+          ctx,
+          prevMapSize,
+          isCanvasTransitioning,
+        });
+        shapesMapRef.current = new Map();
+        bump();
+        return;
+      }
+      
       console.log('[ViewerCanvas] FULL SYNC SKIPPED: incoming empty, Map already empty', {
         ctx,
         prevMapSize,
@@ -1062,10 +1073,18 @@ const ViewerCanvas = forwardRef(({
       });
     }
 
+    // ★★★ B: tool='select'時は描画開始しない（明示ログ）★★★
+    if (tool === 'select') {
+      if (DEBUG_MODE) {
+        console.log('[ViewerCanvas] PointerDown blocked: tool=select (not a draw tool)');
+      }
+      return;
+    }
+    
     // ★★★ CRITICAL: 描画開始は canDrawNew でOK（draftReady不要）★★★
     if (!canDrawNew && tool !== 'text') {
       if (DEBUG_MODE) {
-        console.log('[ViewerCanvas] PointerDown blocked: canDrawNew=false');
+        console.log('[ViewerCanvas] PointerDown blocked: canDrawNew=false', { paintMode });
       }
       return;
     }

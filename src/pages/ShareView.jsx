@@ -110,6 +110,7 @@ function ShareViewContent() {
   const [commentSort, setCommentSort] = useState('page');
   const [paintMode, setPaintMode] = useState(false);
   const [tool, setTool] = useState('select');
+  const lastDrawToolRef = useRef('pen'); // 最後に使った描画ツール
   const [strokeColor, setStrokeColor] = useState('#ff0000');
   const [strokeWidth, setStrokeWidth] = useState(4);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
@@ -144,6 +145,7 @@ function ShareViewContent() {
   const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
   const didInitActiveRef = useRef(false);
+  const lastActiveCommentIdRef = useRef(null); // paintContextId補完用
 
   // DEBUG: Trace ReviewComment.create calls
   useEffect(() => {
@@ -323,16 +325,28 @@ function ShareViewContent() {
   }, [shareLink?.file_id, tempCommentId]);
 
   // ★★★ CRITICAL: paintContextId（唯一の真実、表示・描画・下書き全て統一）★★★
-  // ★★★ C: チラつき防止 - view/edit時はtempを使わない ★★★
+  // ★★★ C: チラつき防止 - 一瞬nullになったらlastを使う ★★★
   const paintContextId = React.useMemo(() => {
     if (showAllPaint) return null;
     
     // ★ CRITICAL: 優先順位固定（edit > active > new時のみtemp）
-    if (composerMode === 'edit' && composerTargetCommentId) return String(composerTargetCommentId);
-    if (activeCommentId) return String(activeCommentId);
-    if (composerMode === 'new' && tempCommentId) return String(tempCommentId);
+    let computed = null;
+    if (composerMode === 'edit' && composerTargetCommentId) computed = String(composerTargetCommentId);
+    else if (activeCommentId) computed = String(activeCommentId);
+    else if (composerMode === 'new' && tempCommentId) computed = String(tempCommentId);
     
-    return null;
+    // ★★★ C: computedがnullの場合はlastActiveCommentIdRefで補完（チラつき根絶）★★★
+    if (!computed && lastActiveCommentIdRef.current) {
+      console.log('[paintContextId]補完:', lastActiveCommentIdRef.current.substring(0, 12));
+      return lastActiveCommentIdRef.current;
+    }
+    
+    // 確定したらlastに保存
+    if (computed) {
+      lastActiveCommentIdRef.current = computed;
+    }
+    
+    return computed;
   }, [showAllPaint, composerMode, composerTargetCommentId, activeCommentId, tempCommentId]);
 
   // ★★★ CRITICAL: renderTargetCommentId は paintContextId と完全同一（Single Source of Truth）★★★
@@ -587,16 +601,6 @@ function ShareViewContent() {
       return;
     }
 
-    // ★★★ P4: 新規セッション時に tempCommentId が無ければ即座に生成（順序保証）★★★
-    if (composerMode === 'new' && !tempCommentId) {
-      const newTempId = generateTempCommentId();
-      setTempCommentId(newTempId);
-      if (shareLink?.file_id) {
-        localStorage.setItem(`tempCommentId:${shareLink.file_id}`, newTempId);
-      }
-      console.log('[ShareView] P4: Generated tempCommentId before paint:', newTempId.substring(0, 12));
-    }
-
     // 編集セッションか新規セッションかを判定
     const isEditSession = composerMode === 'edit' && !!composerTargetCommentId;
 
@@ -653,12 +657,24 @@ function ShareViewContent() {
     }
 
     setPaintMode(true);
-    // ★★★ CRITICAL: paint ON時は必ず描画ツール（select以外）に強制 ★★★
-    if (tool === 'select') {
-      setTool('pen');
-    }
     setIsDockOpen(true);
   };
+  
+  // ★★★ B: paintMode ON時に tool='select'なら自動で描画ツールに変更 ★★★
+  useEffect(() => {
+    if (paintMode && (tool === 'select' || !tool)) {
+      const drawTool = lastDrawToolRef.current || 'pen';
+      console.log('[ShareView] auto-switch to draw tool:', drawTool);
+      setTool(drawTool);
+    }
+  }, [paintMode, tool]);
+  
+  // ★★★ B: 描画ツール使用時に最後のツールを記録 ★★★
+  useEffect(() => {
+    if (['pen', 'rect', 'circle', 'arrow', 'text'].includes(tool)) {
+      lastDrawToolRef.current = tool;
+    }
+  }, [tool]);
 
   const handleBeginPaint = () => {
     // ペイント開始時はコメントを作らず、セッション開始のみ
@@ -1175,20 +1191,22 @@ function ShareViewContent() {
       return;
     }
 
-    // ★★★ CRITICAL: paintMode中は自動で終了（警告廃止）★★★
+    // ★★★ A: paintMode中は自動OFF（exitEditModeは呼ばず、下書き削除しない）★★★
     if (paintMode) {
-      console.log('[EXIT_DEBUG] selectComment: auto-exit paintMode before switch');
-      if (composerMode === 'edit' || composerMode === 'reply') {
-        exitEditMode('auto_switch');
-      }
+      console.log('[EXIT_DEBUG] selectComment: auto-exit paintMode (keep draft)');
       setPaintMode(false);
       setTool('select');
     }
 
-    // 同じコメントを再クリック → 選択解除＆新規モードに戻す
+    // ★★★ A: 同じコメント再クリック → composerModeだけview（activeCommentIdは維持）★★★
     if (activeCommentId === comment.id) {
-      console.log('[EXIT_DEBUG] selectComment deselect (same comment clicked)');
-      exitEditMode('deselect_same');
+      console.log('[EXIT_DEBUG] selectComment deselect (same comment, keep activeCommentId)');
+      setComposerMode('view');
+      setComposerTargetCommentId(null);
+      setComposerText('');
+      setPendingFiles([]);
+      setReplyingThreadId(null);
+      // activeCommentIdは維持（paintContextId null化を防ぐ）
       return;
     }
 
@@ -1219,9 +1237,9 @@ function ShareViewContent() {
       return;
     }
 
-    // ★★★ CRITICAL: paintMode中は自動で終了（警告廃止）★★★
+    // ★★★ A: paintMode中は自動OFF（exitEditModeは呼ばず、下書き削除しない）★★★
     if (paintMode) {
-      console.log('[EXIT_DEBUG] enterEdit: auto-exit paintMode before edit');
+      console.log('[EXIT_DEBUG] enterEdit: auto-exit paintMode (keep draft)');
       setPaintMode(false);
       setTool('select');
     }
@@ -1248,7 +1266,7 @@ function ShareViewContent() {
     enterEdit(comment);
   };
 
-  // ★★★ CRITICAL: 編集モード解除の統一関数（×終了＝キャンセル扱い）★★★
+  // ★★★ A: 編集モード解除の統一関数（明示キャンセル時のみ下書き削除）★★★
   const exitEditMode = (reason = 'unknown') => {
     console.log('[EXIT_DEBUG] exitEditMode START:', {
       reason,
@@ -1258,15 +1276,19 @@ function ShareViewContent() {
       draftShapesCount: draftShapesRef.current.length,
       cacheSize: draftCacheRef.current.size,
     });
-    
-    // ★★★ P1: editKeyを退避してlocalStorage削除（×終了＝キャンセル扱い）★★★
-    if (composerMode === 'edit' && composerTargetCommentId && shareLink?.file_id) {
+
+    // ★★★ A: 明示キャンセル時のみ下書き削除（auto_switch/deselect_same/auto_replyでは削除しない）★★★
+    const shouldDeleteDraft = ['cancel_button', 'cancel_x', 'clear_all'].includes(reason);
+
+    if (shouldDeleteDraft && composerMode === 'edit' && composerTargetCommentId && shareLink?.file_id) {
       const editKey = getDraftKey(shareLink.file_id, composerTargetCommentId, null, 'edit');
       if (editKey) {
         deleteDraft(editKey);
         draftCacheRef.current.delete(editKey);
-        console.log('[EXIT_DEBUG] Deleted edit draft (cancel):', editKey);
+        console.log('[EXIT_DEBUG] Deleted edit draft (explicit cancel):', editKey, 'reason:', reason);
       }
+    } else {
+      console.log('[EXIT_DEBUG] Draft preserved (auto switch):', reason);
     }
     
     // ViewerCanvasの描画をクリア
@@ -1339,12 +1361,9 @@ function ShareViewContent() {
       return;
     }
 
-    // ★★★ CRITICAL: paintMode中は自動で終了（警告廃止）★★★
+    // ★★★ A: paintMode中は自動OFF（exitEditModeは呼ばず、下書き削除しない）★★★
     if (paintMode) {
-      console.log('[EXIT_DEBUG] handleStartReply: auto-exit paintMode before reply');
-      if (composerMode === 'edit') {
-        exitEditMode('auto_reply');
-      }
+      console.log('[EXIT_DEBUG] handleStartReply: auto-exit paintMode (keep draft)');
       setPaintMode(false);
       setTool('select');
     }
@@ -1526,6 +1545,9 @@ function ShareViewContent() {
     const showDraft = shouldShowDraft ? 'draft' : 'nodraft';
     return `${fileId}:${mode}:${scope}:${paintContextId || 'none'}:${showDraft}`;
   }, [shareLink?.file_id, showAllPaint, composerMode, draftScope, paintContextId, shouldShowDraft]);
+  
+  // ★★★ D: Canvas遷移中フラグ（incoming empty時のMap保持用）★★★
+  const isCanvasTransitioning = shapesFetching || !storageDraftReady;
 
   // ★★★ C: チラつき防止 - DB素材が読み込まれるまでドラフトを表示しない ★★★
   const canvasReady = React.useMemo(() => {
@@ -1877,6 +1899,7 @@ function ShareViewContent() {
                 comments={comments.filter(c => c.page_no === currentPage)}
                 activeCommentId={activeCommentId}
                 canvasContextKey={canvasInternalResetKey}
+                isCanvasTransitioning={isCanvasTransitioning}
                 onCommentClick={(id) => {
                   const comment = comments.find(c => c.id === id);
                   if (!comment) return;
