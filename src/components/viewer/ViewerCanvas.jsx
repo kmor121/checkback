@@ -437,10 +437,6 @@ const ViewerCanvas = forwardRef(({
       shapeIds: existingShapes.map(s => ({ id: s.id?.substring?.(0, 8), cid: s.comment_id })),
     });
     
-    // ★ CRITICAL: existingShapesが空でもMapから該当shapeを削除しない
-    // （送信後のクリア時に既存描画が消えないように）
-    if (existingShapes.length === 0) return;
-    
     // ★★★ CRITICAL: 新しいMapを作成（不変更新）★★★
     const newMap = new Map(shapesMapRef.current);
     let changed = false;
@@ -463,13 +459,11 @@ const ViewerCanvas = forwardRef(({
       changed = true;
     }
     
-    if (changed) {
-      console.log('[ViewerCanvas] Map updated (immutable), new size:', newMap.size);
-      // ★★★ CRITICAL: 新しいMap参照を代入して確実に再レンダリング ★★★
-      shapesMapRef.current = newMap;
-      bump();
-    }
-  }, [existingShapes, activeCommentId]);
+    // ★★★ CRITICAL: changedに関わらず必ずbump()を呼ぶ（初期ロード時にrenderedShapesが再計算されるように）★★★
+    console.log('[ViewerCanvas] Map updated (immutable), new size:', newMap.size, 'changed:', changed);
+    shapesMapRef.current = newMap;
+    bump();
+  }, [existingShapes]);
 
   // ✅ 選択維持（Mapに存在するか確認）
   useEffect(() => {
