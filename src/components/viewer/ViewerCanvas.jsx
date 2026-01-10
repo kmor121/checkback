@@ -843,11 +843,14 @@ const ViewerCanvas = forwardRef(({
       setLastMutation('delete');
       setLastPayload(JSON.stringify({ id: shape.id }));
       try {
+        console.log('[ViewerCanvas] Calling onDeleteShape...');
         await onDeleteShape(shape);
         setLastSaveStatus('success');
         setLastError(null);
+        console.log('[ViewerCanvas] ========== HANDLE DELETE END (success) ==========');
+        console.log('[ViewerCanvas] deletedLocalCount: 1, deletedDbCount: 1');
       } catch (err) {
-        console.error('Delete shape error:', err);
+        console.error('[ViewerCanvas] Delete shape error:', err);
         setLastSaveStatus('error');
         setLastError(err.message);
         // 失敗時はrevert（★★★ CRITICAL: 新しいMapを作成 ★★★）
@@ -856,7 +859,12 @@ const ViewerCanvas = forwardRef(({
         shapesMapRef.current = revertMap;
         bump();
         onShapesChange?.(getAllShapes());
+        console.log('[ViewerCanvas] ========== HANDLE DELETE END (error, reverted) ==========');
+        console.log('[ViewerCanvas] deletedLocalCount: 0, deletedDbCount: 0');
       }
+    } else {
+      console.log('[ViewerCanvas] ========== HANDLE DELETE END (local only, no onDeleteShape) ==========');
+      console.log('[ViewerCanvas] deletedLocalCount: 1, deletedDbCount: 0');
     }
   };
 
