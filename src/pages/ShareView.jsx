@@ -1609,6 +1609,7 @@ function ShareViewContent() {
                 showAllPaint={showAllPaint}
                 forceClearToken={forceClearToken}
                 draftCommentId={tempCommentId}
+                renderTargetCommentId={renderTargetCommentId}
                 debugInfo={{
                   isReady: isReady,
                   readyDetails: readyDetails,
