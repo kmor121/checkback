@@ -224,19 +224,13 @@ const ViewerCanvas = forwardRef(({
     canMutate && isSelectableShape(shape);
   
   // CRITICAL: 描画に使うcomment_idを取得（effectiveActiveIdまたは仮ID）
-  // ★★★ CRITICAL FIX: String型で返す（型統一）★★★
-  // ★★★ A: ShareViewから渡されたdraftCommentId(=tempCommentId)を最優先で使用 ★★★
+  // ★★★ CRITICAL FIX: draftCommentId（props）を最優先、内部生成は完全禁止 ★★★
   const getCommentIdForDrawing = () => {
-    // ★ effectiveActiveId（親から渡されたactiveCommentId）を優先
-    if (effectiveActiveId != null) return String(effectiveActiveId);
-    // ★★★ A: ShareViewから渡されたdraftCommentIdを使用（内部生成しない）★★★
+    // ★★★ CRITICAL: draftCommentId（props）を最優先、内部UUID生成を完全無効化 ★★★
     if (draftCommentId != null) return String(draftCommentId);
-    // フォールバック: 内部で仮ID生成（これは使われないはず）
-    if (!draftCommentIdRef.current) {
-      draftCommentIdRef.current = generateUUID();
-      console.warn('[ViewerCanvas] getCommentIdForDrawing: fallback to internal UUID (this should not happen)');
-    }
-    return String(draftCommentIdRef.current);
+    if (effectiveActiveId != null) return String(effectiveActiveId);
+    // ★★★ CRITICAL: fallback禁止、draftCommentIdもeffectiveActiveIdも無い場合はエラー ★★★
+    throw new Error('[ViewerCanvas] getCommentIdForDrawing: no draftCommentId or effectiveActiveId available');
   };
   
   // ★ CRITICAL: Mapが唯一の真実（mergedShapesはMap由来）
@@ -247,6 +241,15 @@ const ViewerCanvas = forwardRef(({
   const renderedShapes = useMemo(() => {
     // ★★★ CRITICAL: Map由来のshapes（shapesVersionで再計算トリガー）★★★
     const mapShapes = getAllShapes();
+
+    // ★★★ DEBUG: 計算開始時の状態を詳細ログ ★★★
+    console.log('[renderedShapes] CALC START:', {
+      renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
+      draftCommentId: draftCommentId?.substring(0, 12) || 'null',
+      activeCommentId: activeCommentId?.substring(0, 12) || 'null',
+      mapShapesCount: mapShapes.length,
+      showAllPaint,
+    });
 
     // ★★★ REQUIRED: renderTargetCommentId を最優先で使用（リロード後の下書き復元対応）★★★
     // renderTargetCommentId がなければ effectiveActiveId / showAllPaint で判定
@@ -456,9 +459,20 @@ const ViewerCanvas = forwardRef(({
 
     // ★★★ P2 FIX: incoming空の場合は常にスキップ（クリアはforceClearToken経由のみ）★★★
     if (incomingEmpty) {
-      console.log('[ViewerCanvas] FULL SYNC SKIPPED: incoming empty, preserving current Map (size:', prevMapSize, ')');
+      console.log('[ViewerCanvas] FULL SYNC SKIPPED: incoming empty, preserving current Map', {
+        prevMapSize,
+        renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
+        draftCommentId: draftCommentId?.substring(0, 12) || 'null',
+      });
       return;
     }
+
+    // ★★★ DEBUG: FULL SYNC開始 ★★★
+    console.log('[ViewerCanvas] FULL SYNC START:', {
+      incomingLength: existingShapes.length,
+      prevMapSize,
+      renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
+    });
 
     // ★★★ CRITICAL: dirtyなローカルshapeを保持するために一時保存 ★★★
     const dirtyShapes = new Map();
@@ -1064,8 +1078,15 @@ const ViewerCanvas = forwardRef(({
         console.log('[ViewerCanvas] drawViewRef saved:', drawViewRef.current);
       }
 
-      // ★★★ CRITICAL: comment_idを取得（effectiveActiveIdのみ、fallback禁止）★★★
+      // ★★★ CRITICAL: comment_idを取得（draftCommentId優先、fallback禁止）★★★
       const commentId = getCommentIdForDrawing();
+
+      // ★★★ DEBUG: 描画開始時のcomment_id確認 ★★★
+      console.log('[ViewerCanvas] Drawing with commentId:', {
+        commentId: commentId?.substring(0, 12),
+        draftCommentId: draftCommentId?.substring(0, 12) || 'null',
+        effectiveActiveId: effectiveActiveId?.substring(0, 12) || 'null',
+      });
 
       // ★★★ DEBUG HUD: 描画開始ログを追加 ★★★
       const drawStartLog = {
@@ -1384,9 +1405,12 @@ const ViewerCanvas = forwardRef(({
         }
       }
 
-      // ★★★ CRITICAL FIX: comment_idは描画開始時に固定済み（shape.comment_id）を優先 ★★★
-      // fallback禁止：shape.comment_idが無い場合のみeffectiveActiveIdを使用
-      const resolvedCommentId = shape.comment_id ?? String(effectiveActiveId ?? '');
+      // ★★★ CRITICAL FIX: fallback禁止、shape.comment_id が無い場合はエラー ★★★
+      const resolvedCommentId = shape.comment_id;
+      if (!resolvedCommentId) {
+        console.error('[ViewerCanvas] shape.comment_id is missing:', shape);
+        throw new Error('[ViewerCanvas] shape.comment_id is required');
+      }
       const normalizedShape = {
         id: shape.id,
         comment_id: resolvedCommentId,

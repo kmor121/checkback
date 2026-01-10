@@ -311,6 +311,10 @@ function ShareViewContent() {
       loadedCount: shapes.length,
       savedAt: draft?.updatedAt,
       didHydrate: true,
+      // ★★★ DEBUG: hydrate完了時の状態詳細 ★★★
+      scopeId: shareLink?.file_id?.substring(0, 12),
+      tempCommentId: tempCommentId?.substring(0, 12),
+      targetKeyFull: targetKey?.substring(0, 30),
     });
     
     draftShapesRef.current = shapes;
@@ -1229,10 +1233,20 @@ function ShareViewContent() {
   // activeCommentId > draftShapes有無 > null の優先順でフィルタ対象を決定
   const renderTargetCommentId = React.useMemo(() => {
     if (activeCommentId) return String(activeCommentId);
-    // ★★★ 下書きがあれば draftCommentId でフィルタ（リロード直後の復元対応）★★★
-    if (draftShapes.length > 0 && tempCommentId) return String(tempCommentId);
+    // ★★★ CRITICAL FIX: 新規コメントモード（activeCommentId無し）では tempCommentId を必ず使用 ★★★
+    // draftShapes.length に依存させない（レース防止）
+    if (!activeCommentId && tempCommentId) return String(tempCommentId);
     return null;
-  }, [activeCommentId, draftShapes.length, tempCommentId]);
+  }, [activeCommentId, tempCommentId]);
+
+  // ★★★ DEBUG: renderTargetCommentId 算出ログ ★★★
+  useEffect(() => {
+    console.log('[ShareView] renderTargetCommentId resolved:', {
+      activeCommentId: activeCommentId?.substring(0, 12) || 'null',
+      tempCommentId: tempCommentId?.substring(0, 12) || 'null',
+      renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
+    });
+  }, [renderTargetCommentId, activeCommentId, tempCommentId]);
 
   // CRITICAL: 親側でフィルタリング（ViewerCanvasに渡すshapes）
   // ★★★ P2: draftShapesを確実にCanvasに合流させる ★★★
