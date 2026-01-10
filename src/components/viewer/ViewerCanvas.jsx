@@ -444,58 +444,53 @@ const ViewerCanvas = forwardRef(({
     setPan(p => clampPan(p.x, p.y));
   }, [zoom]);
 
-  // ★ CRITICAL: existingShapesはupsert入力として取り込む
-  // ★★★ CRITICAL FIX: 不変更新（新しいMapを作成）して確実に再レンダリング ★★★
+  // ★★★ CRITICAL FIX: existingShapesで完全同期（upsertではなく置換）★★★
+  // DB削除後にexistingShapesから消えたshapeはMapからも自動で消える
   useEffect(() => {
     if (!existingShapes) return;
 
-    console.log('[ViewerCanvas] existingShapes useEffect:', {
+    console.log('[ViewerCanvas] existingShapes useEffect (FULL SYNC):', {
       length: existingShapes.length,
       activeCommentId,
-      hidePaintUntilSelect,
-      mapSize: shapesMapRef.current.size,
+      prevMapSize: shapesMapRef.current.size,
       shapeIds: existingShapes.map(s => ({ id: s.id?.substring?.(0, 8), cid: s.comment_id })),
     });
 
-    // ★★★ CRITICAL: 新しいMapを作成（不変更新）★★★
-    const newMap = new Map(shapesMapRef.current);
-    let changed = false;
+    // ★★★ CRITICAL: dirtyなローカルshapeを保持するために一時保存 ★★★
+    const dirtyShapes = new Map();
+    for (const [id, shape] of shapesMapRef.current.entries()) {
+      if (shape._dirty) {
+        dirtyShapes.set(id, shape);
+      }
+    }
 
+    // ★★★ CRITICAL: existingShapesのみでMapを作り直す（完全同期）★★★
+    const newMap = new Map();
+    
     for (const s of existingShapes) {
-      // ★★★ CRITICAL: comment_idが空のshapeは取り込まない（意図せず表示されないように）★★★
+      // comment_idが空のshapeは取り込まない
       const cid = shapeCommentId(s);
       if (cid == null || cid === '') {
         console.log('[ViewerCanvas] Skipping shape with empty comment_id:', s.id?.substring?.(0, 8));
         continue;
       }
-
-      const prev = newMap.get(s.id);
-
-      // ★★★ CRITICAL GUARD: 既存shapeのcomment_idが変わる更新は拒否（comment_idは不変）★★★
-      if (prev) {
-        const prevCid = shapeCommentId(prev);
-        const nextCid = String(cid);
-        if (prevCid != null && prevCid !== '' && String(prevCid) !== nextCid) {
-          console.warn('[ViewerCanvas] BLOCKED: comment_id change attempt!', {
-            shapeId: s.id?.substring?.(0, 8),
-            prevCid,
-            nextCid,
-          });
-          continue; // この更新はスキップ
-        }
+      
+      // dirtyなローカルshapeがあればそちらを優先（描画中の巻き戻り防止）
+      if (dirtyShapes.has(s.id)) {
+        newMap.set(s.id, dirtyShapes.get(s.id));
+      } else {
+        newMap.set(s.id, s);
       }
-
-      // dirtyローカルがあるならローカルを優先（巻き戻り防止）
-      if (prev?._dirty) continue;
-
-      // それ以外はserverを取り込む（upsert）
-      const next = prev ? { ...prev, ...s } : s;
-      newMap.set(s.id, next);
-      changed = true;
+    }
+    
+    // ★★★ CRITICAL: dirtyだがexistingShapesに無いshapeも追加（新規描画中のshape）★★★
+    for (const [id, shape] of dirtyShapes.entries()) {
+      if (!newMap.has(id)) {
+        newMap.set(id, shape);
+      }
     }
 
-    // ★★★ CRITICAL: changedに関わらず必ずbump()を呼ぶ（初期ロード時にrenderedShapesが再計算されるように）★★★
-    console.log('[ViewerCanvas] Map updated (immutable), new size:', newMap.size, 'changed:', changed);
+    console.log('[ViewerCanvas] Map replaced (FULL SYNC), new size:', newMap.size, 'dirtyCount:', dirtyShapes.size);
     shapesMapRef.current = newMap;
     bump();
   }, [existingShapes]);
