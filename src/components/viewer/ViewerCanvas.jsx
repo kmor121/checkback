@@ -1685,14 +1685,21 @@ const ViewerCanvas = forwardRef(({
     }
   };
 
-  // ツールバー変更を選択図形に適用
+  // ツールバー変更を選択図形に適用（CRITICAL: applyStyleToSelected不足で無限ループ防止）
+  const prevStrokeColorRef = useRef(strokeColor);
+  const prevStrokeWidthRef = useRef(strokeWidth);
+  
   useEffect(() => {
     if (!canEdit || !selectedId) return;
+    if (prevStrokeColorRef.current === strokeColor) return;
+    prevStrokeColorRef.current = strokeColor;
     applyStyleToSelected({ stroke: strokeColor });
   }, [strokeColor, canEdit, selectedId]);
 
   useEffect(() => {
     if (!canEdit || !selectedId) return;
+    if (prevStrokeWidthRef.current === strokeWidth) return;
+    prevStrokeWidthRef.current = strokeWidth;
     applyStyleToSelected({ strokeWidth });
   }, [strokeWidth, canEdit, selectedId]);
 
