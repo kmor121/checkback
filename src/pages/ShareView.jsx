@@ -760,6 +760,9 @@ function ShareViewContent() {
       setReplyingThreadId(null);
       setIsDockOpen(false);
       
+      // ★★★ 仮IDもリセット（次の新規コメント用に新しいIDを発行させる）★★★
+      setTempCommentId(null);
+      
       // invalidateは少し遅らせて描画クリアを確実に先に完了させる
       setTimeout(async () => {
         await queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id, token] });
