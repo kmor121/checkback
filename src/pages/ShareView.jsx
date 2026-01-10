@@ -1554,7 +1554,16 @@ function ShareViewContent() {
                   selectComment(comment);
                 }}
                 onShapesChange={(updated) => {
-                  // ★★★ CRITICAL: 全ての描画変更はdraftShapesに保存（DB保存は送信時のみ）★★★
+                  // ★★★ CRITICAL: ViewerCanvasからの同期コールバック ★★★
+                  // ★★★ FIX: 復元完了前は無視（FULL SYNCで空配列が来ても上書きしない）★★★
+                  if (!didHydrateDraftRef.current) {
+                    console.log('[ShareView] onShapesChange IGNORED (not hydrated yet):', {
+                      updatedCount: updated.length,
+                      targetKey,
+                    });
+                    return;
+                  }
+                  
                   console.log('[ShareView] onShapesChange called:', {
                     updatedCount: updated.length,
                     targetKey,
