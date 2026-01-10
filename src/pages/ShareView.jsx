@@ -476,6 +476,14 @@ function ShareViewContent() {
   }, [shareLink?.file_id]);
 
   const handlePaintModeChange = (mode) => {
+    console.log('[ShareView] paint start request:', { 
+      mode,
+      composerMode, 
+      activeCommentId: activeCommentId?.substring(0, 12) || 'null', 
+      tempCommentId: tempCommentId?.substring(0, 12) || 'null', 
+      paintContextId: paintContextId?.substring(0, 12) || 'null' 
+    });
+
     if (!mode) {
       setPaintMode(false);
       setTool('select');
@@ -522,17 +530,20 @@ function ShareViewContent() {
       // ★★★ 下書き復元はtargetKey変更時のuseEffectで自動実行される ★★★
       // （composerMode='edit' & composerTargetCommentId設定 → targetKey変更 → 自動復元）
     } else {
+      // ★★★ CRITICAL: 新規時にtempCommentIdが無ければ即座に生成（送信後対策）★★★
+      let effectiveTempId = tempCommentId;
+      if (!effectiveTempId) {
+        effectiveTempId = generateTempCommentId();
+        setTempCommentId(effectiveTempId);
+        if (shareLink?.file_id) {
+          localStorage.setItem(`tempCommentId:${shareLink.file_id}`, effectiveTempId);
+        }
+        console.log('[ShareView] generated tempCommentId for paint:', effectiveTempId.substring(0, 12));
+      }
+
       // 新規作成: 既存コメント描画は非表示・編集不可
       setActiveCommentId(null);
       setPaintSessionCommentId(null);
-      
-      // ★★★ CRITICAL: tempCommentIdは既にuseEffectで確定済み（ここでは生成しない）★★★
-      // もし未確定なら描画を許可しない（レース防止）
-      if (!tempCommentId) {
-        console.warn('[ShareView] tempCommentId not ready yet, cannot start paint');
-        return;
-      }
-      
       setComposerMode('new');
       setComposerTargetCommentId(null);
       setShowAllPaint(false);
@@ -1061,8 +1072,8 @@ function ShareViewContent() {
     setPaintSessionCommentId(null); // CRITICAL: paintSessionをクリア
     setIsDockOpen(true);
 
-    // クリックだけで edit にならないように必ず new に戻す
-    setComposerMode('new');
+    // ★★★ CRITICAL: 既存コメント選択時は new 状態を解除（"新規作成中"バッジ防止）★★★
+    setComposerMode('view'); // または 'edit' ではなく閲覧状態
     setComposerTargetCommentId(null);
     setComposerText('');
     setDraftShapes([]);
@@ -1857,7 +1868,7 @@ function ShareViewContent() {
                           対応済みのため編集できません
                         </Badge>
                       </div>
-                    ) : (composerMode === 'edit' || paintSessionCommentId || draftShapes.length > 0) ? (
+                    ) : (composerMode === 'edit' || paintSessionCommentId || (composerMode === 'new' && !activeCommentId && draftShapes.length > 0)) ? (
                       <div className="text-xs text-gray-500 flex items-center gap-2">
                         <Badge className="bg-green-600 text-white">
                           {composerMode === 'edit' ? 'コメント編集中' : paintSessionCommentId ? 'コメントに追記中' : '新規作成中'}

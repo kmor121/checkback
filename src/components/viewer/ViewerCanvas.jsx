@@ -228,19 +228,20 @@ const ViewerCanvas = forwardRef(({
   // ★★★ A: draftCommentIdRef.currentではなく、propsのdraftCommentIdを優先 ★★★
   const effectiveActiveId = activeCommentId ?? draftCommentId ?? draftCommentIdRef.current ?? null;
 
-  // ★★★ CRITICAL: 新規描画と既存編集を分離（最小差分）★★★
+  // ★★★ CRITICAL: 新規描画と既存編集を分離、paintMode OFF時は完全無効化 ★★★
   const canDrawNew = !!paintMode;                      // 新規描画開始は paintMode だけでOK
   const canMutate = !!paintMode && !!draftReady;       // 既存shapeの編集/削除は draftReady 必須
   const canEdit = canMutate && isEditMode;             // 後方互換用エイリアス
-  const canSelect = canEdit;                           // 選択もcanEditに統一
+  const canSelect = !!paintMode && canEdit;            // ★ CRITICAL: paintMode必須化
   
   // ★★★ NEW: 削除専用フラグ（paintMode不問、targetIdがあれば削除可能）★★★
   const targetIdForDelete = effectiveActiveId != null ? String(effectiveActiveId) : '';
   const canEditPaint = targetIdForDelete !== '';  // 削除操作の可否
 
-  // ★★★ CRITICAL: 選択可能性（canEdit && selectツール && commentId一致）★★★
+  // ★★★ CRITICAL: 選択可能性（paintMode && canEdit && selectツール && commentId一致）★★★
   const isSelectableShape = (shape) => {
-    if (!canEdit) return false;  // paintMode && draftReady 必須
+    if (!paintMode) return false;  // ★ CRITICAL: paintMode OFF時は選択不可
+    if (!canEdit) return false;
     if (tool !== 'select') return false;
     if (effectiveActiveId == null) return false;
     return sameId(shapeCommentId(shape), effectiveActiveId);
@@ -652,7 +653,8 @@ const ViewerCanvas = forwardRef(({
       }
 
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        // ★★★ CRITICAL: canEdit で判定（paintMode && draftReady 必須）★★★
+        // ★★★ CRITICAL: paintMode OFF時は削除不可 ★★★
+        if (!paintMode) return;
         if (!canEdit || !selectedId) return;
 
         const selectedShape = shapes.find(s => s.id === selectedId);
