@@ -194,8 +194,9 @@ const ViewerCanvas = forwardRef(({
   // ★ CRITICAL: fileUrlを正規化してリセット判定に使う（クエリ違いでリセットしない）
   const fileIdentity = useMemo(() => normalizeFileUrl(fileUrl), [fileUrl]);
   
-  // ★ CRITICAL: 選択に使うIDは activeCommentId または draftCommentIdRef（仮ID対応）
-  const effectiveActiveId = activeCommentId ?? draftCommentIdRef.current ?? null;
+  // ★ CRITICAL: 選択に使うIDは activeCommentId または draftCommentId（ShareViewからの仮ID）
+  // ★★★ A: draftCommentIdRef.currentではなく、propsのdraftCommentIdを優先 ★★★
+  const effectiveActiveId = activeCommentId ?? draftCommentId ?? draftCommentIdRef.current ?? null;
   
   // ★ CRITICAL: 選択と編集を分離（表示フィルタ用 - paintMode必須）
   const canSelect = paintMode && isEditMode;    // paintMode時のみ選択可能
