@@ -1007,9 +1007,13 @@ const ViewerCanvas = forwardRef(({
         });
       }
 
-      // ★★★ DEBUG: 描画開始直後の状態を詳細ログ ★★★
+      // ★★★ DEBUG: 描画開始直後の状態を詳細ログ（差分検出用）★★★
+      // NOTE: renderedShapesはuseMemoなので、同一レンダリング内では変化しない
+      // 実際の変化は次のレンダリングで発生する
+      const afterIds = renderedShapes.map(s => s.id);
       const uniqueCidsAfter = [...new Set(renderedShapes.map(s => shapeCommentId(s)))].slice(0, 10);
-      console.log('[DRAW_DEBUG] handlePointerDown AFTER:', {
+      console.log('[DRAW_DEBUG] handlePointerDown AFTER (same render):', {
+        targetId: effectiveActiveId != null ? String(effectiveActiveId) : '',
         effectiveActiveId,
         activeCommentId,
         draftCommentId: draftCommentIdRef.current,
@@ -1017,6 +1021,7 @@ const ViewerCanvas = forwardRef(({
         hidePaintUntilSelect,
         renderedShapesLength: renderedShapes.length,
         uniqueCommentIdsInRendered: uniqueCidsAfter,
+        afterIds: afterIds.slice(0, 5).map(id => id?.substring?.(0, 8)),
         newShapeCommentId: commentId,
       });
       } catch (err) {
