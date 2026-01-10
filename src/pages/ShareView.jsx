@@ -554,23 +554,41 @@ function ShareViewContent() {
       return;
     }
     
+    // ★★★ CRITICAL: tempCommentIdが無ければ描画を保存しない（レース防止）★★★
+    if (!activeCommentId && !tempCommentId) {
+      console.error('[ShareView] handleSaveShape: tempCommentId not ready, aborting save');
+      return;
+    }
+    
     // ★★★ P2 FIX: 必ずユニークIDを確保（functional update で追記）★★★
     const shapeWithId = {
       ...shape,
       id: shape.id || crypto.randomUUID(),
     };
     
-    // ★★★ CRITICAL: DB保存は行わない（送信時にまとめて保存）★★★
-    // P2 FIX: functional update で確実に追記（置き換えではなく追記）
-    // ★★★ P2 FIX: _dirty=true を付与してViewerCanvasのFULL SYNCで消されないようにする ★★★
-    // ★★★ A: 新規コメント用のdraftCommentId(=tempCommentId)を使用してcomment_idを統一 ★★★
-    const effectiveDraftCommentId = tempCommentId || shapeWithId.comment_id;
+    // ★★★ CRITICAL: comment_idは必ずtempCommentId（新規時）またはactiveCommentId（編集時）★★★
+    const effectiveDraftCommentId = activeCommentId || tempCommentId;
+    if (!effectiveDraftCommentId) {
+      console.error('[ShareView] handleSaveShape: no valid commentId available');
+      return;
+    }
+    
     const shapeWithDirty = { 
       ...shapeWithId, 
       comment_id: effectiveDraftCommentId,
       _dirty: true, 
       _localTs: Date.now() 
     };
+    
+    // ★★★ DEBUG: 保存する shape の comment_id を必ず出力 ★★★
+    console.log('[ShareView] handleSaveShape:', {
+      shapeId: shapeWithId.id.substring(0, 8),
+      mode,
+      tempCommentId: tempCommentId?.substring(0, 12) || 'null',
+      activeCommentId: activeCommentId?.substring(0, 12) || 'null',
+      effectiveDraftCommentId: effectiveDraftCommentId.substring(0, 12),
+      'shape.comment_id': shapeWithDirty.comment_id.substring(0, 12),
+    });
     
     setDraftShapes(prev => {
       if (mode === 'create') {
@@ -1623,7 +1641,7 @@ function ShareViewContent() {
                 onBeginPaint={handleBeginPaint}
                 onSaveShape={handleSaveShape}
                 onDeleteShape={handleDeleteShape}
-                paintMode={isReady && paintMode}
+                paintMode={isReady && paintMode && (activeCommentId || tempCommentId)}
                 tool={tool}
                 onToolChange={setTool}
                 onStrokeColorChange={setStrokeColor}
