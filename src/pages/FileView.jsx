@@ -54,6 +54,10 @@ function FileViewContent() {
   const submitLockRef = useRef(false);
   const mutationIdRef = useRef(null);
   
+  // ★★★ CRITICAL: effectiveActiveIdRef - 描画の紐づけ先を常に最新で参照 ★★★
+  // editingCommentId(composerTargetCommentId) > activeCommentId > paintSessionCommentId の優先順
+  const effectiveActiveIdRef = useRef(null);
+  
   const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
 
@@ -104,6 +108,27 @@ function FileViewContent() {
   useEffect(() => {
     base44.auth.me().then(setUser).catch(() => {});
   }, []);
+
+  // ★★★ CRITICAL: effectiveActiveIdRefを常に最新に同期 ★★★
+  // 編集中(composerTargetCommentId) > 選択中(activeCommentId) > セッション(paintSessionCommentId)
+  useEffect(() => {
+    const newEffectiveId = composerTargetCommentId ?? activeCommentId ?? paintSessionCommentId ?? null;
+    const newEffectiveIdStr = newEffectiveId != null ? String(newEffectiveId) : null;
+    
+    if (effectiveActiveIdRef.current !== newEffectiveIdStr) {
+      console.log('[FileView] effectiveActiveIdRef updated:', {
+        prev: effectiveActiveIdRef.current,
+        next: newEffectiveIdStr,
+        composerTargetCommentId,
+        activeCommentId,
+        paintSessionCommentId,
+      });
+      effectiveActiveIdRef.current = newEffectiveIdStr;
+      
+      // ★★★ CRITICAL: ID変更時はdraftShapesをクリア（前コメントの下書き混入防止）★★★
+      setDraftShapes([]);
+    }
+  }, [composerTargetCommentId, activeCommentId, paintSessionCommentId]);
 
   const { data: file, isLoading: fileLoading, error: fileError } = useQuery({
     queryKey: ['file', fileId],
@@ -160,26 +185,30 @@ function FileViewContent() {
   }, [file, user, fileId]);
 
   // CRITICAL: onBeginPaintではコメントを作成しない（送信時のみ作成に統一）
-  // これにより二重作成を防止
+  // ★★★ CRITICAL: effectiveActiveIdRef経由で最新IDを参照（stale closure対策）★★★
   const handleBeginPaint = async (imgX, imgY, bgW, bgH) => {
-    console.log('[handleBeginPaint] called, activeCommentId:', activeCommentId);
+    // ★ ref経由で最新のIDを取得（stale closure回避）
+    const currentEffectiveId = effectiveActiveIdRef.current;
+    console.log('[handleBeginPaint] called, effectiveActiveIdRef:', currentEffectiveId);
     
-    // すでに編集中コメントがあるならそれを使う
-    if (activeCommentId) {
-      setPaintSessionCommentId(activeCommentId);
-      return activeCommentId;
+    // すでに編集中/選択中コメントがあるならそれを使う
+    if (currentEffectiveId) {
+      setPaintSessionCommentId(currentEffectiveId);
+      return currentEffectiveId;
     }
 
     // CRITICAL: ここではコメントを作成しない
     // 描画開始位置だけ記録して、送信時にコメントを作成する
-    // draftShapesに追加されるので、送信時にアンカー位置を計算する
-    console.log('[handleBeginPaint] no activeCommentId, draft mode');
+    console.log('[handleBeginPaint] no effectiveActiveId, draft mode');
     return null;
   };
 
   const handleSaveShape = async (shape, mode) => {
     try {
-      const targetCommentId = paintSessionCommentId;
+      // ★★★ CRITICAL: ref経由で最新IDを取得（stale closure回避）★★★
+      const targetCommentId = effectiveActiveIdRef.current || paintSessionCommentId;
+      
+      console.log('[handleSaveShape] targetCommentId:', targetCommentId, 'mode:', mode);
       
       // Draft（新規コメント）の場合はメモリに保存のみ
       if (!targetCommentId) {

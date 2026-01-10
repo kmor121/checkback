@@ -1,5 +1,6 @@
 import AccountSettings from './pages/AccountSettings';
 import DebugRoutes from './pages/DebugRoutes';
+import FileView from './pages/FileView';
 import Home from './pages/Home';
 import ProjectFiles from './pages/ProjectFiles';
 import ProjectNotes from './pages/ProjectNotes';
@@ -9,13 +10,13 @@ import Projects from './pages/Projects';
 import QuickCheck from './pages/QuickCheck';
 import ShareView from './pages/ShareView';
 import public_ from './pages/_public';
-import FileView from './pages/FileView';
 import __Layout from './Layout.jsx';
 
 
 export const PAGES = {
     "AccountSettings": AccountSettings,
     "DebugRoutes": DebugRoutes,
+    "FileView": FileView,
     "Home": Home,
     "ProjectFiles": ProjectFiles,
     "ProjectNotes": ProjectNotes,
@@ -25,7 +26,6 @@ export const PAGES = {
     "QuickCheck": QuickCheck,
     "ShareView": ShareView,
     "_public": public_,
-    "FileView": FileView,
 }
 
 export const pagesConfig = {
