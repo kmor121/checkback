@@ -202,11 +202,11 @@ const ViewerCanvas = forwardRef(({
   const canMutate = (paintMode && isEditMode) || (isInEditSession && isEditMode);
   const canEdit = canMutate;                    // 後方互換用エイリアス
 
-  // ★ このshapeを選択できるか（paintMode時のみ、effectiveActiveId使用で仮ID対応）
+  // ★ このshapeを選択できるか（編集モード時はpaintMode不問で選択可能）
   const isSelectableShape = (shape) =>
     canSelect && effectiveActiveId != null && sameId(shapeCommentId(shape), effectiveActiveId);
 
-  // ★ このshapeを編集できるか（paintMode時のみ）
+  // ★ このshapeを編集できるか（編集モード時はpaintMode不問で編集可能）
   const isEditableShape2 = (shape) =>
     canMutate && isSelectableShape(shape);
   
