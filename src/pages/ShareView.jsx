@@ -321,37 +321,21 @@ function ShareViewContent() {
     console.log('[ShareView] Saved tempCommentId to localStorage:', tempCommentId);
   }, [shareLink?.file_id, tempCommentId]);
 
-  // ★★★ CRITICAL: renderTargetCommentId（表示対象、modeで明示分岐）★★★
-  const renderTargetCommentId = React.useMemo(() => {
-    if (showAllPaint) return null;
-    
-    // ★★★ CRITICAL: new モードは tempCommentId のみ表示 ★★★
-    if (composerMode === 'new') {
-      return tempCommentId ? String(tempCommentId) : null;
-    }
-    
-    // edit / view: activeCommentId（選択コメントのDB描画 + edit時は下書きも）
-    return activeCommentId ? String(activeCommentId) : null;
-  }, [showAllPaint, composerMode, activeCommentId, tempCommentId]);
-  
-  // ★★★ CRITICAL: viewContextId（後方互換エイリアス、renderTargetCommentIdと同じ）★★★
-  const viewContextId = renderTargetCommentId;
+  // ★★★ CRITICAL: renderTargetCommentId は paintContextId と完全同一（Single Source of Truth）★★★
+  const renderTargetCommentId = paintContextId;
+  const viewContextId = paintContextId;
 
-  // ★★★ CRITICAL: paintContextId（下書き保存先、描画用、modeで明示分岐）★★★
+  // ★★★ CRITICAL: paintContextId（唯一の真実、表示・描画・下書き全て統一）★★★
   const paintContextId = React.useMemo(() => {
     if (showAllPaint) return null;
     
-    // ★ CRITICAL: edit モードのターゲットが最優先
+    // ★ CRITICAL: 優先順位固定（edit > active > temp）
     if (composerMode === 'edit' && composerTargetCommentId) return String(composerTargetCommentId);
+    if (activeCommentId) return String(activeCommentId);
+    if (tempCommentId) return String(tempCommentId);
     
-    // ★★★ CRITICAL: new モードは tempCommentId のみ（activeCommentId完全無視）★★★
-    if (composerMode === 'new') {
-      return tempCommentId ? String(tempCommentId) : null;
-    }
-    
-    // view: activeCommentId（通常のコメント選択）
-    return activeCommentId ? String(activeCommentId) : null;
-  }, [showAllPaint, composerMode, composerTargetCommentId, tempCommentId, activeCommentId]);
+    return null;
+  }, [showAllPaint, composerMode, composerTargetCommentId, activeCommentId, tempCommentId]);
 
   // ★★★ CRITICAL: 下書き表示判定（edit or new、viewでは非表示）★★★
   const shouldShowDraft = React.useMemo(() => {
@@ -361,6 +345,22 @@ function ShareViewContent() {
   // ★★★ CRITICAL FIX: hydratedKeyRef を string ref に変更（targetKey追跡用）★★★
   const hydratedKeyRef = useRef(null);
   const [hydratedKeyState, setHydratedKeyState] = useState(null);
+  
+  // ★★★ CRITICAL: paintContextId変化検知（コメント切替時のクリーンスタート）★★★
+  const prevPaintContextIdRef = useRef(paintContextId);
+  
+  useEffect(() => {
+    const prev = prevPaintContextIdRef.current;
+    prevPaintContextIdRef.current = paintContextId;
+    
+    if (prev !== paintContextId) {
+      console.log('[ShareView] paintContextId changed, clearing hydrate state:', {
+        prev: prev?.substring(0, 12) || 'null',
+        next: paintContextId?.substring(0, 12) || 'null',
+      });
+      setHydratedKeyState(null);
+    }
+  }, [paintContextId]);
 
   // temp かどうかの判定
   const isTempCid = (cid) => typeof cid === 'string' && cid.startsWith('temp_');
@@ -424,7 +424,7 @@ function ShareViewContent() {
     draftShapesRef.current = merged;
     setDraftShapes(merged);
     
-    // ★★★ CRITICAL: hydrate完了後にキーを記録（空でもready扱い、描画開始可能に）★★★
+    // ★★★ CRITICAL: hydrate完了後に必ずキーを記録（loadedCount=0でもready扱い）★★★
     hydratedKeyRef.current = targetKey;
     setHydratedKeyState(targetKey);
     
@@ -436,10 +436,11 @@ function ShareViewContent() {
       savedAt: draft?.updatedAt,
       scopeId: shareLink?.file_id?.substring(0, 12),
       tempCommentId: tempCommentId?.substring(0, 12) || 'null',
+      hydratedKeyState: 'SET',
     });
     
-    if (shapes.length > 0) {
-      showToast(`${shapes.length}個の下書きを復元しました`, 'info');
+    if (normalizedShapes.length > 0) {
+      showToast(`${normalizedShapes.length}個の下書きを復元しました`, 'info');
     }
   }, [targetKey, shareLink?.file_id, tempCommentId]);
 
@@ -1378,32 +1379,29 @@ function ShareViewContent() {
   useEffect(() => {
     console.log('[ShareView] context resolved:', {
       composerMode,
-      renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
       paintContextId: paintContextId?.substring(0, 12) || 'null',
       shouldShowDraft,
       storageDraftReady,
       activeCommentId: activeCommentId?.substring(0, 12) || 'null',
       tempCommentId: tempCommentId?.substring(0, 12) || 'null',
     });
-  }, [renderTargetCommentId, paintContextId, shouldShowDraft, storageDraftReady, composerMode, activeCommentId, tempCommentId]);
+  }, [paintContextId, shouldShowDraft, storageDraftReady, composerMode, activeCommentId, tempCommentId]);
 
-  // ★★★ CRITICAL: canvasContextKey（コメント切替検知用、renderTargetCommentIdベース）★★★
+  // ★★★ CRITICAL: canvasContextKey（paintContextIdベース、切替でMap完全リセット）★★★
   const canvasContextKey = React.useMemo(() => {
     const fileId = shareLink?.file_id || 'no-file';
     if (showAllPaint) return `${fileId}:all`;
-    return `${fileId}:render:${renderTargetCommentId || 'none'}`;
-  }, [shareLink?.file_id, showAllPaint, renderTargetCommentId]);
+    return `${fileId}:paint:${paintContextId || 'none'}`;
+  }, [shareLink?.file_id, showAllPaint, paintContextId]);
 
   // CRITICAL: 親側でフィルタリング（ViewerCanvasに渡すshapes）
   // ★★★ CRITICAL: viewContextId（表示）と paintContextId（描画）を分離 ★★★
   const shapesForCanvas = React.useMemo(() => {
     console.log('[ShareView] shapesForCanvas calculation:', {
-      renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
       paintContextId: paintContextId?.substring(0, 12) || 'null',
       composerMode,
       shouldShowDraft,
       storageDraftReady,
-      includeDraftInCanvas,
       showAllPaint,
       draftShapesCount: draftShapes.length,
       allShapesCount: allShapes.length,
@@ -1415,12 +1413,12 @@ function ShareViewContent() {
     // ★★★ CRITICAL: draftShapes を正規化（defaultCommentId=tempCommentId）★★★
     const draftShapesNormalized = draftShapes.map(s => normalizeShape(s, tempCommentId)).filter(Boolean);
     
-    // ★★★ CRITICAL: DB側はrenderTargetCommentIdでフィルタ（表示対象）★★★
+    // ★★★ CRITICAL: DB/draft両方とも paintContextId で統一（Single Source of Truth）★★★
     const dbShapesForView = showAllPaint
       ? allShapesNormalized
-      : (renderTargetCommentId ? allShapesNormalized.filter(s => resolveCommentId(s) === renderTargetCommentId) : []);
+      : (paintContextId ? allShapesNormalized.filter(s => resolveCommentId(s) === paintContextId) : []);
     
-    // ★★★ CRITICAL: draft側は shouldShowDraft && storageDraftReady でフィルタ ★★★
+    // ★★★ CRITICAL: draft側も paintContextId で統一（shouldShowDraft && storageDraftReady）★★★
     const draftShapesForView = shouldShowDraft && storageDraftReady && paintContextId
       ? draftShapesNormalized.filter(s => resolveCommentId(s) === paintContextId)
       : [];
@@ -1431,7 +1429,6 @@ function ShareViewContent() {
     const merged = [...dbShapesWithoutDuplicates, ...draftShapesForView];
     
     console.log('[ShareView] shapesForCanvas result:', {
-      renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
       paintContextId: paintContextId?.substring(0, 12) || 'null',
       composerMode,
       shouldShowDraft,
@@ -1442,7 +1439,7 @@ function ShareViewContent() {
     });
     
     return merged;
-  }, [allShapes, draftShapes, showAllPaint, renderTargetCommentId, paintContextId, shouldShowDraft, storageDraftReady, composerMode, tempCommentId, viewContextId]);
+  }, [allShapes, draftShapes, showAllPaint, paintContextId, shouldShowDraft, storageDraftReady, composerMode, tempCommentId]);
 
   // 親コメントと返信を分離（条件付きreturnの前に配置）
   const filteredComments = React.useMemo(() => {
@@ -1780,12 +1777,11 @@ function ShareViewContent() {
                 showAllPaint={showAllPaint}
                 forceClearToken={forceClearToken}
                 draftCommentId={paintContextId}
-                renderTargetCommentId={viewContextId}
-                activeCommentId={viewContextId}
+                renderTargetCommentId={paintContextId}
+                activeCommentId={paintContextId}
                 debugInfo={{
                   isReady: isReady,
                   readyDetails: readyDetails,
-                  renderTargetCommentId: renderTargetCommentId,
                   paintContextId: paintContextId,
                   composerMode: composerMode,
                   queryKey: ['paintShapes', token, shareLink?.file_id, currentPage],

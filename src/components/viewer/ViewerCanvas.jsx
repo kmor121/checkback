@@ -456,15 +456,16 @@ const ViewerCanvas = forwardRef(({
         prev,
         next: canvasContextKey,
         prevMapSize: shapesMapRef.current.size,
-        renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
       });
       
       shapesMapRef.current = new Map();
       bump();
       setSelectedId(null);
+      setCurrentShape(null);
+      setIsDrawing(false);
       prevCanvasContextKeyRef.current = canvasContextKey;
     }
-  }, [canvasContextKey, renderTargetCommentId]);
+  }, [canvasContextKey]);
 
   // CRITICAL: fileIdentity/pageNumber変更時のみリセット（Mapをクリア）
   useEffect(() => {
@@ -500,8 +501,7 @@ const ViewerCanvas = forwardRef(({
   }, [forceClearToken]);
 
   // ★★★ CRITICAL FIX: existingShapesで完全同期（upsertではなく置換）★★★
-  // ★★★ P2 FIX: incoming空は「データ未到達/瞬間的0」として扱い、Map空置換しない ★★★
-  // ★★★ クリアは forceClearToken または canvasContextKey 変化経由で行う ★★★
+  // ★★★ CONTEXT切替時はincoming空でもMapクリア（切替時のみ保持禁止）★★★
   useEffect(() => {
     if (!existingShapes) return;
 
@@ -509,13 +509,11 @@ const ViewerCanvas = forwardRef(({
     const prevMapSize = shapesMapRef.current.size;
     const ctx = canvasContextKey || 'no-ctx';
 
-    // ★★★ CRITICAL: incoming empty は常に SKIP（Map残留は context change でクリア済み）★★★
+    // ★★★ CRITICAL: incoming empty でも context切替後なら一度はクリア済み ★★★
     if (incomingEmpty) {
-      console.log('[ViewerCanvas] FULL SYNC SKIPPED: incoming empty (Map already cleared by context change)', {
+      console.log('[ViewerCanvas] FULL SYNC SKIPPED: incoming empty', {
         ctx,
         prevMapSize,
-        renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
-        draftCommentId: draftCommentId?.substring(0, 12) || 'null',
       });
       return;
     }
@@ -572,7 +570,11 @@ const ViewerCanvas = forwardRef(({
       }
     }
 
-    console.log('[ViewerCanvas] Map replaced (FULL SYNC), new size:', newMap.size, 'dirtyCount:', dirtyShapes.size);
+    console.log('[ViewerCanvas] Map replaced (FULL SYNC):', {
+      newSize: newMap.size,
+      dirtyCount: dirtyShapes.size,
+      ctx,
+    });
     shapesMapRef.current = newMap;
     bump();
   }, [existingShapes, canvasContextKey]);
