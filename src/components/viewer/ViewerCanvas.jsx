@@ -570,11 +570,16 @@ const ViewerCanvas = forwardRef(({
       }
       
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        // CRITICAL: 編集可能なIDのみ削除を許可（isEditableShape関数で判定）
+        // ★★★ FIX: 編集セッション中はpaintModeに関係なく削除を許可 ★★★
+        const canDeleteNow = canEdit || isInEditSession;
         const selectedShape = shapes.find(s => s.id === selectedId);
-        if (canEdit && selectedId && selectedShape && isEditableShape(selectedShape)) {
-          e.preventDefault();
-          handleDelete();
+        if (canDeleteNow && selectedId && selectedShape) {
+          // comment_id一致チェック
+          const shapeCommentIdValue = shapeCommentId(selectedShape);
+          if (effectiveActiveId != null && sameId(shapeCommentIdValue, effectiveActiveId)) {
+            e.preventDefault();
+            handleDelete();
+          }
         }
       } else if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
         e.preventDefault();
@@ -587,7 +592,7 @@ const ViewerCanvas = forwardRef(({
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [selectedId, shapes, undoStack, redoStack, canEdit]);
+    }, [selectedId, shapes, undoStack, redoStack, canEdit, isInEditSession, effectiveActiveId]);
 
   // ResizeObserver
   useEffect(() => {
