@@ -256,12 +256,40 @@ const ViewerCanvas = forwardRef(({
       sourceShapes = sourceShapes.filter(s => s.id !== currentShape.id);
     }
 
+    // ★★★ DEBUG: フィルタ前の状態を詳細ログ ★★★
+    const uniqueCidsBeforeFilter = [...new Set(sourceShapes.map(s => shapeCommentId(s)).filter(Boolean))];
+    console.log('[renderedShapes] before filter:', {
+      targetId,
+      sourceShapesCount: sourceShapes.length,
+      uniqueCommentIds: uniqueCidsBeforeFilter.slice(0, 10).map(id => String(id).substring(0, 12)),
+    });
+
     // ★★★ CRITICAL: targetIdに一致するshapeのみをフィルタ（commentId空のshapeは除外）★★★
     const filtered = sourceShapes.filter(s => {
       const cid = shapeCommentId(s);
       // commentIdがnull/空のshapeは除外（混入防止）
       if (cid == null || cid === '') return false;
-      return String(cid) === targetId;
+      const cidStr = String(cid);
+      const matches = cidStr === targetId;
+      
+      // ★★★ DEBUG: マッチしない場合の詳細ログ ★★★
+      if (!matches && DEBUG_MODE) {
+        console.log('[renderedShapes] shape filtered out:', {
+          shapeId: s.id?.substring(0, 8),
+          shapeCid: cidStr.substring(0, 12),
+          targetId: targetId.substring(0, 12),
+        });
+      }
+      
+      return matches;
+    });
+
+    // ★★★ DEBUG: フィルタ後の状態を詳細ログ ★★★
+    const uniqueCidsAfterFilter = [...new Set(filtered.map(s => shapeCommentId(s)).filter(Boolean))];
+    console.log('[renderedShapes] after filter:', {
+      targetId: targetId.substring(0, 12),
+      filteredCount: filtered.length,
+      uniqueCommentIds: uniqueCidsAfterFilter.slice(0, 10).map(id => String(id).substring(0, 12)),
     });
 
     return filtered;
