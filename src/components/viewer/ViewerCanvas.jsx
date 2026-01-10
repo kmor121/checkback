@@ -227,22 +227,21 @@ const ViewerCanvas = forwardRef(({
   const mergedShapes = useMemo(() => getAllShapes(), [shapesVersion]);
   
   // CRITICAL: 実際に描画するshape配列（hidePaintUntilSelectで強制非表示）
-  // ★★★ ROOT FIX: shapesMapRef (shapesVersion) 由来のみから生成し、existingShapesを直接使わない ★★★
+  // ★★★ ROOT FIX: fallback禁止、effectiveActiveIdのみ使用 ★★★
   const renderedShapes = useMemo(() => {
     // ★★★ CRITICAL: Map由来のshapes（shapesVersionで再計算トリガー）★★★
     const mapShapes = getAllShapes();
     
-    // ★★★ CRITICAL: renderTargetIdは effectiveActiveId を使う（activeCommentIdではなく）★★★
+    // ★★★ CRITICAL FIX: fallback禁止 - effectiveActiveIdのみ使用（lastStableCommentIdRef使用禁止）★★★
     // effectiveActiveId = activeCommentId ?? draftCommentIdRef.current ?? null
-    // これにより編集モード/新規描画モードで統一される
-    const renderTargetId = effectiveActiveId ?? lastStableCommentIdRef.current ?? null;
+    const targetId = effectiveActiveId != null ? String(effectiveActiveId) : '';
     
     console.log('[ViewerCanvas] renderedShapes calculation:', {
       hidePaintUntilSelect,
       showAllPaint,
       activeCommentId,
       effectiveActiveId,
-      renderTargetId,
+      targetId,
       currentShapeId: currentShape?.id,
       draftCommentId: draftCommentIdRef.current,
       lastStableId: lastStableCommentIdRef.current,
@@ -250,10 +249,18 @@ const ViewerCanvas = forwardRef(({
       shapesVersion,
     });
 
-    // ★★★ CRITICAL FIX: hidePaintUntilSelect時は effectiveActiveId が無い時のみ非表示 ★★★
-    // effectiveActiveIdがあれば（編集モードや新規描画モード）描画を許可
-    if (hidePaintUntilSelect && effectiveActiveId == null) {
-      console.log('[ViewerCanvas] renderedShapes: hidden (hidePaintUntilSelect && no effectiveActiveId)');
+    // ★★★ CRITICAL: showAllPaint時は全shape表示 ★★★
+    if (showAllPaint) {
+      let sourceShapes = mapShapes;
+      if (currentShape?.id) {
+        sourceShapes = sourceShapes.filter(s => s.id !== currentShape.id);
+      }
+      return sourceShapes;
+    }
+
+    // ★★★ CRITICAL FIX: targetIdが空の場合は空配列（fallback禁止）★★★
+    if (targetId === '') {
+      console.log('[ViewerCanvas] renderedShapes: empty (no targetId, fallback disabled)');
       return [];
     }
 
@@ -265,26 +272,20 @@ const ViewerCanvas = forwardRef(({
       sourceShapes = sourceShapes.filter(s => s.id !== currentShape.id);
     }
 
-    if (showAllPaint) {
-      return sourceShapes;
-    }
+    console.log('[ViewerCanvas] targetId:', targetId, 'sourceShapes before filter:', sourceShapes.length);
 
-    console.log('[ViewerCanvas] renderTargetId:', renderTargetId, 'sourceShapes before filter:', sourceShapes.length);
-
-    if (renderTargetId == null) {
-      return [];
-    }
-
-    // ★★★ CRITICAL: renderTargetIdに一致するshapeのみをフィルタ ★★★
+    // ★★★ CRITICAL: targetIdに一致するshapeのみをフィルタ（commentId空のshapeは除外）★★★
     const filtered = sourceShapes.filter(s => {
       const cid = shapeCommentId(s);
-      return cid != null && sameId(cid, renderTargetId);
+      // commentIdがnull/空のshapeは除外（混入防止）
+      if (cid == null || cid === '') return false;
+      return String(cid) === targetId;
     });
 
-    console.log('[ViewerCanvas] renderedShapes filtered:', filtered.length, 'for targetId:', renderTargetId);
+    console.log('[ViewerCanvas] renderedShapes filtered:', filtered.length, 'for targetId:', targetId);
 
     return filtered;
-  }, [shapesVersion, showAllPaint, effectiveActiveId, hidePaintUntilSelect, currentShape]);
+  }, [shapesVersion, showAllPaint, effectiveActiveId, currentShape]);
   
   // ★ CRITICAL: activeShapes を existingShapes から抽出（comment_id統一判定）
   const activeShapes = useMemo(() => {
