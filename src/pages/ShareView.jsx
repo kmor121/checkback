@@ -86,6 +86,10 @@ function ShareViewContent() {
   const draftShapesRef = useRef([]);
   const [canvasSessionNonce, setCanvasSessionNonce] = useState(0);
   
+  // ★★★ 新規コメント用の仮ID（localStorage下書き用）★★★
+  const [tempCommentId, setTempCommentId] = useState(null);
+  const saveDraftTimeoutRef = useRef(null);
+  
   // Composer mode (new or edit or reply)
   const [composerMode, setComposerMode] = useState('new');
   const [composerTargetCommentId, setComposerTargetCommentId] = useState(null);
