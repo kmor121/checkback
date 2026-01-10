@@ -767,8 +767,16 @@ function ShareViewContent() {
     }
 
     // 別のコメントをクリック → 選択のみ（編集には入らない）
+    // ★★★ CRITICAL: 前の描画セッションをクリア（他コメント編集の描画が残らないように）★★★
+    if (paintMode) {
+      viewerCanvasRef.current?.clear();
+      setPaintMode(false);
+      setTool('select');
+    }
+    
     setCurrentPage(comment.page_no);
     setActiveCommentId(comment.id);
+    setPaintSessionCommentId(null); // CRITICAL: paintSessionをクリア
     setIsDockOpen(true);
 
     // クリックだけで edit にならないように必ず new に戻す

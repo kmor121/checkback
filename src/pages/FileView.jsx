@@ -494,12 +494,18 @@ function FileViewContent() {
     // 同じコメントを再クリック → 選択解除＆新規モードに戻す
     if (activeCommentId === comment.id) {
       console.log('[FileView] Deselecting comment');
+      // ★★★ CRITICAL: 描画セッションをクリア ★★★
+      if (paintMode) {
+        viewerCanvasRef.current?.clear();
+      }
       setActiveCommentId(null);
       setPaintSessionCommentId(null); // CRITICAL: paintSessionも解除
       setComposerMode('new');
       setComposerTargetCommentId(null);
       setCommentBody('');
+      setDraftShapes([]);
       setPaintMode(false);
+      setTool('select');
       return;
     }
     
