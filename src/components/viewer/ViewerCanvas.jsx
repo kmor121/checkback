@@ -1273,8 +1273,9 @@ const ViewerCanvas = forwardRef(({
         }
       }
 
-      // 正規化データを作成（描画開始時のcomment_idを優先、effectiveActiveIdを使用）
-      const resolvedCommentId = shape.comment_id ?? effectiveActiveId ?? draftCommentIdRef.current;
+      // ★★★ CRITICAL FIX: comment_idは描画開始時に固定済み（shape.comment_id）を優先 ★★★
+      // fallback禁止：shape.comment_idが無い場合のみeffectiveActiveIdを使用
+      const resolvedCommentId = shape.comment_id ?? String(effectiveActiveId ?? '');
       const normalizedShape = {
         id: shape.id,
         comment_id: resolvedCommentId,
