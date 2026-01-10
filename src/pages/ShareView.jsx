@@ -559,19 +559,16 @@ function ShareViewContent() {
       return;
     }
     
-    const targetCommentId = paintSessionCommentId;
-    
-    // メモリから削除（ref即時更新）
-    draftShapesRef.current = draftShapesRef.current.filter(s => s.id !== shape.id);
-    setDraftShapes(draftShapesRef.current);
-    
-    // ★★★ localStorageに下書き保存（debounce付き）★★★
-    saveDraftDebounced(draftShapesRef.current, targetCommentId, tempCommentId);
+    // P2 FIX: functional update でメモリから削除
+    setDraftShapes(prev => {
+      const next = prev.filter(s => s.id !== shape.id);
+      draftShapesRef.current = next;
+      return next;
+    });
     
     console.log('[ShareView] Shape deleted from draft (NOT DB):', {
       shapeId: shape.id,
-      targetCommentId,
-      tempCommentId,
+      targetKey,
       remainingDraftCount: draftShapesRef.current.length,
     });
   };
