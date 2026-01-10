@@ -509,7 +509,7 @@ function FileViewContent() {
       return;
     }
     
-    // 別のコメントをクリック → 編集モードに切替
+    // 別のコメントをクリック → 選択のみ（ダブルクリックで編集）
     console.log('[FileView] Selecting comment:', comment.id);
     
     // ★★★ CRITICAL: 前の描画セッションをクリア（他コメント編集の描画が残らないように）★★★
@@ -522,6 +522,23 @@ function FileViewContent() {
     
     setActiveCommentId(comment.id);
     setPaintSessionCommentId(comment.id); // CRITICAL: paintSessionも設定して描画を表示
+    // ★ シングルクリックでは編集モードに入らない（選択のみ）
+    setComposerMode('new');
+    setComposerTargetCommentId(null);
+    setCommentBody('');
+  };
+
+  // ★★★ ダブルクリックで編集モードに入る ★★★
+  const handleCommentDoubleClick = (comment) => {
+    console.log('[FileView] handleCommentDoubleClick:', comment.id);
+    
+    if (paintMode) {
+      showToast('ペイントを終了してから編集してください', 'error');
+      return;
+    }
+    
+    setActiveCommentId(comment.id);
+    setPaintSessionCommentId(comment.id);
     setComposerMode('edit');
     setComposerTargetCommentId(comment.id);
     setCommentBody(comment.body);
@@ -864,6 +881,7 @@ function FileViewContent() {
                     activeCommentId === comment.id ? 'ring-2 ring-blue-500' : ''
                   }`}
                   onClick={() => handleCommentClick(comment)}
+                  onDoubleClick={() => handleCommentDoubleClick(comment)}
                 >
                   <CardContent className="p-3">
                     <div className="flex items-start gap-2 mb-2">
