@@ -445,11 +445,31 @@ const ViewerCanvas = forwardRef(({
     setPan(p => clampPan(p.x, p.y));
   }, [zoom]);
 
+  // ★★★ P2: 明示クリア用トークン監視（forceClearToken変化でのみMap空化）★★★
+  const prevForceClearTokenRef = useRef(forceClearToken);
+  useEffect(() => {
+    if (forceClearToken === prevForceClearTokenRef.current) return;
+    prevForceClearTokenRef.current = forceClearToken;
+
+    console.log('[ViewerCanvas] forceClearToken changed, clearing Map explicitly:', forceClearToken);
+    shapesMapRef.current = new Map();
+    bump();
+  }, [forceClearToken]);
+
   // ★★★ CRITICAL FIX: existingShapesで完全同期（upsertではなく置換）★★★
-  // DB削除後にexistingShapesから消えたshapeはMapからも自動で消える
-  // ★★★ P2 FIX: incoming空でもdirtyがあればMap空置換しない（draft消失防止）★★★
+  // ★★★ P2 FIX: incoming空は「データ未到達/瞬間的0」として扱い、Map空置換しない ★★★
+  // ★★★ クリアは forceClearToken 経由でのみ行う ★★★
   useEffect(() => {
     if (!existingShapes) return;
+
+    const incomingEmpty = existingShapes.length === 0;
+    const prevMapSize = shapesMapRef.current.size;
+
+    // ★★★ P2 FIX: incoming空の場合は常にスキップ（クリアはforceClearToken経由のみ）★★★
+    if (incomingEmpty) {
+      console.log('[ViewerCanvas] FULL SYNC SKIPPED: incoming empty, preserving current Map (size:', prevMapSize, ')');
+      return;
+    }
 
     // ★★★ CRITICAL: dirtyなローカルshapeを保持するために一時保存 ★★★
     const dirtyShapes = new Map();
@@ -459,23 +479,12 @@ const ViewerCanvas = forwardRef(({
       }
     }
 
-    const hasDirty = dirtyShapes.size > 0;
-    const incomingEmpty = existingShapes.length === 0;
-
     console.log('[ViewerCanvas] existingShapes useEffect (FULL SYNC):', {
       incomingLength: existingShapes.length,
       activeCommentId,
-      prevMapSize: shapesMapRef.current.size,
+      prevMapSize,
       dirtyCount: dirtyShapes.size,
-      hasDirty,
-      incomingEmpty,
     });
-
-    // ★★★ P2 FIX: incoming空 && dirtyあり → Map空置換スキップ（draft消失防止）★★★
-    if (incomingEmpty && hasDirty) {
-      console.log('[ViewerCanvas] FULL SYNC SKIPPED: incoming empty but dirty shapes exist, preserving draft');
-      return;
-    }
 
     // ★★★ CRITICAL: existingShapesのみでMapを作り直す（完全同期）★★★
     const newMap = new Map();
