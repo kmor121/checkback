@@ -695,8 +695,9 @@ function ShareViewContent() {
           has_paint: shapesToCommit.length > 0,
         });
 
-        // DraftShapesをDBに保存（refから取得）
+        // ★★★ CRITICAL: 送信時にのみDraftShapesをDBに保存 ★★★
         if (shapesToCommit.length > 0) {
+          console.log('[ShareView] Saving draft shapes to DB:', shapesToCommit.length);
           for (const shape of shapesToCommit) {
             await base44.entities.PaintShape.create({
               file_id: shareLink.file_id,
@@ -710,6 +711,13 @@ function ShareViewContent() {
               author_name: guestName,
             });
           }
+        }
+        
+        // ★★★ 送信成功後にlocalStorageの下書きを削除 ★★★
+        const draftKey = getDraftKey(shareLink.file_id, null, tempCommentId);
+        if (draftKey) {
+          deleteDraft(draftKey);
+          console.log('[ShareView] Deleted draft after submit:', draftKey);
         }
 
         // 添付ファイルがあればアップロード＆保存
