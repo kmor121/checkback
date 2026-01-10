@@ -352,8 +352,8 @@ function ShareViewContent() {
   const isEditMode = composerMode === 'edit' && !!composerTargetCommentId;
   const isNewMode = composerMode === 'new' && !!tempCommentId;
   
-  // ★★★ CRITICAL: 下書き表示判定（edit or new、view/reply時は非表示）★★★
-  const shouldShowDraft = paintMode && (isEditMode || isNewMode);
+  // ★★★ P3: 下書き表示判定（paintMode不問、edit/new時は常に表示）★★★
+  const shouldShowDraft = isEditMode || isNewMode;
   
   // ★★★ CRITICAL: draft filter用のID（型統一）★★★
   const draftFilterId = isEditMode ? String(composerTargetCommentId) : (isNewMode ? String(tempCommentId) : null);
@@ -585,6 +585,16 @@ function ShareViewContent() {
     if (!guestName.trim()) {
       setShowNameDialog(true);
       return;
+    }
+
+    // ★★★ P4: 新規セッション時に tempCommentId が無ければ即座に生成（順序保証）★★★
+    if (composerMode === 'new' && !tempCommentId) {
+      const newTempId = generateTempCommentId();
+      setTempCommentId(newTempId);
+      if (shareLink?.file_id) {
+        localStorage.setItem(`tempCommentId:${shareLink.file_id}`, newTempId);
+      }
+      console.log('[ShareView] P4: Generated tempCommentId before paint:', newTempId.substring(0, 12));
     }
 
     // 編集セッションか新規セッションかを判定
@@ -1184,6 +1194,7 @@ function ShareViewContent() {
 
     // 別のコメントをクリック → 選択のみ（編集には入らない）
     setCurrentPage(comment.page_no);
+    // ★★★ P2: activeCommentIdは維持（paintContextId null防止でちらつき根絶）★★★
     setActiveCommentId(comment.id);
     setPaintSessionCommentId(null);
     setIsDockOpen(true);
@@ -1192,8 +1203,9 @@ function ShareViewContent() {
     setComposerMode('view');
     setComposerTargetCommentId(null);
     setComposerText('');
-    setDraftShapes([]);
-    draftShapesRef.current = [];
+    // ★★★ P2: draftShapesはクリアしない（view時も下書き表示するため保持）★★★
+    // setDraftShapes([]);
+    // draftShapesRef.current = [];
     
     // ★★★ P1: 前のedit/new draftkeyをクリア ★★★
     hydratedKeyRef.current = null;
@@ -1266,8 +1278,8 @@ function ShareViewContent() {
     setComposerTargetCommentId(null);
     setComposerParentCommentId(null);
     
-    // ★★★ CRITICAL: activeCommentIdをnullにして描画表示を消す ★★★
-    setActiveCommentId(null);
+    // ★★★ P2: activeCommentIdは維持（null化でちらつき防止）★★★
+    // setActiveCommentId(null); // 削除：paintContextId null 化を防止
     
     // ペイント関連
     setPaintMode(false);
@@ -1495,8 +1507,18 @@ function ShareViewContent() {
     });
   }, [paintContextId, shouldShowDraft, storageDraftReady, composerMode, activeCommentId, tempCommentId]);
 
-  // ★★★ CRITICAL: canvasContextKey（mode/scope含めて完全分離、Map reset確実化）★★★
+  // ★★★ P1: canvasContextKey（再マウント用、paintContextId除外でちらつき防止）★★★
   const canvasContextKey = React.useMemo(() => {
+    const fileId = shareLink?.file_id || 'no-file';
+    const page = currentPage;
+    const mode = composerMode || 'view';
+    const scope = draftScope || 'none';
+    const showDraft = shouldShowDraft ? 'draft' : 'nodraft';
+    return `${fileId}:${page}:${mode}:${scope}:${showDraft}`;
+  }, [shareLink?.file_id, currentPage, composerMode, draftScope, shouldShowDraft]);
+  
+  // ★★★ P1: ViewerCanvas内部リセット用キー（paintContextId含む、props渡し）★★★
+  const canvasInternalResetKey = React.useMemo(() => {
     const fileId = shareLink?.file_id || 'no-file';
     if (showAllPaint) return `${fileId}:all`;
     const mode = composerMode || 'view';
@@ -1854,7 +1876,7 @@ function ShareViewContent() {
                 existingShapes={shapesForCanvas}
                 comments={comments.filter(c => c.page_no === currentPage)}
                 activeCommentId={activeCommentId}
-                canvasContextKey={canvasContextKey}
+                canvasContextKey={canvasInternalResetKey}
                 onCommentClick={(id) => {
                   const comment = comments.find(c => c.id === id);
                   if (!comment) return;
@@ -2065,9 +2087,16 @@ function ShareViewContent() {
                         <span>
                           {composerMode === 'edit' ? '保存して更新' : 'コメントを入力してください。'}
                         </span>
-                        {draftShapes.length > 0 && (
-                          <Badge variant="secondary">{draftShapes.length}個の描画</Badge>
-                        )}
+                        {/* ★★★ P5: 下書きバッジ（cache含む正確なカウント）★★★ */}
+                        {(() => {
+                          const cacheCount = targetKey ? (draftCacheRef.current.get(targetKey)?.length || 0) : 0;
+                          const displayCount = Math.max(draftShapes.length, cacheCount);
+                          return displayCount > 0 ? (
+                            <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                              📝 下書き {displayCount}個
+                            </Badge>
+                          ) : null;
+                        })()}
                       </div>
                     ) : (
                       <div className="opacity-0 pointer-events-none">placeholder</div>
@@ -2130,6 +2159,11 @@ function ShareViewContent() {
                                   const replies = repliesByParent.get(comment.id) || [];
                                   const commentAttachments = attachmentsByComment.get(comment.id) || [];
                                   const isThreadOpen = replyingThreadId === comment.id;
+                                  
+                                  // ★★★ P5: 下書きカウント（cache含む）★★★
+                                  const editDraftKey = shareLink?.file_id ? getDraftKey(shareLink.file_id, comment.id, null, 'edit') : null;
+                                  const hasDraft = editDraftKey && draftCacheRef.current.has(editDraftKey);
+                                  const draftCount = hasDraft ? (draftCacheRef.current.get(editDraftKey)?.length || 0) : 0;
 
                   return (
                     <div key={comment.id} className="space-y-2">
@@ -2161,6 +2195,12 @@ function ShareViewContent() {
                                   <Badge variant="outline" className="text-xs flex items-center gap-1">
                                     <Paintbrush className="w-3 h-3" />
                                     {shapesCount}
+                                  </Badge>
+                                )}
+                                {/* ★★★ P5: 下書き表示（ドット）★★★ */}
+                                {draftCount > 0 && (
+                                  <Badge variant="outline" className="text-xs flex items-center gap-1 bg-blue-50 text-blue-700 border-blue-300">
+                                    📝 下書き {draftCount}
                                   </Badge>
                                 )}
                                 {isEditing && (
