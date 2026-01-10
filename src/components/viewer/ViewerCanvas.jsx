@@ -2374,12 +2374,11 @@ const ViewerCanvas = forwardRef(({
             
             {/* ★★★ CRITICAL: 描画中のcurrentShapeは最後に独立して描画 ★★★ */}
             {/* ★★★ FIX: currentShapeのcomment_idがactiveCommentIdと一致する場合のみ描画 ★★★ */}
-            {currentShape && (
-              // comment_id未設定（新規描画中）またはactiveCommentIdと一致する場合のみ描画
+            {currentShape && 
               (currentShape.comment_id == null || 
                String(currentShape.comment_id) === String(activeCommentId) ||
-               String(currentShape.comment_id) === String(draftCommentIdRef.current))
-            ) && renderShape(currentShape, false)}
+               String(currentShape.comment_id) === String(draftCommentIdRef.current)) && 
+              renderShape(currentShape, false)}
             
             <Transformer ref={transformerRef} />
           </Group>
