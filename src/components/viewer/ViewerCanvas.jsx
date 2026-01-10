@@ -2302,8 +2302,58 @@ const ViewerCanvas = forwardRef(({
     );
   }
   
+  // ★★★ DEBUG HUD: 画面左上に常時表示 ★★★
+  const debugHudData = useMemo(() => {
+    const uniqueCids = [...new Set(renderedShapes.map(s => shapeCommentId(s)).filter(Boolean))].slice(0, 5);
+    return {
+      activeCommentId: String(activeCommentId ?? 'null'),
+      effectiveActiveId: String(effectiveActiveId ?? 'null'),
+      draftCommentId: String(draftCommentIdRef.current ?? 'null'),
+      renderedShapesLength: renderedShapes.length,
+      uniqueCommentIds: uniqueCids.map(id => String(id).substring(0, 12)),
+    };
+  }, [activeCommentId, effectiveActiveId, renderedShapes]);
+
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative', overflow: 'auto', background: '#e0e0e0' }}>
+      {/* ★★★ DEBUG HUD: 画面左上に常時表示 ★★★ */}
+      <div style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        zIndex: 9999,
+        background: 'rgba(0, 0, 0, 0.85)',
+        color: '#0f0',
+        padding: '8px',
+        fontSize: '11px',
+        fontFamily: 'monospace',
+        lineHeight: '1.4',
+        maxWidth: '400px',
+        maxHeight: '40vh',
+        overflow: 'auto',
+        borderBottomRightRadius: '4px',
+      }}>
+        <div style={{ color: '#ff0', fontWeight: 'bold', marginBottom: '4px' }}>🎯 ViewerCanvas State</div>
+        <div>activeCommentId: <span style={{ color: '#0ff' }}>{debugHudData.activeCommentId}</span></div>
+        <div>effectiveActiveId: <span style={{ color: '#0ff' }}>{debugHudData.effectiveActiveId}</span></div>
+        <div>draftCommentId: <span style={{ color: '#0ff' }}>{debugHudData.draftCommentId}</span></div>
+        <div>renderedShapes.length: <span style={{ color: '#ff0' }}>{debugHudData.renderedShapesLength}</span></div>
+        <div>uniqueCommentIds: <span style={{ color: '#f0f' }}>{debugHudData.uniqueCommentIds.join(', ') || '(none)'}</span></div>
+        
+        {debugHudLogs.length > 0 && (
+          <>
+            <div style={{ borderTop: '1px solid #333', marginTop: '6px', paddingTop: '6px', color: '#ff0' }}>
+              Recent Events:
+            </div>
+            {debugHudLogs.map((log, i) => (
+              <div key={i} style={{ fontSize: '9px', marginTop: '2px' }}>
+                {log.event}: targetId={log.targetId.substring(0, 12)} tool={log.tool}
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+
       {/* テキスト入力エディタ */}
       {textEditor.visible && (
         <div
