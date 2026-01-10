@@ -823,28 +823,38 @@ function ShareViewContent() {
     enterEdit(comment);
   };
 
-  const resetEditorSession = () => {
+  // ★★★ CRITICAL: 編集モード解除の統一関数 ★★★
+  const exitEditMode = () => {
+    // ViewerCanvasの描画をクリア
+    viewerCanvasRef.current?.afterSubmitClear();
     viewerCanvasRef.current?.clear();
-    setPaintMode(false);
-    setTool('select'); // CRITICAL: ツールもリセット
-    setIsDockOpen(false);
-    setPaintSessionCommentId(null);
-
-    // 編集解除
+    
+    // 編集/返信モード解除
     setComposerMode('new');
     setComposerTargetCommentId(null);
     setComposerParentCommentId(null);
-
-    // 選択解除
+    
+    // ★★★ CRITICAL: activeCommentIdをnullにして描画表示を消す ★★★
     setActiveCommentId(null);
-
-    // draftクリア
+    
+    // ペイント関連
+    setPaintMode(false);
+    setTool('select');
+    setPaintSessionCommentId(null);
+    
+    // draft/描画一時stateクリア
     setDraftShapes([]);
     draftShapesRef.current = [];
+    
+    // UI状態
     setComposerText('');
     setPendingFiles([]);
     setReplyingThreadId(null);
+    setIsDockOpen(false);
   };
+
+  // 後方互換用エイリアス
+  const resetEditorSession = exitEditMode;
 
   const handleCancelEdit = () => {
     // 編集中のコメントを取得して本文が変更されているか確認
@@ -855,13 +865,8 @@ function ShareViewContent() {
       return;
     }
 
-    // 編集モードのみ終了（選択は維持）
-    setComposerMode('new');
-    setComposerTargetCommentId(null);
-    setComposerText('');
-    setPendingFiles([]);
-    setPaintMode(false);
-    setPaintSessionCommentId(null);
+    // ★★★ CRITICAL: 統一関数を呼ぶ ★★★
+    exitEditMode();
   };
 
   const handleStartReply = (parentComment) => {
