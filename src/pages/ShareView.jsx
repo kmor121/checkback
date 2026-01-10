@@ -417,33 +417,18 @@ function ShareViewContent() {
       setPaintSessionCommentId(composerTargetCommentId);
       setActiveCommentId(composerTargetCommentId);
       
-      // ★★★ 既存コメントの下書きを復元 ★★★
-      const restoredShapes = restoreDraft(composerTargetCommentId, null);
-      if (restoredShapes.length > 0) {
-        draftShapesRef.current = restoredShapes;
-        setDraftShapes(restoredShapes);
-        showToast(`${restoredShapes.length}個の下書きを復元しました`, 'info');
-      }
+      // ★★★ 下書き復元はtargetKey変更時のuseEffectで自動実行される ★★★
+      // （composerMode='edit' & composerTargetCommentId設定 → targetKey変更 → 自動復元）
     } else {
       // 新規作成: 既存コメント描画は非表示・編集不可
       setActiveCommentId(null);
       setPaintSessionCommentId(null);
       
-      // ★★★ 新規コメント用の仮IDを生成し、下書きを復元 ★★★
-      let currentTempId = tempCommentId;
-      if (!currentTempId) {
-        currentTempId = generateTempCommentId();
-        setTempCommentId(currentTempId);
-      }
-      
-      const restoredShapes = restoreDraft(null, currentTempId);
-      if (restoredShapes.length > 0) {
-        draftShapesRef.current = restoredShapes;
-        setDraftShapes(restoredShapes);
-        showToast(`${restoredShapes.length}個の下書きを復元しました`, 'info');
-      } else {
-        setDraftShapes([]);
-        draftShapesRef.current = [];
+      // ★★★ 新規コメント用の仮IDを生成（下書き復元はtargetKey変更時に自動実行）★★★
+      if (!tempCommentId) {
+        const newTempId = generateTempCommentId();
+        setTempCommentId(newTempId);
+        console.log('[ShareView] Generated new tempCommentId:', newTempId);
       }
       
       setComposerMode('new');
