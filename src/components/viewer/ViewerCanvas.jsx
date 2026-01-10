@@ -299,8 +299,8 @@ const ViewerCanvas = forwardRef(({
     }
   }, [fileUrl]);
 
-  // CRITICAL: activeCommentId変化時のリセット
-  // ★★★ FIX: コメント切替時は必ずcurrentShape/draftをクリア（前コメントの描画残り防止）★★★
+  // CRITICAL: activeCommentId変化時の完全リセット
+  // ★★★ FIX: コメント切替時は全ての編集状態を完全クリア（前コメントの描画残り防止）★★★
   useEffect(() => {
     const prev = prevActiveCommentIdRef.current;
     prevActiveCommentIdRef.current = activeCommentId;
@@ -308,20 +308,25 @@ const ViewerCanvas = forwardRef(({
     // ★ 同じIDへの変更は無視（型も統一して比較）
     if (String(prev ?? '') === String(activeCommentId ?? '')) return;
 
-    if (DEBUG_MODE) {
-      console.log('[ViewerCanvas] activeCommentId changed, clearing draft', { prev, next: activeCommentId });
-    }
-
-    // ★★★ CRITICAL: コメント切替時は必ずcurrentShapeをクリア ★★★
-    // これにより前コメントの描画中データが残らない
+    // ★★★ CRITICAL: コメント切替時は全ての編集状態を完全リセット ★★★
+    // currentShape（描画中オブジェクト）
     setCurrentShape(null);
-    currentShapeRef2.current = null; // refも同期
+    currentShapeRef2.current = null;
+    
+    // isDrawing / tool状態に紐づく一時フラグ
     setIsDrawing(false);
-    isDrawingRef2.current = false; // refも同期
+    isDrawingRef2.current = false;
+    
+    // hidePaintUntilSelect
+    setHidePaintUntilSelect(false);
+    
+    // 選択中shapeId
     setSelectedId(null);
+    
+    // テキストエディタ
     setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
 
-    // ★★★ CRITICAL: draftCommentIdRefもクリア（新規描画用の仮IDをリセット）★★★
+    // ★★★ CRITICAL: draftCommentIdRefをクリア（前コメントのドラフト参照をリセット）★★★
     draftCommentIdRef.current = null;
     
     // ★★★ CRITICAL: drawViewRefもクリア（座標系の混乱防止）★★★
