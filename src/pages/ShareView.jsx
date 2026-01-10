@@ -1342,6 +1342,13 @@ function ShareViewContent() {
     });
   }, [paintContextId, composerMode, composerTargetCommentId, activeCommentId, tempCommentId, renderTargetCommentId]);
 
+  // ★★★ CRITICAL: 下書き表示判定（temp_は常に、既存は編集モードのみ）★★★
+  const showDraftShapes = React.useMemo(() => {
+    if (!paintContextId) return false;
+    if (isTempCid(paintContextId)) return true;        // 新規は常に表示
+    return composerMode === 'edit';                    // 既存は編集モードだけ表示
+  }, [paintContextId, composerMode]);
+
   // ★★★ CRITICAL: canvasContextKey（コメント切替検知用）★★★
   const canvasContextKey = React.useMemo(() => {
     const fileId = shareLink?.file_id || 'no-file';
@@ -1369,7 +1376,8 @@ function ShareViewContent() {
     if (showAllPaint) {
       const draftIds = new Set(draftShapesNormalized.map(s => s.id));
       const dbShapesWithoutDuplicates = allShapesNormalized.filter(s => !draftIds.has(s.id));
-      return [...dbShapesWithoutDuplicates, ...draftShapesNormalized];
+      const draftToShow = showDraftShapes ? draftShapesNormalized : [];
+      return [...dbShapesWithoutDuplicates, ...draftToShow];
     }
     
     // ★★★ CRITICAL FIX: renderTargetCommentId でフィルタ（resolveCommentId使用）★★★
@@ -1381,20 +1389,23 @@ function ShareViewContent() {
       ? draftShapesNormalized.filter(s => resolveCommentId(s) === renderTargetCommentId)
       : draftShapesNormalized;
     
-    // ★★★ CRITICAL: DB shapes + draftShapes を合流（draftが優先） ★★★
+    // ★★★ CRITICAL: draft表示判定で混ぜる（temp_は常に、既存は編集モードのみ）★★★
     const draftIds = new Set(draftShapesFiltered.map(s => s.id));
     const dbShapesWithoutDuplicates = dbShapesFiltered.filter(s => !draftIds.has(s.id));
-    const merged = [...dbShapesWithoutDuplicates, ...draftShapesFiltered];
+    const draftToMerge = showDraftShapes ? draftShapesFiltered : [];
+    const merged = [...dbShapesWithoutDuplicates, ...draftToMerge];
     
     console.log('[ShareView] shapesForCanvas result:', {
       renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
+      composerMode,
+      showDraftShapes,
       dbFilteredCount: dbShapesFiltered.length,
-      draftFilteredCount: draftShapesFiltered.length,
+      draftFilteredCount: showDraftShapes ? draftShapesFiltered.length : 0,
       mergedTotal: merged.length,
     });
     
     return merged;
-  }, [allShapes, showAllPaint, renderTargetCommentId, draftShapes, tempCommentId]);
+  }, [allShapes, showAllPaint, renderTargetCommentId, draftShapes, tempCommentId, showDraftShapes, composerMode]);
 
   // 親コメントと返信を分離（条件付きreturnの前に配置）
   const filteredComments = React.useMemo(() => {
