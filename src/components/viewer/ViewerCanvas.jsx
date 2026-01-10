@@ -204,9 +204,11 @@ const ViewerCanvas = forwardRef(({
   const isEditableShape2 = (shape) =>
     canMutate && isSelectableShape(shape);
   
-  // CRITICAL: 描画に使うcomment_idを取得（仮IDまたはactiveCommentId）
+  // CRITICAL: 描画に使うcomment_idを取得（activeCommentIdまたは仮ID）
+  // ★★★ CRITICAL: effectiveActiveIdを優先（編集/選択/セッションで統一）★★★
   const getCommentIdForDrawing = () => {
-    if (activeCommentId != null) return activeCommentId;
+    // ★ effectiveActiveId（親から渡されたactiveCommentId）を優先
+    if (effectiveActiveId != null) return effectiveActiveId;
     // 仮ID生成（onBeginPaintは非同期で投げるだけ）
     if (!draftCommentIdRef.current) {
       draftCommentIdRef.current = generateUUID();
@@ -921,8 +923,9 @@ const ViewerCanvas = forwardRef(({
         console.log('[ViewerCanvas] drawViewRef saved:', drawViewRef.current);
       }
 
-      // CRITICAL: comment_idを取得（仮IDまたはactiveCommentId）
+      // CRITICAL: comment_idを取得（effectiveActiveIdまたは仮ID）
       const commentId = getCommentIdForDrawing();
+      if (DEBUG_MODE) console.log('[ViewerCanvas] Drawing with commentId:', commentId);
 
       // CRITICAL: clientShapeId は1回だけ発行して固定（移動・編集で絶対に再生成しない）
       const newShape = {
@@ -1203,8 +1206,8 @@ const ViewerCanvas = forwardRef(({
         }
       }
 
-      // 正規化データを作成（描画開始時のcomment_idを優先）
-      const resolvedCommentId = shape.comment_id ?? activeCommentId ?? draftCommentIdRef.current;
+      // 正規化データを作成（描画開始時のcomment_idを優先、effectiveActiveIdを使用）
+      const resolvedCommentId = shape.comment_id ?? effectiveActiveId ?? draftCommentIdRef.current;
       const normalizedShape = {
         id: shape.id,
         comment_id: resolvedCommentId,
