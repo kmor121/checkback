@@ -122,15 +122,17 @@ const ViewerCanvas = forwardRef(({
   // 後方互換のためのダミー（実際はMapを参照）
   const shapes = useMemo(() => getAllShapes(), [shapesVersion]);
   
-  // setShapes互換関数（Mapを更新してbump）
+  // setShapes互換関数（★★★ CRITICAL: 必ず新しいMapを作成して不変更新 ★★★）
   const setShapes = (updater) => {
+    let next;
     if (typeof updater === 'function') {
       const current = getAllShapes();
-      const next = updater(current);
-      shapesMapRef.current = new Map(next.map(s => [s.id, s]));
+      next = updater(current);
     } else {
-      shapesMapRef.current = new Map((updater ?? []).map(s => [s.id, s]));
+      next = updater ?? [];
     }
+    // ★★★ CRITICAL: 新しいMap参照を作成（不変更新）★★★
+    shapesMapRef.current = new Map(next.map(s => [s.id, s]));
     bump();
   };
   
