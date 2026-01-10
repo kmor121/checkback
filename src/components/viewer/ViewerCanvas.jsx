@@ -232,11 +232,17 @@ const ViewerCanvas = forwardRef(({
     // ★★★ CRITICAL: Map由来のshapes（shapesVersionで再計算トリガー）★★★
     const mapShapes = getAllShapes();
     
+    // ★★★ CRITICAL: renderTargetIdは effectiveActiveId を使う（activeCommentIdではなく）★★★
+    // effectiveActiveId = activeCommentId ?? draftCommentIdRef.current ?? null
+    // これにより編集モード/新規描画モードで統一される
+    const renderTargetId = effectiveActiveId ?? lastStableCommentIdRef.current ?? null;
+    
     console.log('[ViewerCanvas] renderedShapes calculation:', {
       hidePaintUntilSelect,
       showAllPaint,
       activeCommentId,
       effectiveActiveId,
+      renderTargetId,
       currentShapeId: currentShape?.id,
       draftCommentId: draftCommentIdRef.current,
       lastStableId: lastStableCommentIdRef.current,
@@ -244,9 +250,10 @@ const ViewerCanvas = forwardRef(({
       shapesVersion,
     });
 
-    // ★送信完了後は強制非表示
-    if (hidePaintUntilSelect && activeCommentId == null && !draftCommentIdRef.current) {
-      console.log('[ViewerCanvas] renderedShapes: hidden (hidePaintUntilSelect)');
+    // ★★★ CRITICAL FIX: hidePaintUntilSelect時は effectiveActiveId が無い時のみ非表示 ★★★
+    // effectiveActiveIdがあれば（編集モードや新規描画モード）描画を許可
+    if (hidePaintUntilSelect && effectiveActiveId == null) {
+      console.log('[ViewerCanvas] renderedShapes: hidden (hidePaintUntilSelect && no effectiveActiveId)');
       return [];
     }
 
@@ -261,10 +268,6 @@ const ViewerCanvas = forwardRef(({
     if (showAllPaint) {
       return sourceShapes;
     }
-
-    // renderTargetId: activeCommentId → draftCommentIdRef → lastStableCommentIdRef の優先順
-    const renderTargetId =
-      activeCommentId ?? draftCommentIdRef.current ?? lastStableCommentIdRef.current ?? null;
 
     console.log('[ViewerCanvas] renderTargetId:', renderTargetId, 'sourceShapes before filter:', sourceShapes.length);
 
@@ -281,7 +284,7 @@ const ViewerCanvas = forwardRef(({
     console.log('[ViewerCanvas] renderedShapes filtered:', filtered.length, 'for targetId:', renderTargetId);
 
     return filtered;
-  }, [shapesVersion, showAllPaint, activeCommentId, hidePaintUntilSelect, currentShape]);
+  }, [shapesVersion, showAllPaint, effectiveActiveId, hidePaintUntilSelect, currentShape]);
   
   // ★ CRITICAL: activeShapes を existingShapes から抽出（comment_id統一判定）
   const activeShapes = useMemo(() => {
