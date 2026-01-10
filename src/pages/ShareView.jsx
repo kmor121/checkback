@@ -1156,6 +1156,7 @@ function ShareViewContent() {
     : (paintSessionCommentId ? String(paintSessionCommentId) : null);
 
   // CRITICAL: 親側でフィルタリング（ViewerCanvasに渡すshapes）
+  // ★★★ P2: draftShapesを確実にCanvasに合流させる ★★★
   const shapesForCanvas = React.useMemo(() => {
     console.log('[ShareView] shapesForCanvas calculation:', {
       isEditMode,
@@ -1167,10 +1168,21 @@ function ShareViewContent() {
       draftShapesCount: draftShapes.length,
     });
     
-    if (showAllPaint) return [...allShapes, ...draftShapes];
-    if (!targetIdForShapes && draftShapes.length === 0) return [];
-    if (!targetIdForShapes) return draftShapes;
+    // ★★★ CRITICAL: showAllPaint時はDB shapes + draftShapes を全て表示 ★★★
+    if (showAllPaint) {
+      // draftShapesのIDと重複するDB shapesを除外（二重表示防止）
+      const draftIds = new Set(draftShapes.map(s => s.id));
+      const dbShapesWithoutDuplicates = allShapes.filter(s => !draftIds.has(s.id));
+      return [...dbShapesWithoutDuplicates, ...draftShapes];
+    }
     
+    // ★★★ CRITICAL: targetIdがなくてもdraftShapesがあれば表示（新規作成中）★★★
+    if (!targetIdForShapes) {
+      // draftShapesは常に表示
+      return draftShapes;
+    }
+    
+    // targetIdでDB shapesをフィルタ
     const filtered = allShapes.filter(s => {
       const shapeCommentId = s.comment_id;
       if (shapeCommentId == null || shapeCommentId === '') return false;
@@ -1183,15 +1195,20 @@ function ShareViewContent() {
       console.warn('[ShareView] WARNING: Multiple comment_ids in filtered shapes!', uniqueCommentIds);
     }
     
+    // ★★★ CRITICAL: DB shapes + draftShapes を合流（draftが優先、ID重複時はdraft側を使用）★★★
+    const draftIds = new Set(draftShapes.map(s => s.id));
+    const dbShapesWithoutDuplicates = filtered.filter(s => !draftIds.has(s.id));
+    const merged = [...dbShapesWithoutDuplicates, ...draftShapes];
+    
     console.log('[ShareView] shapesForCanvas result:', {
       targetId: targetIdForShapes,
-      filteredCount: filtered.length,
+      filteredDbCount: filtered.length,
       draftShapesCount: draftShapes.length,
-      total: filtered.length + draftShapes.length,
+      mergedTotal: merged.length,
       uniqueCommentIds,
     });
     
-    return [...filtered, ...draftShapes];
+    return merged;
   }, [allShapes, showAllPaint, targetIdForShapes, draftShapes, isEditMode]);
 
   // 親コメントと返信を分離（条件付きreturnの前に配置）
