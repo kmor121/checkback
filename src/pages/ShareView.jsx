@@ -625,6 +625,12 @@ function ShareViewContent() {
 
   // ★★★ CRITICAL: 描画確定時はDB保存せず、localStorageのみに保存 ★★★
   const handleSaveShape = async (shape, mode) => {
+    console.log('[ShareView] handleSaveShape start:', {
+      shapeId: shape.id?.substring(0, 8),
+      mode,
+      paintContextId: paintContextId?.substring(0, 12) || 'null',
+    });
+
     if (!isReady) {
       console.warn('[ShareView] Not ready yet, save aborted');
       return;
@@ -680,12 +686,12 @@ function ShareViewContent() {
       }
     });
     
-    console.log('[ShareView] Shape saved to draft (NOT DB):', {
-      shapeId: shapeWithId.id,
+    console.log('[ShareView] handleSaveShape end:', {
+      shapeId: shapeWithId.id?.substring(0, 8),
       mode,
-      targetKey,
-      effectiveDraftCommentId,
-      totalDraftCount: draftShapesRef.current.length,
+      targetKey: targetKey?.substring(0, 30) || 'null',
+      paintContextId: paintContextId?.substring(0, 12),
+      draftCount: draftShapesRef.current.length,
     });
     
     return { draft: true };

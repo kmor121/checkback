@@ -1907,40 +1907,43 @@ const ViewerCanvas = forwardRef(({
 
       // DB更新（upsertモード）
       if (onSaveShape) {
-      setIsSaving(prev => ({ ...prev, [shape.id]: true }));
-      setLastMutation('update-transform');
-      setLastPayload(JSON.stringify(updatedShape));
-      setLastSaveStatus('saving');
-      
-      try {
-        const result = await onSaveShape(updatedShape, 'upsert');
-        setLastSaveStatus('success');
-        setLastSuccessId(result?.dbId || updatedShape.id);
-        setLastError(null);
-        
-        // CRITICAL: dirty解除（★★★ 不変更新 ★★★）
-        const cur = shapesMapRef.current.get(updatedShape.id);
-        if (cur) {
-          const dirtyMap = new Map(shapesMapRef.current);
-          dirtyMap.set(updatedShape.id, { ...cur, dbId: result?.dbId, _dirty: false });
-          shapesMapRef.current = dirtyMap;
+        setIsSaving(prev => ({ ...prev, [shape.id]: true }));
+        setLastMutation('update-transform');
+        setLastPayload(JSON.stringify(updatedShape));
+        setLastSaveStatus('saving');
+        console.log('[ViewerCanvas] resize commit -> onSaveShape:', { shapeId: shape.id?.substring(0, 8) });
+
+        try {
+          const result = await onSaveShape(updatedShape, 'upsert');
+          setLastSaveStatus('success');
+          setLastSuccessId(result?.dbId || updatedShape.id);
+          setLastError(null);
+          console.log('[ViewerCanvas] onSaveShape success:', { shapeId: shape.id?.substring(0, 8) });
+
+          // CRITICAL: dirty解除（★★★ 不変更新 ★★★）
+          const cur = shapesMapRef.current.get(updatedShape.id);
+          if (cur) {
+            const dirtyMap = new Map(shapesMapRef.current);
+            dirtyMap.set(updatedShape.id, { ...cur, dbId: result?.dbId, _dirty: false });
+            shapesMapRef.current = dirtyMap;
+            bump();
+            onShapesChange?.(getAllShapes());
+          }
+        } catch (err) {
+          console.error('[ViewerCanvas] onSaveShape error:', err);
+          setLastSaveStatus('error');
+          setLastError(err.message);
+          // 失敗時はrevert（★★★ 不変更新 ★★★）
+          const revertMap = new Map(shapesMapRef.current);
+          revertMap.set(shape.id, shape);
+          shapesMapRef.current = revertMap;
           bump();
           onShapesChange?.(getAllShapes());
+          console.log('[ViewerCanvas] onSaveShape failed, reverted to original size:', { shapeId: shape.id?.substring(0, 8) });
+        } finally {
+          setIsSaving(prev => ({ ...prev, [shape.id]: false }));
         }
-      } catch (err) {
-        console.error('Update shape error:', err);
-        setLastSaveStatus('error');
-        setLastError(err.message);
-        // 失敗時はrevert（★★★ 不変更新 ★★★）
-        const revertMap = new Map(shapesMapRef.current);
-        revertMap.set(shape.id, shape);
-        shapesMapRef.current = revertMap;
-        bump();
-        onShapesChange?.(getAllShapes());
-      } finally {
-        setIsSaving(prev => ({ ...prev, [shape.id]: false }));
       }
-    }
   };
 
   // 選択図形にスタイルを適用（CRITICAL: ref基準＆number正規化）
