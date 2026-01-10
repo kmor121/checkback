@@ -251,14 +251,13 @@ const ViewerCanvas = forwardRef(({
   const isEditableShape2 = (shape) =>
     canMutate && isSelectableShape(shape);
   
-  // CRITICAL: 描画に使うcomment_idを取得（effectiveActiveIdまたは仮ID）
-  // ★★★ CRITICAL FIX: draftCommentId（props）を最優先、内部生成は完全禁止 ★★★
+  // CRITICAL: 描画に使うcomment_idを取得（paintContextId = draftCommentId が最優先）
+  // ★★★ CRITICAL: draftCommentId（= paintContextId）を最優先、UUID生成禁止 ★★★
   const getCommentIdForDrawing = () => {
-    // ★★★ CRITICAL: draftCommentId（props）を最優先、内部UUID生成を完全無効化 ★★★
-    if (draftCommentId != null) return String(draftCommentId);
-    if (effectiveActiveId != null) return String(effectiveActiveId);
-    // ★★★ CRITICAL: fallback禁止、draftCommentIdもeffectiveActiveIdも無い場合はエラー ★★★
-    throw new Error('[ViewerCanvas] getCommentIdForDrawing: no draftCommentId or effectiveActiveId available');
+    if (draftCommentId != null && draftCommentId !== '') return String(draftCommentId);
+    if (renderTargetCommentId != null && renderTargetCommentId !== '') return String(renderTargetCommentId);
+    if (activeCommentId != null && activeCommentId !== '') return String(activeCommentId);
+    throw new Error('[ViewerCanvas] getCommentIdForDrawing: no paintContextId (draftCommentId) available');
   };
   
   // ★ CRITICAL: Mapが唯一の真実（mergedShapesはMap由来）

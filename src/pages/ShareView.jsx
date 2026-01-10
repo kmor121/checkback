@@ -321,26 +321,33 @@ function ShareViewContent() {
     console.log('[ShareView] Saved tempCommentId to localStorage:', tempCommentId);
   }, [shareLink?.file_id, tempCommentId]);
 
-  // ★★★ CRITICAL: draftContextId（下書き紐づけ先、activeCommentId最優先）★★★
-  const draftContextId = React.useMemo(() => {
+  // ★★★ CRITICAL: paintContextId（描画の紐づけ先、composerTargetCommentId最優先）★★★
+  const paintContextId = React.useMemo(() => {
     if (showAllPaint) return null;
+    // ★ CRITICAL: edit モードのターゲットが最優先
+    if (composerMode === 'edit' && composerTargetCommentId) return String(composerTargetCommentId);
+    // コメント選択時
     if (activeCommentId != null && activeCommentId !== '') return String(activeCommentId);
+    // 新規下書き
     if (tempCommentId != null && tempCommentId !== '') return String(tempCommentId);
     return null;
-  }, [showAllPaint, activeCommentId, tempCommentId]);
+  }, [showAllPaint, composerMode, composerTargetCommentId, activeCommentId, tempCommentId]);
 
-  // ★★★ CRITICAL: targetKey（draftStorageKey）を draftContextId から生成 ★★★
+  // temp かどうかの判定
+  const isTempCid = (cid) => typeof cid === 'string' && cid.startsWith('temp_');
+
+  // ★★★ CRITICAL: renderTargetCommentId / draftContextId を paintContextId に統一 ★★★
+  const renderTargetCommentId = paintContextId;
+  const draftContextId = paintContextId;
+
+  // ★★★ CRITICAL: targetKey を paintContextId から生成（edit時にtempへ落ちないように）★★★
   const targetKey = React.useMemo(() => {
-    if (!shareLink?.file_id || !draftContextId) return null;
-    
-    // activeCommentIdがあればそれ、なければtempCommentId
-    if (activeCommentId != null && activeCommentId !== '') {
-      return getDraftKey(shareLink.file_id, draftContextId, null);
-    } else if (tempCommentId != null && tempCommentId !== '') {
-      return getDraftKey(shareLink.file_id, null, draftContextId);
+    if (!shareLink?.file_id || !paintContextId) return null;
+    if (isTempCid(paintContextId)) {
+      return getDraftKey(shareLink.file_id, null, paintContextId);
     }
-    return null;
-  }, [shareLink?.file_id, draftContextId, activeCommentId, tempCommentId]);
+    return getDraftKey(shareLink.file_id, paintContextId, null);
+  }, [shareLink?.file_id, paintContextId]);
 
   // ★★★ CRITICAL FIX: hydratedKeyRef を string ref に変更（targetKey追跡用）★★★
   const hydratedKeyRef = useRef(null);
@@ -607,9 +614,9 @@ function ShareViewContent() {
       return;
     }
     
-    // ★★★ CRITICAL: tempCommentIdが無ければ描画を保存しない（レース防止）★★★
-    if (!activeCommentId && !tempCommentId) {
-      console.error('[ShareView] handleSaveShape: tempCommentId not ready, aborting save');
+    // ★★★ CRITICAL: paintContextId が無ければ abort（UUID生成禁止）★★★
+    if (!paintContextId) {
+      console.error('[ShareView] handleSaveShape: paintContextId missing, abort');
       return;
     }
     
@@ -619,18 +626,11 @@ function ShareViewContent() {
       id: shape.id || crypto.randomUUID(),
     };
     
-    // ★★★ CRITICAL: comment_idは必ずtempCommentId（新規時）またはactiveCommentId（編集時）★★★
-    const effectiveDraftCommentId = activeCommentId || tempCommentId;
-    if (!effectiveDraftCommentId) {
-      console.error('[ShareView] handleSaveShape: no valid commentId available');
-      return;
-    }
-    
-    // ★★★ CRITICAL: comment_id を正規化して保存（キー揺れ防止）★★★
+    // ★★★ CRITICAL: comment_id を必ず paintContextId に固定（UUID禁止）★★★
     const shapeWithDirty = { 
       ...shapeWithId, 
-      comment_id: String(effectiveDraftCommentId),
-      commentId: String(effectiveDraftCommentId),  // 念のため両方
+      comment_id: String(paintContextId),
+      commentId: String(paintContextId),
       _dirty: true, 
       _localTs: Date.now() 
     };
@@ -639,9 +639,11 @@ function ShareViewContent() {
     console.log('[ShareView] handleSaveShape:', {
       shapeId: shapeWithId.id.substring(0, 8),
       mode,
-      tempCommentId: tempCommentId?.substring(0, 12) || 'null',
+      composerMode,
+      composerTargetCommentId: composerTargetCommentId?.substring(0, 12) || 'null',
       activeCommentId: activeCommentId?.substring(0, 12) || 'null',
-      effectiveDraftCommentId: effectiveDraftCommentId.substring(0, 12),
+      tempCommentId: tempCommentId?.substring(0, 12) || 'null',
+      paintContextId: paintContextId.substring(0, 12),
       'shape.comment_id': shapeWithDirty.comment_id.substring(0, 12),
     });
     
@@ -1306,25 +1308,17 @@ function ShareViewContent() {
     return result;
   }, [paintShapes, isReady]);
 
-  // ★★★ CRITICAL FIX: renderTargetCommentId の優先順位（選択中コメント最優先）★★★
-  const renderTargetCommentId = React.useMemo(() => {
-    if (showAllPaint) return null;
-    // ★ CRITICAL: 選択中コメント（activeCommentId）が最優先
-    if (activeCommentId != null && activeCommentId !== '') return String(activeCommentId);
-    // 選択中コメントが無い時のみ tempCommentId（新規下書き）
-    if (tempCommentId != null && tempCommentId !== '') return String(tempCommentId);
-    return null;
-  }, [showAllPaint, activeCommentId, tempCommentId]);
-
-  // ★★★ DEBUG: renderTargetCommentId 算出ログ ★★★
+  // ★★★ DEBUG: paintContextId 算出ログ ★★★
   useEffect(() => {
-    console.log('[ShareView] renderTargetCommentId resolved:', {
+    console.log('[ShareView] paintContextId resolved:', {
+      composerMode,
+      composerTargetCommentId: composerTargetCommentId?.substring(0, 12) || 'null',
       activeCommentId: activeCommentId?.substring(0, 12) || 'null',
       tempCommentId: tempCommentId?.substring(0, 12) || 'null',
+      paintContextId: paintContextId?.substring(0, 12) || 'null',
       renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
-      draftContextId: draftContextId?.substring(0, 12) || 'null',
     });
-  }, [renderTargetCommentId, activeCommentId, tempCommentId, draftContextId]);
+  }, [paintContextId, composerMode, composerTargetCommentId, activeCommentId, tempCommentId, renderTargetCommentId]);
 
   // ★★★ CRITICAL: canvasContextKey（コメント切替検知用）★★★
   const canvasContextKey = React.useMemo(() => {
@@ -1693,7 +1687,7 @@ function ShareViewContent() {
                   console.log('[ShareView] onShapesChange called:', {
                     updatedCount: updated.length,
                     targetKey,
-                    activeCommentId,
+                    paintContextId: paintContextId?.substring(0, 12) || 'null',
                   });
                   
                   // メモリに保存（useEffectでlocalStorage自動保存される）
@@ -1703,7 +1697,7 @@ function ShareViewContent() {
                 onBeginPaint={handleBeginPaint}
                 onSaveShape={handleSaveShape}
                 onDeleteShape={handleDeleteShape}
-                paintMode={isReady && paintMode && !!draftContextId}
+                paintMode={isReady && paintMode && !!paintContextId}
                 tool={tool}
                 onToolChange={setTool}
                 onStrokeColorChange={setStrokeColor}
@@ -1714,8 +1708,9 @@ function ShareViewContent() {
                 showBoundingBoxes={showBoundingBoxes}
                 showAllPaint={showAllPaint}
                 forceClearToken={forceClearToken}
-                draftCommentId={draftContextId}
+                draftCommentId={paintContextId}
                 renderTargetCommentId={renderTargetCommentId}
+                activeCommentId={composerMode === 'edit' ? String(composerTargetCommentId || '') : (activeCommentId ? String(activeCommentId) : null)}
                 debugInfo={{
                   isReady: isReady,
                   readyDetails: readyDetails,
