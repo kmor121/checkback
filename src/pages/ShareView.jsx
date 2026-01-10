@@ -1527,21 +1527,15 @@ function ShareViewContent() {
                 }}
                 onShapesChange={(updated) => {
                   // ★★★ CRITICAL: 全ての描画変更はdraftShapesに保存（DB保存は送信時のみ）★★★
-                  const targetCommentId = paintSessionCommentId;
-                  
                   console.log('[ShareView] onShapesChange called:', {
                     updatedCount: updated.length,
-                    targetCommentId,
-                    tempCommentId,
+                    targetKey,
                     activeCommentId,
                   });
                   
-                  // メモリに保存
+                  // メモリに保存（useEffectでlocalStorage自動保存される）
                   draftShapesRef.current = updated;
                   setDraftShapes(updated);
-                  
-                  // ★★★ localStorageに下書き保存（debounce付き）★★★
-                  saveDraftDebounced(updated, targetCommentId, tempCommentId);
                 }}
                 onBeginPaint={handleBeginPaint}
                 onSaveShape={handleSaveShape}
