@@ -841,6 +841,7 @@ function ShareViewContent() {
         
         // ★★★ 送信成功後にlocalStorageの下書きを削除（targetKeyを使用）★★★
         if (targetKey) {
+          console.log('[draft] delete reason: submit (new)');
           deleteDraft(targetKey);
           console.log('[ShareView] Deleted draft after submit:', targetKey);
         }
