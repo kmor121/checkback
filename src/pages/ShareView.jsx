@@ -593,17 +593,24 @@ function ShareViewContent() {
 
   // ★★★ CRITICAL: 全削除処理（下書きのみクリア、DBは送信時まで触らない）★★★
   const handleClearAll = async () => {
+    console.log('[draft] delete reason: clearAll');
     console.log('[handleClearAll] ========== CLEAR ALL START ==========');
     console.log('[handleClearAll] draftShapesCount:', draftShapesRef.current.length);
     console.log('[handleClearAll] targetKey:', targetKey);
     
     const draftCount = draftShapesRef.current.length;
     
-    // ★★★ 1. メモリから全削除（useEffectでlocalStorage自動削除される）★★★
+    // ★★★ 1. メモリから全削除 ★★★
     draftShapesRef.current = [];
     setDraftShapes([]);
     
-    // ★★★ 2. ViewerCanvasもクリア ★★★
+    // ★★★ 2. localStorageから明示的に削除（FIX: autosaveでは消えないので手動削除）★★★
+    if (targetKey) {
+      deleteDraft(targetKey);
+      console.log('[draft] deleteDraft called (clearAll):', targetKey);
+    }
+    
+    // ★★★ 3. ViewerCanvasもクリア ★★★
     viewerCanvasRef.current?.clear();
     
     console.log('[handleClearAll] ========== CLEAR ALL COMPLETE ==========');
