@@ -56,10 +56,30 @@ import {
 
 const DEBUG_MODE = import.meta.env.VITE_DEBUG === 'true';
 
-// ★★★ CRITICAL: commentId解決ユーティリティ（キー揺れ完全吸収）★★★
+// ★★★ CRITICAL: commentId解決ユーティリティ（キー揺れ完全吸収、入れ子対応）★★★
 const resolveCommentId = (s) => {
-  const v = s?.comment_id ?? s?.commentId ?? s?.commentID ?? s?.comment?.id;
+  const v = s?.comment_id ?? s?.commentId ?? s?.commentID ?? 
+            s?.comment?.id ?? 
+            s?.data?.comment_id ?? s?.data?.commentId ?? s?.data?.commentID ??
+            s?.shape?.comment_id ?? s?.shape?.commentId ?? s?.shape?.commentID;
   return v == null ? null : String(v);
+};
+
+// ★★★ CRITICAL: shape正規化（入れ子を平坦化、comment_id を canonical 化）★★★
+const normalizeShape = (s) => {
+  if (!s) return null;
+  
+  // 入れ子を平坦化
+  const base = s.data ? { ...s, ...s.data } : (s.shape ? { ...s, ...s.shape } : s);
+  
+  // comment_id を canonical 化
+  const commentId = resolveCommentId(base);
+  
+  return {
+    ...base,
+    comment_id: commentId,
+    id: base.id || base.client_shape_id || crypto.randomUUID(),
+  };
 };
 
 function ShareViewContent() {
@@ -325,10 +345,10 @@ function ShareViewContent() {
     const draft = loadDraft(targetKey);
     const shapes = draft?.shapes || [];
     
-    // ★★★ CRITICAL: 復元直後に comment_id を正規化（キー揺れ吸収）★★★
-    const normalizedShapes = shapes.map(s => ({
+    // ★★★ CRITICAL: 復元直後に normalizeShape で完全正規化（入れ子・キー揺れ吸収）★★★
+    const normalizedShapes = shapes.map(s => normalizeShape(s)).filter(Boolean).map(s => ({
       ...s,
-      comment_id: resolveCommentId(s) || String(tempCommentId || ''),
+      comment_id: s.comment_id || String(tempCommentId || ''),
     }));
     
     draftShapesRef.current = normalizedShapes;
@@ -1272,28 +1292,24 @@ function ShareViewContent() {
     return result;
   }, [paintShapes, isReady]);
 
-  // ★★★ CRITICAL FIX: isEditMode判定（編集 vs 新規を明確に分離）★★★
-  const isEditMode = composerMode === 'edit' && !!composerTargetCommentId;
-  
-  // ★★★ CRITICAL FIX: 新規時はactiveCommentIdを無視、tempCommentIdのみ使用 ★★★
+  // ★★★ CRITICAL FIX: renderTargetCommentId の優先順位修正（activeCommentId 最優先）★★★
   const renderTargetCommentId = React.useMemo(() => {
     if (showAllPaint) return null;
-    // 編集モード: activeCommentId 優先
-    if (isEditMode && activeCommentId) return String(activeCommentId);
-    // 新規モード: tempCommentId のみ（activeCommentId が残っていても無視）
-    if (!isEditMode && tempCommentId) return String(tempCommentId);
+    // ★ CRITICAL: activeCommentId が最優先（コメント選択時は必ず表示）
+    if (activeCommentId) return String(activeCommentId);
+    // activeCommentId が無い時のみ tempCommentId を使う（新規コメント下書き）
+    if (tempCommentId) return String(tempCommentId);
     return null;
-  }, [showAllPaint, isEditMode, activeCommentId, tempCommentId]);
+  }, [showAllPaint, activeCommentId, tempCommentId]);
 
   // ★★★ DEBUG: renderTargetCommentId 算出ログ ★★★
   useEffect(() => {
     console.log('[ShareView] renderTargetCommentId resolved:', {
-      isEditMode,
       activeCommentId: activeCommentId?.substring(0, 12) || 'null',
       tempCommentId: tempCommentId?.substring(0, 12) || 'null',
       renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
     });
-  }, [renderTargetCommentId, isEditMode, activeCommentId, tempCommentId]);
+  }, [renderTargetCommentId, activeCommentId, tempCommentId]);
 
   // CRITICAL: 親側でフィルタリング（ViewerCanvasに渡すshapes）
   // ★★★ CRITICAL FIX: resolveCommentId でキー揺れを完全吸収 ★★★
@@ -1301,7 +1317,6 @@ function ShareViewContent() {
     console.log('[ShareView] shapesForCanvas calculation:', {
       renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
       showAllPaint,
-      isEditMode,
       draftShapesCount: draftShapes.length,
       allShapesCount: allShapes.length,
     });
@@ -1335,7 +1350,7 @@ function ShareViewContent() {
     });
     
     return merged;
-  }, [allShapes, showAllPaint, renderTargetCommentId, isEditMode, draftShapes]);
+  }, [allShapes, showAllPaint, renderTargetCommentId, draftShapes]);
 
   // 親コメントと返信を分離（条件付きreturnの前に配置）
   const filteredComments = React.useMemo(() => {

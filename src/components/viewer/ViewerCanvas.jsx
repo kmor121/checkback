@@ -24,11 +24,27 @@ function normalizeFileUrl(url) {
   }
 }
 
-// ★★★ CRITICAL: commentId解決ユーティリティ（キー揺れ完全吸収）★★★
+// ★★★ CRITICAL: commentId解決ユーティリティ（キー揺れ完全吸収、入れ子対応）★★★
 const resolveCommentId = (s) => {
-  const v = s?.comment_id ?? s?.commentId ?? s?.commentID ?? s?.comment?.id;
+  const v = s?.comment_id ?? s?.commentId ?? s?.commentID ?? 
+            s?.comment?.id ?? 
+            s?.data?.comment_id ?? s?.data?.commentId ?? s?.data?.commentID ??
+            s?.shape?.comment_id ?? s?.shape?.commentId ?? s?.shape?.commentID;
   return v == null ? null : String(v);
 };
+
+// ★★★ CRITICAL: shape正規化（入れ子を平坦化、comment_id を canonical 化）★★★
+const normalizeShape = (s) => {
+  if (!s) return null;
+  const base = s.data ? { ...s, ...s.data } : (s.shape ? { ...s, ...s.shape } : s);
+  const commentId = resolveCommentId(base);
+  return {
+    ...base,
+    comment_id: commentId,
+    id: base.id || base.client_shape_id,
+  };
+};
+
 const shapeCommentId = resolveCommentId;  // 後方互換エイリアス
 const sameId = (a, b) => String(a ?? '') === String(b ?? '');
 
@@ -291,12 +307,14 @@ const ViewerCanvas = forwardRef(({
     // ★★★ DEBUG: 件数付きログ（原因特定用） ★★★
     const beforeCount = sourceShapes.length;
     const afterCount = filtered.length;
-    const sampleCids = [...new Set(filtered.map(s => resolveCommentId(s)).filter(Boolean))].slice(0, 3).map(id => id.substring(0, 8));
+    const sourceSampleCids = [...new Set(sourceShapes.map(s => resolveCommentId(s)).filter(Boolean))].slice(0, 5).map(id => id.substring(0, 12));
+    const afterSampleCids = [...new Set(filtered.map(s => resolveCommentId(s)).filter(Boolean))].slice(0, 3).map(id => id.substring(0, 12));
     console.log('[renderedShapes]', {
       targetId: targetId.substring(0, 12) || '(none)',
       source: beforeCount,
       after: afterCount,
-      samples: sampleCids.join(','),
+      sourceSamples: sourceSampleCids.join(','),
+      afterSamples: afterSampleCids.join(','),
     });
 
     return filtered;
@@ -497,18 +515,21 @@ const ViewerCanvas = forwardRef(({
     const newMap = new Map();
 
     for (const s of existingShapes) {
+      // ★★★ CRITICAL: normalizeShape で正規化してから取り込み ★★★
+      const normalized = normalizeShape(s);
+
       // comment_idが空のshapeは取り込まない
-      const cid = shapeCommentId(s);
-      if (cid == null || cid === '') {
+      const cid = resolveCommentId(normalized);
+      if (!normalized || !cid) {
         console.log('[ViewerCanvas] Skipping shape with empty comment_id:', s.id?.substring?.(0, 8));
         continue;
       }
 
       // dirtyなローカルshapeがあればそちらを優先（描画中の巻き戻り防止）
-      if (dirtyShapes.has(s.id)) {
-        newMap.set(s.id, dirtyShapes.get(s.id));
+      if (dirtyShapes.has(normalized.id)) {
+        newMap.set(normalized.id, dirtyShapes.get(normalized.id));
       } else {
-        newMap.set(s.id, s);
+        newMap.set(normalized.id, normalized);
       }
     }
 
