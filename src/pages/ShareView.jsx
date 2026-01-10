@@ -1567,6 +1567,17 @@ function ShareViewContent() {
                     return;
                   }
                   
+                  // ★★★ P2 FIX: 空配列が来てもdraftが残っていれば上書きしない ★★★
+                  const currentDraftCount = draftShapesRef.current.length;
+                  if (updated.length === 0 && currentDraftCount > 0) {
+                    console.log('[ShareView] onShapesChange IGNORED (empty array would overwrite draft):', {
+                      updatedCount: updated.length,
+                      currentDraftCount,
+                      targetKey,
+                    });
+                    return;
+                  }
+                  
                   console.log('[ShareView] onShapesChange called:', {
                     updatedCount: updated.length,
                     targetKey,
