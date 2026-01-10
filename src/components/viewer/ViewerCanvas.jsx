@@ -229,29 +229,16 @@ const ViewerCanvas = forwardRef(({
   // ★ CRITICAL: Mapが唯一の真実（mergedShapesはMap由来）
   const mergedShapes = useMemo(() => getAllShapes(), [shapesVersion]);
   
-  // CRITICAL: 実際に描画するshape配列（hidePaintUntilSelectで強制非表示）
-  // ★★★ ROOT FIX: fallback禁止、effectiveActiveIdのみ使用 ★★★
+  // CRITICAL: 実際に描画するshape配列
+  // ★★★ ROOT FIX: fallback完全禁止、effectiveActiveIdのみ使用 ★★★
   const renderedShapes = useMemo(() => {
     // ★★★ CRITICAL: Map由来のshapes（shapesVersionで再計算トリガー）★★★
     const mapShapes = getAllShapes();
     
-    // ★★★ CRITICAL FIX: fallback禁止 - effectiveActiveIdのみ使用（lastStableCommentIdRef使用禁止）★★★
+    // ★★★ CRITICAL FIX: fallback完全禁止 - effectiveActiveIdのみ使用 ★★★
     // effectiveActiveId = activeCommentId ?? draftCommentIdRef.current ?? null
     const targetId = effectiveActiveId != null ? String(effectiveActiveId) : '';
     
-    console.log('[ViewerCanvas] renderedShapes calculation:', {
-      hidePaintUntilSelect,
-      showAllPaint,
-      activeCommentId,
-      effectiveActiveId,
-      targetId,
-      currentShapeId: currentShape?.id,
-      draftCommentId: draftCommentIdRef.current,
-      lastStableId: lastStableCommentIdRef.current,
-      mapShapesCount: mapShapes.length,
-      shapesVersion,
-    });
-
     // ★★★ CRITICAL: showAllPaint時は全shape表示 ★★★
     if (showAllPaint) {
       let sourceShapes = mapShapes;
@@ -261,9 +248,8 @@ const ViewerCanvas = forwardRef(({
       return sourceShapes;
     }
 
-    // ★★★ CRITICAL FIX: targetIdが空の場合は空配列（fallback禁止）★★★
+    // ★★★ CRITICAL FIX: targetIdが空の場合は必ず空配列（fallback禁止）★★★
     if (targetId === '') {
-      console.log('[ViewerCanvas] renderedShapes: empty (no targetId, fallback disabled)');
       return [];
     }
 
@@ -275,8 +261,6 @@ const ViewerCanvas = forwardRef(({
       sourceShapes = sourceShapes.filter(s => s.id !== currentShape.id);
     }
 
-    console.log('[ViewerCanvas] targetId:', targetId, 'sourceShapes before filter:', sourceShapes.length);
-
     // ★★★ CRITICAL: targetIdに一致するshapeのみをフィルタ（commentId空のshapeは除外）★★★
     const filtered = sourceShapes.filter(s => {
       const cid = shapeCommentId(s);
@@ -284,8 +268,6 @@ const ViewerCanvas = forwardRef(({
       if (cid == null || cid === '') return false;
       return String(cid) === targetId;
     });
-
-    console.log('[ViewerCanvas] renderedShapes filtered:', filtered.length, 'for targetId:', targetId);
 
     return filtered;
   }, [shapesVersion, showAllPaint, effectiveActiveId, currentShape]);
