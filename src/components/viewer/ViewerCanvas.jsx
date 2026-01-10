@@ -1798,18 +1798,33 @@ const ViewerCanvas = forwardRef(({
     }
     
     if (shape.tool === 'pen') {
+      // ★★★ CRITICAL FIX: 描画中と確定済みで座標系を完全に分離 ★★★
+      // 描画中: shape.points（絶対座標）を使用、Group x/y = 0
+      // 確定済み: normalizedPointsから復元、Group x/y = dragX/dragY（ドラッグ時のみ）
+      
+      const isDrawingShape = !shape.normalizedPoints && shape.points;
       let points = [];
+      let groupX = 0;
+      let groupY = 0;
 
-      // 正規化座標を優先（必ずこれから復元）
-      if (shape.normalizedPoints) {
+      if (isDrawingShape) {
+        // ★ 描画中: 絶対座標pointsをそのまま使用（x=y=0固定、正規化しない）
+        points = shape.points;
+        groupX = 0;
+        groupY = 0;
+      } else if (shape.normalizedPoints) {
+        // ★ 確定済み: normalizedPointsから復元
         for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
           const { x, y } = denormalizeCoords(shape.normalizedPoints[i], shape.normalizedPoints[i + 1]);
           points.push(x, y);
         }
-      } else if (shape.points) {
-        // 描画中の一時データ（normalizedPointsがない場合のみ）
-        points = shape.points;
+        // ドラッグ中のオフセット（確定済みshapeのみ）
+        groupX = shape.dragX ?? 0;
+        groupY = shape.dragY ?? 0;
       }
+
+      // pointsが空の場合は描画しない
+      if (points.length < 4) return null;
 
       // bbox計算（透明当たり判定用）
       const xs = [], ys = [];
@@ -1827,19 +1842,19 @@ const ViewerCanvas = forwardRef(({
         <React.Fragment key={shape.id}>
           <Group
             ref={(node) => { if (node) shapeRefs.current[shape.id] = node; }}
-            x={shape.dragX ?? 0}
-            y={shape.dragY ?? 0}
-            listening={isSelectable}
-            draggable={isEditable}
-            onPointerDown={isSelectable ? (e) => {
+            x={groupX}
+            y={groupY}
+            listening={isSelectable && !isDrawingShape}
+            draggable={isEditable && !isDrawingShape}
+            onPointerDown={(isSelectable && !isDrawingShape) ? (e) => {
               e.cancelBubble = true;
               setSelectedId(shape.id);
               if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
               if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
             } : undefined}
-            onDragStart={isEditable ? (e) => handleDragStart(shape, e) : undefined}
-            onDragMove={isEditable ? (e) => handleDragMove(shape, e) : undefined}
-            onDragEnd={isEditable ? (e) => handleDragEnd(shape, e) : undefined}
+            onDragStart={(isEditable && !isDrawingShape) ? (e) => handleDragStart(shape, e) : undefined}
+            onDragMove={(isEditable && !isDrawingShape) ? (e) => handleDragMove(shape, e) : undefined}
+            onDragEnd={(isEditable && !isDrawingShape) ? (e) => handleDragEnd(shape, e) : undefined}
           >
             <Line 
               stroke={shape.stroke}
@@ -1851,15 +1866,17 @@ const ViewerCanvas = forwardRef(({
               fill={undefined}
               listening={false}
             />
-            <Rect 
-              x={bboxX} 
-              y={bboxY} 
-              width={bboxW} 
-              height={bboxH} 
-              fill="rgba(0,0,0,0.01)"
-              listening={isSelectable}
-            />
-            {isSelected && (
+            {!isDrawingShape && (
+              <Rect 
+                x={bboxX} 
+                y={bboxY} 
+                width={bboxW} 
+                height={bboxH} 
+                fill="rgba(0,0,0,0.01)"
+                listening={isSelectable}
+              />
+            )}
+            {isSelected && !isDrawingShape && (
               <>
                 <Rect 
                   x={bboxX} 
@@ -1871,7 +1888,6 @@ const ViewerCanvas = forwardRef(({
                   dash={[4, 4]}
                   listening={false}
                 />
-                {/* ラベル：枠内左上に配置（座標系統一） */}
                 <Rect
                   x={bboxX + 2}
                   y={bboxY + 2}
@@ -1933,18 +1949,29 @@ const ViewerCanvas = forwardRef(({
 
         return null;
       } else if (shape.tool === 'arrow') {
+        // ★★★ CRITICAL FIX: 描画中と確定済みで座標系を完全に分離 ★★★
+        const isDrawingShape = !shape.normalizedPoints && shape.points;
         let points = [];
+        let groupX = 0;
+        let groupY = 0;
 
-        // 正規化座標を優先（必ずこれから復元）
-        if (shape.normalizedPoints) {
+        if (isDrawingShape) {
+          // ★ 描画中: 絶対座標pointsをそのまま使用
+          points = shape.points;
+          groupX = 0;
+          groupY = 0;
+        } else if (shape.normalizedPoints) {
+          // ★ 確定済み: normalizedPointsから復元
           for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
             const { x, y } = denormalizeCoords(shape.normalizedPoints[i], shape.normalizedPoints[i + 1]);
             points.push(x, y);
           }
-        } else if (shape.points) {
-          // 描画中の一時データ（normalizedPointsがない場合のみ）
-          points = shape.points;
+          groupX = shape.dragX ?? 0;
+          groupY = shape.dragY ?? 0;
         }
+
+        // pointsが空の場合は描画しない
+        if (points.length < 4) return null;
 
         // bbox計算（透明当たり判定用）
         const xs = [], ys = [];
@@ -1952,7 +1979,7 @@ const ViewerCanvas = forwardRef(({
           xs.push(points[i]);
           ys.push(points[i + 1]);
         }
-        const pad = Math.max(15, (shape.strokeWidth || 2) * 4); // 矢印は先端も考慮
+        const pad = Math.max(15, (shape.strokeWidth || 2) * 4);
         const bboxX = Math.min(...xs) - pad;
         const bboxY = Math.min(...ys) - pad;
         const bboxW = Math.max(20, (Math.max(...xs) - Math.min(...xs)) + pad * 2);
@@ -1962,19 +1989,19 @@ const ViewerCanvas = forwardRef(({
           <React.Fragment key={shape.id}>
             <Group
               ref={(node) => { if (node) shapeRefs.current[shape.id] = node; }}
-              x={shape.dragX ?? 0}
-              y={shape.dragY ?? 0}
-              listening={isSelectable}
-              draggable={isEditable}
-              onPointerDown={isSelectable ? (e) => {
+              x={groupX}
+              y={groupY}
+              listening={isSelectable && !isDrawingShape}
+              draggable={isEditable && !isDrawingShape}
+              onPointerDown={(isSelectable && !isDrawingShape) ? (e) => {
                 e.cancelBubble = true;
                 setSelectedId(shape.id);
                 if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
                 if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
               } : undefined}
-              onDragStart={isEditable ? (e) => handleDragStart(shape, e) : undefined}
-              onDragMove={isEditable ? (e) => handleDragMove(shape, e) : undefined}
-              onDragEnd={isEditable ? (e) => handleDragEnd(shape, e) : undefined}
+              onDragStart={(isEditable && !isDrawingShape) ? (e) => handleDragStart(shape, e) : undefined}
+              onDragMove={(isEditable && !isDrawingShape) ? (e) => handleDragMove(shape, e) : undefined}
+              onDragEnd={(isEditable && !isDrawingShape) ? (e) => handleDragEnd(shape, e) : undefined}
             >
               <Arrow 
                 stroke={shape.stroke}
@@ -1984,14 +2011,16 @@ const ViewerCanvas = forwardRef(({
                 pointerWidth={10} 
                 listening={false}
               />
-              <Rect 
-                x={bboxX} 
-                y={bboxY} 
-                width={bboxW} 
-                height={bboxH} 
-                fill="rgba(0,0,0,0.01)"
-                listening={isSelectable}
-              />
+              {!isDrawingShape && (
+                <Rect 
+                  x={bboxX} 
+                  y={bboxY} 
+                  width={bboxW} 
+                  height={bboxH} 
+                  fill="rgba(0,0,0,0.01)"
+                  listening={isSelectable}
+                />
+              )}
             </Group>
             {boundingBox && <Rect x={boundingBox.x} y={boundingBox.y} width={boundingBox.width} height={boundingBox.height} stroke="rgba(255,0,0,0.3)" strokeWidth={1} dash={[5,5]} fill={undefined} listening={false} />}
           </React.Fragment>
