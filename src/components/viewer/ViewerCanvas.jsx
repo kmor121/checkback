@@ -102,7 +102,8 @@ const ViewerCanvas = forwardRef(({
   
   // 後方互換用（shapesRef.currentを参照している箇所向け）
   const shapesRef = { get current() { return getAllShapes(); } };
-  const drawViewRef = useRef(null); // CRITICAL: 描画中のview固定（ジャンプ防止）
+  // ★★★ CRITICAL: 描画開始時のview/scale情報を固定（ジャンプ防止の核心）★★★
+  const drawViewRef = useRef(null); // { viewX, viewY, contentScale } を描画開始時に保存
   const isDraggingRef = useRef(false); // CRITICAL: ドラッグ中フラグ（残像防止）
   const dragRafRef = useRef(null); // RAF間引き用
   const pendingDragRef = useRef(null); // ドラッグ座標バッファ
@@ -621,21 +622,33 @@ const ViewerCanvas = forwardRef(({
   
 
 
-  // CRITICAL: Konva transform API を使った座標変換（手計算を廃止）
+  // ★★★ CRITICAL: 座標変換（描画中は開始時のview/scaleを使用してジャンプ防止）★★★
   const stagePointToImagePoint = () => {
     const stage = stageRef.current;
-    const group = contentGroupRef.current;
-    if (!stage || !group) return null;
+    if (!stage) return null;
 
     const p = stage.getPointerPosition();
     if (!p) return null;
 
-    // group(=画像レイヤー)の絶対変換を逆変換して、ローカル座標に戻す
-    const tr = group.getAbsoluteTransform().copy();
-    tr.invert();
-    const local = tr.point(p);
+    // ★★★ CRITICAL: 描画中は開始時に保存したview/scaleを使う（ジャンプ防止の核心）★★★
+    let useViewX, useViewY, useScale;
+    if (isDrawingRef2.current && drawViewRef.current) {
+      // 描画中は固定値を使用
+      useViewX = drawViewRef.current.viewX;
+      useViewY = drawViewRef.current.viewY;
+      useScale = drawViewRef.current.contentScale;
+    } else {
+      // 非描画中は現在値を使用
+      useViewX = viewX;
+      useViewY = viewY;
+      useScale = contentScale;
+    }
 
-    return { x: local.x, y: local.y, stageX: p.x, stageY: p.y };
+    // 手計算で座標変換（Konva transform APIはGroup位置変更でジャンプの原因になる）
+    const imgX = (p.x - useViewX) / useScale;
+    const imgY = (p.y - useViewY) / useScale;
+
+    return { x: imgX, y: imgY, stageX: p.x, stageY: p.y };
   };
   
   // 正規化座標（0-1の範囲）
@@ -888,6 +901,12 @@ const ViewerCanvas = forwardRef(({
       }
       
       setIsDrawing(true);
+      
+      // ★★★ CRITICAL: 描画開始時のview/scaleを保存（ジャンプ防止の核心）★★★
+      drawViewRef.current = { viewX, viewY, contentScale };
+      if (DEBUG_MODE) {
+        console.log('[ViewerCanvas] drawViewRef saved:', drawViewRef.current);
+      }
 
       // CRITICAL: comment_idを取得（仮IDまたはactiveCommentId）
       const commentId = getCommentIdForDrawing();
@@ -1284,8 +1303,11 @@ const ViewerCanvas = forwardRef(({
         }
         }
 
-        // ★描画完了：view固定解除
+        // ★★★ CRITICAL: 描画完了時にview固定を解除 ★★★
         drawViewRef.current = null;
+        if (DEBUG_MODE) {
+          console.log('[ViewerCanvas] drawViewRef cleared (draw complete)');
+        }
         } catch (err) {
         console.error('PointerUp Error:', err);
         setError(`PointerUp Error: ${err.message}`);
