@@ -825,7 +825,19 @@ const ViewerCanvas = forwardRef(({
         textEditorVisible: textEditor.visible,
         activeCommentId,
         hidePaintUntilSelect,
+        currentShapeCommentId: currentShape?.comment_id,
       });
+    }
+
+    // ★★★ CRITICAL: 描画開始時に古いcurrentShapeを強制クリア（前コメントのdraft残り防止）★★★
+    // currentShapeのcomment_idがactiveCommentIdと異なる場合は古いdraftなので破棄
+    if (currentShape && activeCommentId != null) {
+      const currentCid = currentShape.comment_id;
+      if (currentCid != null && String(currentCid) !== String(activeCommentId)) {
+        if (DEBUG_MODE) console.log('[ViewerCanvas] Clearing stale currentShape from different comment', { currentCid, activeCommentId });
+        setCurrentShape(null);
+        setIsDrawing(false);
+      }
     }
 
     // ★ CRITICAL: 描画開始時にhidePaintUntilSelectを解除（新規描画を許可）
