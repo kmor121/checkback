@@ -1474,11 +1474,11 @@ const ViewerCanvas = forwardRef(({
       onShapesChange?.(getAllShapes()); // ★ 常に全量を渡す
       setCurrentShape(null);
 
-      // ★★★ CRITICAL: 描画直後に選択状態にする ★★★
+      // ★★★ C: 描画確定直後に新規作成したshapeを自動選択（ハンドル/枠が出る）★★★
       setSelectedId(normalizedShape.id);
-      // ★★★ P1 FIX: 新規コメント（activeCommentId=null）では自動select切替を禁止 ★★★
-      // 編集モード（activeCommentId有り）のときのみselectに戻す
-      if (onToolChange && activeCommentId != null) {
+
+      // ★★★ C: 自動でselectツールに切り替えて選択状態を維持 ★★★
+      if (onToolChange) {
         onToolChange('select');
       }
 
