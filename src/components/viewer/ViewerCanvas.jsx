@@ -338,6 +338,9 @@ const ViewerCanvas = forwardRef(({
     // ★★★ CRITICAL: drawViewRefもクリア（座標系の混乱防止）★★★
     drawViewRef.current = null;
 
+    // ★★★ CRITICAL: activeCommentId変更時に必ずbump()でrenderedShapesを再計算させる ★★★
+    bump();
+
     requestAnimationFrame(() => {
       if (transformerRef.current) {
         transformerRef.current.nodes([]);
