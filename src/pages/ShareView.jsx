@@ -517,25 +517,35 @@ function ShareViewContent() {
       return;
     }
     
-    const targetCommentId = paintSessionCommentId;
+    // ★★★ P2 FIX: 必ずユニークIDを確保（functional update で追記）★★★
+    const shapeWithId = {
+      ...shape,
+      id: shape.id || crypto.randomUUID(),
+    };
     
     // ★★★ CRITICAL: DB保存は行わない（送信時にまとめて保存）★★★
-    // メモリ（draftShapesRef）のみ更新
-    if (mode === 'create') {
-      draftShapesRef.current = [...draftShapesRef.current, shape];
-    } else {
-      draftShapesRef.current = draftShapesRef.current.map(s => (s.id === shape.id ? shape : s));
-    }
-    setDraftShapes(draftShapesRef.current);
-    
-    // ★★★ localStorageに下書き保存（debounce付き）★★★
-    saveDraftDebounced(draftShapesRef.current, targetCommentId, tempCommentId);
+    // P2 FIX: functional update で確実に追記（置き換えではなく追記）
+    setDraftShapes(prev => {
+      if (mode === 'create') {
+        // 同じIDが既に存在する場合は追記しない（重複防止）
+        if (prev.some(s => s.id === shapeWithId.id)) {
+          return prev;
+        }
+        const next = [...prev, shapeWithId];
+        draftShapesRef.current = next;
+        return next;
+      } else {
+        // update mode: 既存shapeを置き換え
+        const next = prev.map(s => (s.id === shapeWithId.id ? shapeWithId : s));
+        draftShapesRef.current = next;
+        return next;
+      }
+    });
     
     console.log('[ShareView] Shape saved to draft (NOT DB):', {
-      shapeId: shape.id,
+      shapeId: shapeWithId.id,
       mode,
-      targetCommentId,
-      tempCommentId,
+      targetKey,
       totalDraftCount: draftShapesRef.current.length,
     });
     
