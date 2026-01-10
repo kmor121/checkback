@@ -410,7 +410,7 @@ const ViewerCanvas = forwardRef(({
   }, [zoom]);
 
   // ★ CRITICAL: existingShapesはupsert入力として取り込む
-  // ★★★ CRITICAL FIX: activeCommentId変化時に強制的にMapを更新 ★★★
+  // ★★★ CRITICAL FIX: 不変更新（新しいMapを作成）して確実に再レンダリング ★★★
   useEffect(() => {
     if (!existingShapes) return;
     
@@ -426,25 +426,32 @@ const ViewerCanvas = forwardRef(({
     // （送信後のクリア時に既存描画が消えないように）
     if (existingShapes.length === 0) return;
     
+    // ★★★ CRITICAL: 新しいMapを作成（不変更新）★★★
+    const newMap = new Map(shapesMapRef.current);
     let changed = false;
+    
     for (const s of existingShapes) {
-      const prev = shapesMapRef.current.get(s.id);
+      // ★★★ CRITICAL: comment_idが空のshapeは取り込まない（意図せず表示されないように）★★★
+      const cid = shapeCommentId(s);
+      if (cid == null || cid === '') {
+        console.log('[ViewerCanvas] Skipping shape with empty comment_id:', s.id?.substring?.(0, 8));
+        continue;
+      }
+      
+      const prev = newMap.get(s.id);
       // dirtyローカルがあるならローカルを優先（巻き戻り防止）
       if (prev?._dirty) continue;
       
       // それ以外はserverを取り込む（upsert）
-      // ★★★ CRITICAL: スプレッドの順序を修正 - 新しいデータで上書き ★★★
       const next = prev ? { ...prev, ...s } : s;
-      shapesMapRef.current.set(s.id, next);
+      newMap.set(s.id, next);
       changed = true;
-      
-      console.log('[ViewerCanvas] Imported shape to Map:', {
-        id: s.id?.substring?.(0, 8),
-        comment_id: s.comment_id,
-      });
     }
+    
     if (changed) {
-      console.log('[ViewerCanvas] Map updated, new size:', shapesMapRef.current.size);
+      console.log('[ViewerCanvas] Map updated (immutable), new size:', newMap.size);
+      // ★★★ CRITICAL: 新しいMap参照を代入して確実に再レンダリング ★★★
+      shapesMapRef.current = newMap;
       bump();
     }
   }, [existingShapes, activeCommentId]);
