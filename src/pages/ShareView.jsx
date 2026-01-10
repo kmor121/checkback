@@ -323,13 +323,14 @@ function ShareViewContent() {
   }, [shareLink?.file_id, tempCommentId]);
 
   // ★★★ CRITICAL: paintContextId（唯一の真実、表示・描画・下書き全て統一）★★★
+  // ★★★ C: チラつき防止 - view/edit時はtempを使わない ★★★
   const paintContextId = React.useMemo(() => {
     if (showAllPaint) return null;
     
-    // ★ CRITICAL: 優先順位固定（edit > active > temp）
+    // ★ CRITICAL: 優先順位固定（edit > active > new時のみtemp）
     if (composerMode === 'edit' && composerTargetCommentId) return String(composerTargetCommentId);
     if (activeCommentId) return String(activeCommentId);
-    if (tempCommentId) return String(tempCommentId);
+    if (composerMode === 'new' && tempCommentId) return String(tempCommentId);
     
     return null;
   }, [showAllPaint, composerMode, composerTargetCommentId, activeCommentId, tempCommentId]);
@@ -652,7 +653,7 @@ function ShareViewContent() {
   }, [activeCommentId, token, shareLink?.file_id, currentPage]);
 
   // CRITICAL: comment_idで絞らず、全shapesをフェッチ（表示フィルタはクライアント側）
-  const { data: paintShapes = [], isFetching: shapesFetching } = useQuery({
+  const { data: paintShapes = [], isFetching: shapesFetching, isSuccess: shapesLoaded } = useQuery({
     queryKey: ['paintShapes', token, shareLink?.file_id, currentPage],
     queryFn: async () => {
       console.log('[ShareView] Fetching all shapes for page:', { 
@@ -678,20 +679,23 @@ function ShareViewContent() {
 
   // ★★★ CRITICAL: 描画確定時はDB保存せず、localStorageのみに保存 ★★★
   const handleSaveShape = async (shape, mode) => {
-    console.log('[ShareView] handleSaveShape start:', {
+    console.log('[DRAW_DEBUG] ShareView.handleSaveShape start:', {
       shapeId: shape.id?.substring(0, 8),
       mode,
       paintContextId: paintContextId?.substring(0, 12) || 'null',
+      targetKey: targetKey?.substring(0, 30) || 'null',
+      draftShapesLength: draftShapesRef.current.length,
+      cacheSize: draftCacheRef.current.size,
     });
 
     if (!isReady) {
-      console.warn('[ShareView] Not ready yet, save aborted');
+      console.warn('[DRAW_DEBUG] ShareView.handleSaveShape aborted: not ready');
       return;
     }
     
     // ★★★ CRITICAL: paintContextId が無ければ abort（UUID生成禁止）★★★
     if (!paintContextId) {
-      console.error('[ShareView] handleSaveShape: paintContextId missing, abort');
+      console.error('[DRAW_DEBUG] ShareView.handleSaveShape aborted: paintContextId missing');
       return;
     }
     
@@ -743,12 +747,14 @@ function ShareViewContent() {
       return next;
     });
     
-    console.log('[ShareView] handleSaveShape end:', {
+    console.log('[DRAW_DEBUG] ShareView.handleSaveShape end:', {
       shapeId: shapeWithId.id?.substring(0, 8),
       mode,
       targetKey: targetKey?.substring(0, 30) || 'null',
       paintContextId: paintContextId?.substring(0, 12),
       draftCount: draftShapesRef.current.length,
+      cacheSize: draftCacheRef.current.size,
+      cacheHasTargetKey: targetKey ? draftCacheRef.current.has(targetKey) : false,
     });
     
     return { draft: true };
@@ -1425,6 +1431,11 @@ function ShareViewContent() {
     return `${fileId}:paint:${paintContextId || 'none'}`;
   }, [shareLink?.file_id, showAllPaint, paintContextId]);
 
+  // ★★★ C: チラつき防止 - DB素材が読み込まれるまでドラフトを表示しない ★★★
+  const canvasReady = React.useMemo(() => {
+    return !!isReady && !!shapesLoaded;
+  }, [isReady, shapesLoaded]);
+
   // CRITICAL: 親側でフィルタリング（ViewerCanvasに渡すshapes）
   // ★★★ CRITICAL: viewContextId（表示）と paintContextId（描画）を分離 ★★★
   const shapesForCanvas = React.useMemo(() => {
@@ -1434,6 +1445,7 @@ function ShareViewContent() {
       shouldShowDraft,
       storageDraftReady,
       showAllPaint,
+      canvasReady,
       draftShapesCount: draftShapes.length,
       allShapesCount: allShapes.length,
     });
@@ -1449,8 +1461,8 @@ function ShareViewContent() {
       ? allShapesNormalized
       : (paintContextId ? allShapesNormalized.filter(s => resolveCommentId(s) === paintContextId) : []);
     
-    // ★★★ CRITICAL: draft側も paintContextId で統一（shouldShowDraft && storageDraftReady）★★★
-    const draftShapesForView = shouldShowDraft && storageDraftReady && paintContextId
+    // ★★★ C: チラつき防止 - canvasReady前はドラフト非表示 ★★★
+    const draftShapesForView = canvasReady && shouldShowDraft && storageDraftReady && paintContextId
       ? draftShapesNormalized.filter(s => resolveCommentId(s) === paintContextId)
       : [];
     
@@ -1464,13 +1476,15 @@ function ShareViewContent() {
       composerMode,
       shouldShowDraft,
       storageDraftReady,
+      canvasReady,
+      shapesLoaded,
       dbCount: dbShapesForView.length,
       draftCount: draftShapesForView.length,
       mergedTotal: merged.length,
     });
     
     return merged;
-  }, [allShapes, draftShapes, showAllPaint, paintContextId, shouldShowDraft, storageDraftReady, composerMode, tempCommentId]);
+  }, [allShapes, draftShapes, showAllPaint, paintContextId, shouldShowDraft, storageDraftReady, composerMode, tempCommentId, canvasReady]);
 
   // 親コメントと返信を分離（条件付きreturnの前に配置）
   const filteredComments = React.useMemo(() => {

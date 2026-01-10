@@ -1442,9 +1442,26 @@ const ViewerCanvas = forwardRef(({
 
   // PointerUp: 描画終了（CRITICAL: refベースで判定、propsに依存しない）
   const handlePointerUp = async () => {
+    // ★★★ DEBUG: pointerUp開始時の状態を必ず出力 ★★★
+    console.log('[DRAW_DEBUG] pointerUp start:', {
+      isDrawing: isDrawingRef2.current,
+      tool,
+      canDrawNew,
+      canCommitNew,
+      paintMode,
+      draftReady,
+      renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
+      draftCommentId: draftCommentId?.substring(0, 12) || 'null',
+      currentShapeExists: !!currentShapeRef2.current,
+      mapSize: shapesMapRef.current.size,
+    });
+
     // CRITICAL: refベースで判定（親stateが揺れても描画完了）
     const shape = currentShapeRef2.current;
-    if (!isDrawingRef2.current || !shape) return;
+    if (!isDrawingRef2.current || !shape) {
+      console.log('[DRAW_DEBUG] pointerUp aborted: isDrawing=false or no currentShape');
+      return;
+    }
     
     try {
       setLastEvent('up');
@@ -1554,18 +1571,26 @@ const ViewerCanvas = forwardRef(({
       delete normalizedShape.radius;
 
       // ★★★ CRITICAL: 新規shape確定は canCommitNew でOK（draftReady不要）★★★
+      console.log('[DRAW_DEBUG] commit check:', {
+        canCommitNew,
+        paintMode,
+        draftReady,
+        normalizedShapeCommentId: normalizedShape.comment_id?.substring(0, 12) || 'null',
+      });
+
       if (!canCommitNew) {
-        console.warn('[ViewerCanvas] COMMIT blocked: canCommitNew=false', { paintMode, draftReady });
+        console.warn('[DRAW_DEBUG] COMMIT blocked: canCommitNew=false', { paintMode, draftReady });
         setCurrentShape(null);
         setIsDrawing(false);
         drawViewRef.current = null;
         return;
       }
 
-      console.log('[ViewerCanvas] COMMIT new shape -> addToMap + onSaveShape:', {
+      console.log('[DRAW_DEBUG] COMMIT new shape -> addToMap + onSaveShape:', {
         shapeId: normalizedShape.id.substring(0, 8),
         canCommitNew,
         draftReady,
+        mapSizeBefore: shapesMapRef.current.size,
       });
 
       // Undo履歴に追加
@@ -1577,6 +1602,12 @@ const ViewerCanvas = forwardRef(({
       newMap.set(shapeWithDirty.id, shapeWithDirty);
       shapesMapRef.current = newMap;
       bump();
+      console.log('[DRAW_DEBUG] Map updated after commit:', {
+        shapeId: shapeWithDirty.id.substring(0, 8),
+        mapSizeAfter: shapesMapRef.current.size,
+        allShapesCount: getAllShapes().length,
+      });
+
       onShapesChange?.(getAllShapes()); // ★ 常に全量を渡す
       setCurrentShape(null);
 
@@ -1604,8 +1635,17 @@ const ViewerCanvas = forwardRef(({
         setLastMutation('create');
         setLastPayload(JSON.stringify(normalizedShape));
 
+        console.log('[DRAW_DEBUG] calling onSaveShape:', {
+          shapeId: normalizedShape.id.substring(0, 8),
+          mode: 'create',
+        });
+
         try {
           const result = await onSaveShape(normalizedShape, 'create');
+          console.log('[DRAW_DEBUG] onSaveShape success:', {
+            shapeId: normalizedShape.id.substring(0, 8),
+            result,
+          });
           setLastSaveStatus('success');
           setLastSuccessId(result?.dbId || normalizedShape.id);
           setLastError(null);
