@@ -471,12 +471,17 @@ const ViewerCanvas = forwardRef(({
     };
   }, []);
 
-  // 描画モード開始時は選択解除
+  // ★★★ CRITICAL: 描画ツール切替時のみ選択解除（select→pen等の時のみ）★★★
+  const prevToolRef = useRef(tool);
   useEffect(() => {
-    if (!isEditMode) {
+    const prevTool = prevToolRef.current;
+    prevToolRef.current = tool;
+    
+    // select以外のツールに切り替わった時のみ選択解除
+    if (prevTool === 'select' && tool !== 'select') {
       setSelectedId(null);
     }
-  }, [isEditMode]);
+  }, [tool]);
 
   // Transformer selection（編集モード時のみ、Rect/Circle/Textに対応）
   useEffect(() => {
@@ -1260,10 +1265,8 @@ const ViewerCanvas = forwardRef(({
       onShapesChange?.(getAllShapes()); // ★ 常に全量を渡す
       setCurrentShape(null);
 
-      // ✅ 描画直後に選択状態にする
+      // ★★★ CRITICAL: 描画直後に選択状態にする（ツールは戻さない）★★★
       setSelectedId(normalizedShape.id);
-      // ✅ ハンドル表示＆すぐ移動したいなら select に戻す
-      if (onToolChange) onToolChange('select');
 
       // DB保存前の検証（一時フィールドが残っていないことを確認）
       if (DEBUG_MODE) {

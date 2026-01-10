@@ -505,6 +505,15 @@ function FileViewContent() {
     
     // 別のコメントをクリック → 編集モードに切替
     console.log('[FileView] Selecting comment:', comment.id);
+    
+    // ★★★ CRITICAL: 前の描画セッションをクリア（他コメント編集の描画が残らないように）★★★
+    if (paintMode) {
+      viewerCanvasRef.current?.clear();
+      setPaintMode(false);
+      setTool('select');
+    }
+    setDraftShapes([]);
+    
     setActiveCommentId(comment.id);
     setPaintSessionCommentId(comment.id); // CRITICAL: paintSessionも設定して描画を表示
     setComposerMode('edit');
