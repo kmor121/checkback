@@ -953,9 +953,20 @@ const ViewerCanvas = forwardRef(({
         console.log('[ViewerCanvas] drawViewRef saved:', drawViewRef.current);
       }
 
-      // CRITICAL: comment_idを取得（effectiveActiveIdまたは仮ID）
+      // ★★★ CRITICAL: comment_idを取得（effectiveActiveIdのみ、fallback禁止）★★★
       const commentId = getCommentIdForDrawing();
-      if (DEBUG_MODE) console.log('[ViewerCanvas] Drawing with commentId:', commentId);
+
+      // ★★★ DEBUG HUD: 描画開始ログを追加 ★★★
+      const drawStartLog = {
+        timestamp: new Date().toISOString(),
+        event: 'DRAW_START',
+        targetId: effectiveActiveId != null ? String(effectiveActiveId) : '',
+        activeCommentId: String(activeCommentId ?? ''),
+        draftCommentId: String(draftCommentIdRef.current ?? ''),
+        commentId,
+        tool,
+      };
+      setDebugHudLogs(prev => [...prev.slice(-9), drawStartLog]);
 
       // CRITICAL: clientShapeId は1回だけ発行して固定（移動・編集で絶対に再生成しない）
       const newShape = {
