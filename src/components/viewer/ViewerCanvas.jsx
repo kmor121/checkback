@@ -889,11 +889,13 @@ const ViewerCanvas = forwardRef(({
       }
     }
 
-    // ★ CRITICAL: 描画開始時にhidePaintUntilSelectを解除（新規描画を許可）
-    if (hidePaintUntilSelect && paintMode && tool !== 'select') {
-      if (DEBUG_MODE) console.log('[ViewerCanvas] Clearing hidePaintUntilSelect on draw start');
-      setHidePaintUntilSelect(false);
-    }
+    // ★★★ CRITICAL FIX: 描画開始時にhidePaintUntilSelectを解除しない ★★★
+    // この解除が過去shapeを表示させる原因になっている可能性が高い
+    // 代わりに、新規描画中はeffectiveActiveId(draftCommentId)のshapeのみ表示される
+    // if (hidePaintUntilSelect && paintMode && tool !== 'select') {
+    //   if (DEBUG_MODE) console.log('[ViewerCanvas] Clearing hidePaintUntilSelect on draw start');
+    //   setHidePaintUntilSelect(false);
+    // }
 
     // ★ CRITICAL: activeCommentIdがnullでもonBeginPaintがあれば描画を許可
     if (activeCommentId == null && tool !== 'select' && !onBeginPaint) {
