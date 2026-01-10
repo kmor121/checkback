@@ -1607,6 +1607,7 @@ function ShareViewContent() {
                 showBoundingBoxes={showBoundingBoxes}
                 showAllPaint={showAllPaint}
                 forceClearToken={forceClearToken}
+                draftCommentId={tempCommentId}
                 debugInfo={{
                   isReady: isReady,
                   readyDetails: readyDetails,
