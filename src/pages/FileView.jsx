@@ -648,39 +648,41 @@ function FileViewContent() {
       draftShapesCount: draftShapes.length,
       allShapesCount: allShapes.length,
     });
-    
+
     // effectiveActiveIdが無い場合は空配列（描画を表示しない）
     if (!effectiveActiveId && draftShapes.length === 0) {
       console.log('[FileView] shapesForCanvas: returning empty (no target)');
       return [];
     }
-    
+
     if (!effectiveActiveId) {
       console.log('[FileView] shapesForCanvas: returning draftShapes only');
       return draftShapes;
     }
-    
+
     // ★★★ CRITICAL: 型を統一して比較（文字列に変換）★★★
     const targetIdStr = String(effectiveActiveId);
-    
+
     console.log('[FileView] filtering shapes for targetId:', targetIdStr);
-    
+
     const filtered = allShapes.filter(s => {
       const shapeCommentId = s.comment_id;
       // ★★★ CRITICAL: null/undefinedチェックと文字列比較 ★★★
-      if (shapeCommentId == null) {
+      if (shapeCommentId == null || shapeCommentId === '') {
         return false;
       }
       return String(shapeCommentId) === targetIdStr;
     });
-    
+
     console.log('[FileView] shapesForCanvas result:', {
       targetId: targetIdStr,
       filteredCount: filtered.length,
       draftShapesCount: draftShapes.length,
       total: filtered.length + draftShapes.length,
+      uniqueCommentIdsInFiltered: [...new Set(filtered.map(s => s.comment_id))],
     });
-    
+
+    // ★★★ CRITICAL: draftShapesはそのまま追加（comment_id上書きしない）★★★
     return [...filtered, ...draftShapes];
   }, [allShapes, effectiveActiveId, draftShapes]);
 
