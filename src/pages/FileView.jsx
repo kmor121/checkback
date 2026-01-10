@@ -512,6 +512,8 @@ function FileViewContent() {
       // 同じコメントを再クリック → 選択解除＆新規モードに戻す
       if (activeCommentId === comment.id && composerMode !== 'edit') {
         console.log('[FileView] Deselecting comment');
+        // ★ CRITICAL: ViewerCanvas内のdraftもクリア
+        viewerCanvasRef.current?.afterSubmitClear();
         setActiveCommentId(null);
         setPaintSessionCommentId(null);
         setComposerMode('new');
@@ -526,13 +528,14 @@ function FileViewContent() {
       // 別のコメントをクリック → 選択のみ
       console.log('[FileView] Selecting comment:', comment.id);
       
-      // 前の描画セッションをクリア
+      // ★ CRITICAL: 前の描画セッションを完全クリア（draftCommentIdRef含む）
+      viewerCanvasRef.current?.afterSubmitClear();
+      setDraftShapes([]);
+      
       if (paintMode) {
-        viewerCanvasRef.current?.clear();
         setPaintMode(false);
         setTool('select');
       }
-      setDraftShapes([]);
       
       setActiveCommentId(comment.id);
       setPaintSessionCommentId(comment.id);
