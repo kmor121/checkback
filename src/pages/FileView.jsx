@@ -277,23 +277,43 @@ function FileViewContent() {
     }
   };
 
+  // ★★★ CRITICAL: 全削除処理を統一（編集モード・新規モード両対応）★★★
   const handleClearAll = async () => {
     try {
-      const targetCommentId = paintSessionCommentId || activeCommentId;
+      // ★★★ CRITICAL: targetIdは編集中コメント > 選択中コメント > セッションの優先順 ★★★
+      const targetId = String(composerTargetCommentId ?? activeCommentId ?? '');
       
-      // Draft中の場合
-      if (!targetCommentId) {
-        setDraftShapes([]);
+      console.log('[handleClearAll] called:', {
+        composerTargetCommentId,
+        activeCommentId,
+        paintSessionCommentId,
+        targetId,
+        draftShapesCount: draftShapes.length,
+      });
+      
+      // ★★★ 1. draftShapesをクリア（新規・編集両方で実行）★★★
+      const draftCount = draftShapes.length;
+      setDraftShapes([]);
+      
+      // ★★★ 2. targetIdが空なら新規モード（draftのみ削除で完了）★★★
+      if (!targetId) {
         viewerCanvasRef.current?.clear();
-        showToast('描画をクリアしました');
+        showToast(`${draftCount}個の描画をクリアしました`);
+        console.log('[handleClearAll] draft only, deletedCount:', draftCount);
         return;
       }
       
-      // 既存コメントの描画を削除
+      // ★★★ 3. 既存コメントの描画をDBから削除（編集モード）★★★
       const shapes = await base44.entities.PaintShape.filter({
         file_id: fileId,
-        comment_id: targetCommentId,
+        comment_id: targetId,
         page_no: 1,
+      });
+      
+      console.log('[handleClearAll] DB shapes to delete:', {
+        targetId,
+        shapesToDeleteCount: shapes.length,
+        shapeIds: shapes.map(s => s.id),
       });
       
       for (const shape of shapes) {
@@ -302,7 +322,10 @@ function FileViewContent() {
       
       await queryClient.invalidateQueries(['paintShapes', fileId, 1]);
       viewerCanvasRef.current?.clear();
-      showToast('このコメントの描画を削除しました');
+      
+      const totalDeleted = draftCount + shapes.length;
+      showToast(`${totalDeleted}個の描画を削除しました`);
+      console.log('[handleClearAll] completed, deletedCount:', totalDeleted);
     } catch (error) {
       console.error('Clear all error:', error);
       const errorMsg = error.message || String(error);
