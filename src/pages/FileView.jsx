@@ -177,9 +177,6 @@ function FileViewContent() {
     return null;
   };
 
-  // ★★★ CRITICAL: 描画完了検知用のref（invalidate延期に使用）★★★
-  const pendingInvalidateRef = useRef(false);
-  
   const handleSaveShape = async (shape, mode) => {
     try {
       const targetCommentId = paintSessionCommentId;
@@ -212,10 +209,8 @@ function FileViewContent() {
         throw new Error(result.data.error);
       }
 
-      // ★★★ CRITICAL: invalidateを即座に実行せず、フラグだけ立てる ★★★
-      // 描画完了（PointerUp）後に一括invalidateすることでジャンプを防止
-      console.log('[FileView] Shape saved, marking for delayed invalidate');
-      pendingInvalidateRef.current = true;
+      // ★★★ CRITICAL: invalidateを完全に削除（onShapesChangeで直接キャッシュ更新済み）★★★
+      console.log('[FileView] Shape saved, cache updated via onShapesChange');
 
       return result.data;
     } catch (error) {
@@ -750,22 +745,48 @@ function FileViewContent() {
             showAllPaint={false}
             clearAfterSubmitNonce={clearAfterSubmitNonce}
             onShapesChange={(updated) => {
-              // CRITICAL: ViewerCanvasからの更新を即座にdraftShapesに反映
+              // ★★★ CRITICAL: 編集モード時も即座に反映（描画中の座標はローカルstate優先）★★★
+              console.log('[FileView] onShapesChange called:', {
+                updatedCount: updated.length,
+                paintSessionCommentId,
+                mode: paintSessionCommentId ? 'EDIT' : 'NEW',
+              });
+              
               if (!paintSessionCommentId) {
+                // 新規モード: draftShapesに保存
                 setDraftShapes(updated);
+              } else {
+                // ★★★ 編集モード: shapesForCanvasを即座に更新（invalidate待たない）★★★
+                // これによりcurrentShapeとの座標系不整合を回避
+                const updatedExisting = allShapes.map(s => {
+                  const localUpdate = updated.find(u => u.id === s.id);
+                  return localUpdate ? { ...s, ...localUpdate } : s;
+                });
+                
+                // CRITICAL: 新規追加分もマージ
+                const newShapes = updated.filter(u => !allShapes.find(s => s.id === u.id));
+                const merged = [...updatedExisting, ...newShapes];
+                
+                // ★ queryClientのキャッシュを直接更新（invalidate不要）
+                queryClient.setQueryData(['paintShapes', fileId, 1], (old) => {
+                  if (!old) return old;
+                  return merged.map(shape => ({
+                    id: shape.dbId || shape.id,
+                    client_shape_id: shape.id,
+                    file_id: fileId,
+                    comment_id: paintSessionCommentId,
+                    page_no: 1,
+                    shape_type: shape.tool,
+                    data_json: JSON.stringify(shape),
+                    author_key: user?.id,
+                    author_name: user?.full_name,
+                  }));
+                });
               }
             }}
             onSaveShape={handleSaveShape}
             onDeleteShape={handleDeleteShape}
             onBeginPaint={handleBeginPaint}
-            onDrawComplete={() => {
-              // ★★★ CRITICAL: 描画完了時に遅延invalidateを実行 ★★★
-              if (pendingInvalidateRef.current) {
-                console.log('[FileView] Draw complete, executing delayed invalidate');
-                pendingInvalidateRef.current = false;
-                queryClient.invalidateQueries(['paintShapes', fileId, 1]);
-              }
-            }}
             paintMode={paintMode}
             tool={tool}
             onToolChange={setTool}

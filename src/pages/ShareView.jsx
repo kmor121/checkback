@@ -357,9 +357,6 @@ function ShareViewContent() {
 
 
 
-  // ★★★ CRITICAL: 描画完了検知用のref（invalidate延期に使用）★★★
-  const pendingInvalidateRef = useRef(false);
-  
   // CRITICAL: _idベース保存で増殖・not found対策
   const handleSaveShape = async (shape, mode) => {
     if (!isReady) {
@@ -413,10 +410,8 @@ function ShareViewContent() {
         if (DEBUG_MODE) console.log('[ShareView] Created new shape:', result.id);
       }
 
-      // ★★★ CRITICAL: invalidateを即座に実行せず、フラグだけ立てる ★★★
-      // 描画完了（PointerUp）後に一括invalidateすることでジャンプを防止
-      console.log('[ShareView] Shape saved, marking for delayed invalidate');
-      pendingInvalidateRef.current = true;
+      // ★★★ CRITICAL: invalidateを完全に削除（onShapesChangeで直接キャッシュ更新済み）★★★
+      console.log('[ShareView] Shape saved, cache updated via onShapesChange');
 
       return { ...result, dbId: result.id };
     } catch (error) {
@@ -1309,23 +1304,49 @@ function ShareViewContent() {
                   selectComment(comment);
                 }}
                 onShapesChange={(updated) => {
-                  // CRITICAL: ViewerCanvasからの更新を即座にdraftShapesに反映
+                  // ★★★ CRITICAL: 編集モード時も即座に反映（描画中の座標はローカルstate優先）★★★
+                  console.log('[ShareView] onShapesChange called:', {
+                    updatedCount: updated.length,
+                    paintSessionCommentId,
+                    mode: paintSessionCommentId ? 'EDIT' : 'NEW',
+                  });
+                  
                   if (!paintSessionCommentId) {
+                    // 新規モード: draftShapesに保存
                     draftShapesRef.current = updated;
                     setDraftShapes(updated);
+                  } else {
+                    // ★★★ 編集モード: allShapesを直接更新（invalidate不要）★★★
+                    const updatedExisting = allShapes.map(s => {
+                      const localUpdate = updated.find(u => u.id === s.id);
+                      return localUpdate ? { ...s, ...localUpdate } : s;
+                    });
+                    
+                    // CRITICAL: 新規追加分もマージ
+                    const newShapes = updated.filter(u => !allShapes.find(s => s.id === u.id));
+                    const merged = [...updatedExisting, ...newShapes];
+                    
+                    // ★ queryClientのキャッシュを直接更新（invalidate不要）
+                    queryClient.setQueryData(['paintShapes', token, shareLink?.file_id, currentPage], (old) => {
+                      if (!old) return old;
+                      return merged.map(shape => ({
+                        id: shape.dbId || shape.id,
+                        client_shape_id: shape.id,
+                        file_id: shareLink.file_id,
+                        share_token: token,
+                        comment_id: paintSessionCommentId,
+                        page_no: currentPage,
+                        shape_type: shape.tool,
+                        data_json: JSON.stringify(shape),
+                        author_key: guestId,
+                        author_name: guestName,
+                      }));
+                    });
                   }
                 }}
                 onBeginPaint={handleBeginPaint}
                 onSaveShape={handleSaveShape}
                 onDeleteShape={handleDeleteShape}
-                onDrawComplete={() => {
-                  // ★★★ CRITICAL: 描画完了時に遅延invalidateを実行 ★★★
-                  if (pendingInvalidateRef.current) {
-                    console.log('[ShareView] Draw complete, executing delayed invalidate');
-                    pendingInvalidateRef.current = false;
-                    queryClient.invalidateQueries({ queryKey: ['paintShapes', token, shareLink?.file_id, currentPage] });
-                  }
-                }}
                 paintMode={isReady && paintMode}
                 tool={tool}
                 onToolChange={setTool}
