@@ -105,6 +105,7 @@ const ViewerCanvas = forwardRef(({
   forceClearToken = 0, // ★★★ P2: 明示クリア用トークン ★★★
   draftCommentId = null, // ★★★ A: ShareViewからの新規コメント用ID ★★★
   renderTargetCommentId = null, // ★★★ REQUIRED: 表示対象commentId（リロード後の下書き復元用） ★★★
+  canvasContextKey = null, // ★★★ CRITICAL: 描画コンテキストキー（切替検知用）★★★
 }, ref) => {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
@@ -144,6 +145,9 @@ const ViewerCanvas = forwardRef(({
   const prevActiveCommentIdRef = useRef(activeCommentId);
   const draftCommentIdRef = useRef(null); // 仮コメントID（描画開始時にactiveCommentIdが無い場合）
   // ★★★ REMOVED: lastStableCommentIdRef - fallback禁止のため完全削除 ★★★
+  
+  // ★★★ CRITICAL: 描画コンテキスト変化検知用（Map残留根絶）★★★
+  const prevCanvasContextKeyRef = useRef(null);
   
   // デバッグHUD用ログ履歴
   const [debugHudLogs, setDebugHudLogs] = useState([]);
@@ -441,6 +445,26 @@ const ViewerCanvas = forwardRef(({
     draftCommentIdRef.current = null;
   }, [activeCommentId]);
 
+  // ★★★ CRITICAL: canvasContextKey 変化時に Map を確実にクリア（Map残留根絶）★★★
+  useEffect(() => {
+    if (!canvasContextKey) return;
+    
+    const prev = prevCanvasContextKeyRef.current;
+    if (prev !== canvasContextKey) {
+      console.log('[ViewerCanvas] CONTEXT CHANGED -> reset Map', {
+        prev,
+        next: canvasContextKey,
+        prevMapSize: shapesMapRef.current.size,
+        renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
+      });
+      
+      shapesMapRef.current = new Map();
+      bump();
+      setSelectedId(null);
+      prevCanvasContextKeyRef.current = canvasContextKey;
+    }
+  }, [canvasContextKey, renderTargetCommentId]);
+
   // CRITICAL: fileIdentity/pageNumber変更時のみリセット（Mapをクリア）
   useEffect(() => {
     if (DEBUG_MODE) {
@@ -476,16 +500,18 @@ const ViewerCanvas = forwardRef(({
 
   // ★★★ CRITICAL FIX: existingShapesで完全同期（upsertではなく置換）★★★
   // ★★★ P2 FIX: incoming空は「データ未到達/瞬間的0」として扱い、Map空置換しない ★★★
-  // ★★★ クリアは forceClearToken 経由でのみ行う ★★★
+  // ★★★ クリアは forceClearToken または canvasContextKey 変化経由で行う ★★★
   useEffect(() => {
     if (!existingShapes) return;
 
     const incomingEmpty = existingShapes.length === 0;
     const prevMapSize = shapesMapRef.current.size;
+    const ctx = canvasContextKey || 'no-ctx';
 
-    // ★★★ P2 FIX: incoming空の場合は常にスキップ（クリアはforceClearToken経由のみ）★★★
+    // ★★★ CRITICAL: incoming empty は常に SKIP（Map残留は context change でクリア済み）★★★
     if (incomingEmpty) {
-      console.log('[ViewerCanvas] FULL SYNC SKIPPED: incoming empty, preserving current Map', {
+      console.log('[ViewerCanvas] FULL SYNC SKIPPED: incoming empty (Map already cleared by context change)', {
+        ctx,
         prevMapSize,
         renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
         draftCommentId: draftCommentId?.substring(0, 12) || 'null',
@@ -495,6 +521,7 @@ const ViewerCanvas = forwardRef(({
 
     // ★★★ DEBUG: FULL SYNC開始 ★★★
     console.log('[ViewerCanvas] FULL SYNC START:', {
+      ctx,
       incomingLength: existingShapes.length,
       prevMapSize,
       renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
@@ -547,7 +574,7 @@ const ViewerCanvas = forwardRef(({
     console.log('[ViewerCanvas] Map replaced (FULL SYNC), new size:', newMap.size, 'dirtyCount:', dirtyShapes.size);
     shapesMapRef.current = newMap;
     bump();
-  }, [existingShapes]);
+  }, [existingShapes, canvasContextKey]);
 
   // ✅ 選択維持（Mapに存在するか確認）
   useEffect(() => {

@@ -1316,6 +1316,13 @@ function ShareViewContent() {
     });
   }, [renderTargetCommentId, activeCommentId, tempCommentId]);
 
+  // ★★★ CRITICAL: canvasContextKey（コメント切替検知用）★★★
+  const canvasContextKey = React.useMemo(() => {
+    const fileId = shareLink?.file_id || 'no-file';
+    if (showAllPaint) return `${fileId}:all`;
+    return `${fileId}:cid:${renderTargetCommentId || 'none'}`;
+  }, [shareLink?.file_id, showAllPaint, renderTargetCommentId]);
+
   // CRITICAL: 親側でフィルタリング（ViewerCanvasに渡すshapes）
   // ★★★ CRITICAL FIX: normalizeShape で正規化してからフィルタ ★★★
   const shapesForCanvas = React.useMemo(() => {
@@ -1644,6 +1651,7 @@ function ShareViewContent() {
                 existingShapes={shapesForCanvas}
                 comments={comments.filter(c => c.page_no === currentPage)}
                 activeCommentId={activeCommentId}
+                canvasContextKey={canvasContextKey}
                 onCommentClick={(id) => {
                   const comment = comments.find(c => c.id === id);
                   if (!comment) return;
