@@ -634,13 +634,23 @@ function FileViewContent() {
     return result;
   }, [paintShapes]);
 
-  // ★★★ CRITICAL: effectiveActiveId を統一的に使用（編集 > 選択 > セッション）★★★
+  // ★★★ CRITICAL BUG FIX: 編集モード中は activeCommentId のみを targetId として使用 ★★★
+  // paintSessionCommentId は「新規コメント作成中」のみ使用する
+  // 編集モード（activeCommentId が存在）中に paintSessionCommentId が更新されても shapesForCanvas の対象は変わらない
+  const isEditMode = !!activeCommentId;
+  const targetIdForShapes = isEditMode
+    ? String(activeCommentId)
+    : (paintSessionCommentId ? String(paintSessionCommentId) : null);
+
+  // ★ effectiveActiveId は Canvas への props 用（描画の紐づけ先）として別途定義
   const effectiveActiveId = composerTargetCommentId ?? activeCommentId ?? paintSessionCommentId ?? null;
 
-  // CRITICAL: ViewerCanvasに渡すshapes（effectiveActiveIdがある時のみ）
-  // ★★★ CRITICAL FIX: effectiveActiveIdを使用して編集/選択を統一 ★★★
+  // CRITICAL: ViewerCanvasに渡すshapes（targetIdForShapesがある時のみ）
+  // ★★★ CRITICAL FIX: 編集モード中は activeCommentId のみでフィルタ ★★★
   const shapesForCanvas = React.useMemo(() => {
     console.log('[FileView] shapesForCanvas calculation:', {
+      isEditMode,
+      targetIdForShapes,
       effectiveActiveId,
       composerTargetCommentId,
       activeCommentId,
@@ -649,21 +659,18 @@ function FileViewContent() {
       allShapesCount: allShapes.length,
     });
 
-    // effectiveActiveIdが無い場合は空配列（描画を表示しない）
-    if (!effectiveActiveId && draftShapes.length === 0) {
+    // targetIdForShapesが無い場合は空配列（描画を表示しない）
+    if (!targetIdForShapes && draftShapes.length === 0) {
       console.log('[FileView] shapesForCanvas: returning empty (no target)');
       return [];
     }
 
-    if (!effectiveActiveId) {
+    if (!targetIdForShapes) {
       console.log('[FileView] shapesForCanvas: returning draftShapes only');
       return draftShapes;
     }
 
-    // ★★★ CRITICAL: 型を統一して比較（文字列に変換）★★★
-    const targetIdStr = String(effectiveActiveId);
-
-    console.log('[FileView] filtering shapes for targetId:', targetIdStr);
+    console.log('[FileView] filtering shapes for targetId:', targetIdForShapes);
 
     const filtered = allShapes.filter(s => {
       const shapeCommentId = s.comment_id;
@@ -671,20 +678,26 @@ function FileViewContent() {
       if (shapeCommentId == null || shapeCommentId === '') {
         return false;
       }
-      return String(shapeCommentId) === targetIdStr;
+      return String(shapeCommentId) === targetIdForShapes;
     });
 
+    // ★★★ 安全策: 複数のcomment_idが混ざっていたら警告 ★★★
+    const uniqueCommentIds = [...new Set(filtered.map(s => s.comment_id))];
+    if (uniqueCommentIds.length > 1) {
+      console.warn('[FileView] WARNING: Multiple comment_ids in filtered shapes!', uniqueCommentIds);
+    }
+
     console.log('[FileView] shapesForCanvas result:', {
-      targetId: targetIdStr,
+      targetId: targetIdForShapes,
       filteredCount: filtered.length,
       draftShapesCount: draftShapes.length,
       total: filtered.length + draftShapes.length,
-      uniqueCommentIdsInFiltered: [...new Set(filtered.map(s => s.comment_id))],
+      uniqueCommentIdsInFiltered: uniqueCommentIds,
     });
 
     // ★★★ CRITICAL: draftShapesはそのまま追加（comment_id上書きしない）★★★
     return [...filtered, ...draftShapes];
-  }, [allShapes, effectiveActiveId, draftShapes]);
+  }, [allShapes, targetIdForShapes, draftShapes, isEditMode]);
 
   const filteredComments = comments.filter(c => {
     if (commentFilter === 'resolved' && !c.resolved) return false;
