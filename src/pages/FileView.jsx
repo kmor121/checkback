@@ -567,14 +567,35 @@ function FileViewContent() {
     setCommentBody(comment.body || '');
   };
 
-  const handleCancelEdit = () => {
+  // ★★★ CRITICAL: 編集モード解除の統一関数 ★★★
+  const exitEditMode = () => {
+    // ViewerCanvasの描画をクリア
+    viewerCanvasRef.current?.afterSubmitClear();
+    viewerCanvasRef.current?.clear();
+    
+    // 編集モード解除
     setComposerMode('new');
     setComposerTargetCommentId(null);
-    setCommentBody('');
-    setDraftShapes([]);
-    setPaintSessionCommentId(null);
+    
+    // ★★★ CRITICAL: activeCommentIdをnullにして描画表示を消す ★★★
     setActiveCommentId(null);
-    setPaintMode(false); // CRITICAL: ペイントモードも解除
+    
+    // ペイント関連
+    setPaintMode(false);
+    setTool('select');
+    setPaintSessionCommentId(null);
+    
+    // draft/描画一時stateクリア
+    setDraftShapes([]);
+    setCommentBody('');
+    
+    // clearAfterSubmitNonceを更新してViewerCanvasに完全リセットを通知
+    setClearAfterSubmitNonce(n => n + 1);
+  };
+
+  const handleCancelEdit = () => {
+    // ★★★ CRITICAL: 統一関数を呼ぶ ★★★
+    exitEditMode();
   };
 
   const toggleResolveMutation = useMutation({
