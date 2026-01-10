@@ -856,17 +856,21 @@ const ViewerCanvas = forwardRef(({
 
   // PointerDown: 描画開始（描画モード時のみ）
   const handlePointerDown = (e) => {
-    // ★★★ DEBUG: 描画開始直前の状態を詳細ログ ★★★
+    // ★★★ DEBUG: 描画開始直前の状態を詳細ログ（差分検出用）★★★
+    const beforeIds = renderedShapes.map(s => s.id);
     const uniqueCidsInRendered = [...new Set(renderedShapes.map(s => shapeCommentId(s)))].slice(0, 10);
+    const targetId = effectiveActiveId != null ? String(effectiveActiveId) : '';
+    
     console.log('[DRAW_DEBUG] handlePointerDown BEFORE:', {
+      targetId,
       effectiveActiveId,
       activeCommentId,
       draftCommentId: draftCommentIdRef.current,
-      lastStableId: lastStableCommentIdRef.current,
       showAllPaint,
       hidePaintUntilSelect,
       renderedShapesLength: renderedShapes.length,
       uniqueCommentIdsInRendered: uniqueCidsInRendered,
+      beforeIds: beforeIds.slice(0, 5).map(id => id?.substring?.(0, 8)),
       tool,
       paintMode,
       isDrawMode,
