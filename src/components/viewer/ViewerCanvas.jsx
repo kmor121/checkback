@@ -1053,20 +1053,24 @@ const ViewerCanvas = forwardRef(({
           fontSize,
         };
 
-        // CRITICAL: Map方式でupsert + dirty/localTs付与
+        // CRITICAL: Map方式でupsert + dirty/localTs付与（★★★ 不変更新 ★★★）
         const updatedWithDirty = { ...updatedShape, _dirty: true, _localTs: Date.now() };
         addToUndoStack({ type: 'update', shapeId, before: existingShape, after: updatedWithDirty });
-        shapesMapRef.current.set(shapeId, updatedWithDirty);
+        const newMap = new Map(shapesMapRef.current);
+        newMap.set(shapeId, updatedWithDirty);
+        shapesMapRef.current = newMap;
         bump();
         onShapesChange?.(getAllShapes());
 
         if (onSaveShape) {
           try {
             await onSaveShape(updatedShape, 'upsert');
-            // CRITICAL: dirty解除（Map方式）
+            // CRITICAL: dirty解除（★★★ 不変更新 ★★★）
             const cur = shapesMapRef.current.get(shapeId);
             if (cur) {
-              shapesMapRef.current.set(shapeId, { ...cur, _dirty: false });
+              const dirtyMap = new Map(shapesMapRef.current);
+              dirtyMap.set(shapeId, { ...cur, _dirty: false });
+              shapesMapRef.current = dirtyMap;
               bump();
               onShapesChange?.(getAllShapes());
             }
