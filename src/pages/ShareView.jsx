@@ -1238,57 +1238,46 @@ function ShareViewContent() {
   // ★★★ P2: draftShapesを確実にCanvasに合流させる ★★★
   const shapesForCanvas = React.useMemo(() => {
     console.log('[ShareView] shapesForCanvas calculation:', {
-      isEditMode,
-      targetIdForShapes,
+      renderTargetCommentId,
       showAllPaint,
       activeCommentId,
-      paintSessionCommentId,
-      allShapesCount: allShapes.length,
       draftShapesCount: draftShapes.length,
+      allShapesCount: allShapes.length,
     });
     
     // ★★★ CRITICAL: showAllPaint時はDB shapes + draftShapes を全て表示 ★★★
     if (showAllPaint) {
-      // draftShapesのIDと重複するDB shapesを除外（二重表示防止）
       const draftIds = new Set(draftShapes.map(s => s.id));
       const dbShapesWithoutDuplicates = allShapes.filter(s => !draftIds.has(s.id));
       return [...dbShapesWithoutDuplicates, ...draftShapes];
     }
     
-    // ★★★ CRITICAL: targetIdがなくてもdraftShapesがあれば表示（新規作成中）★★★
-    if (!targetIdForShapes) {
-      // draftShapesは常に表示
+    // ★★★ CRITICAL: renderTargetCommentId がなければ draftShapes のみ表示 ★★★
+    if (!renderTargetCommentId) {
       return draftShapes;
     }
     
-    // targetIdでDB shapesをフィルタ
+    // renderTargetCommentId でDB shapesをフィルタ
     const filtered = allShapes.filter(s => {
       const shapeCommentId = s.comment_id;
       if (shapeCommentId == null || shapeCommentId === '') return false;
-      return String(shapeCommentId) === targetIdForShapes;
+      return String(shapeCommentId) === renderTargetCommentId;
     });
     
-    // ★★★ 安全策: 複数のcomment_idが混ざっていたら警告 ★★★
-    const uniqueCommentIds = [...new Set(filtered.map(s => s.comment_id))];
-    if (uniqueCommentIds.length > 1) {
-      console.warn('[ShareView] WARNING: Multiple comment_ids in filtered shapes!', uniqueCommentIds);
-    }
-    
-    // ★★★ CRITICAL: DB shapes + draftShapes を合流（draftが優先、ID重複時はdraft側を使用）★★★
+    // ★★★ CRITICAL: DB shapes + draftShapes を合流（draftが優先） ★★★
     const draftIds = new Set(draftShapes.map(s => s.id));
     const dbShapesWithoutDuplicates = filtered.filter(s => !draftIds.has(s.id));
     const merged = [...dbShapesWithoutDuplicates, ...draftShapes];
     
     console.log('[ShareView] shapesForCanvas result:', {
-      targetId: targetIdForShapes,
-      filteredDbCount: filtered.length,
-      draftShapesCount: draftShapes.length,
+      renderTargetCommentId,
+      dbFilteredCount: filtered.length,
+      draftCount: draftShapes.length,
       mergedTotal: merged.length,
-      uniqueCommentIds,
     });
     
     return merged;
-  }, [allShapes, showAllPaint, targetIdForShapes, draftShapes, isEditMode]);
+  }, [allShapes, showAllPaint, renderTargetCommentId, draftShapes]);
 
   // 親コメントと返信を分離（条件付きreturnの前に配置）
   const filteredComments = React.useMemo(() => {
