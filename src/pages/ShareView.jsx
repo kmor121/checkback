@@ -1449,9 +1449,12 @@ function ShareViewContent() {
         <div>draftRenderedCount: <span className="text-yellow-400">{draftDebugInfo.renderedCount}</span></div>
         <div>draftSavedAt: <span className="text-cyan-400">{draftDebugInfo.savedAt || 'never'}</span></div>
         <div className="border-t border-gray-600 mt-1 pt-1">
-          <div>tempCommentId: <span className="text-cyan-400">{tempCommentId?.substring(0, 20) || 'null'}</span></div>
           <div>composerMode: <span className="text-cyan-400">{composerMode}</span></div>
+          <div>tool: <span className="text-cyan-400">{tool}</span></div>
+          <div>paintMode: <span className={paintMode ? 'text-green-400' : 'text-red-400'}>{paintMode ? 'ON' : 'OFF'}</span></div>
+          <div>tempCommentId: <span className="text-cyan-400">{tempCommentId?.substring(0, 12) || 'null'}</span></div>
           <div>activeCommentId: <span className="text-cyan-400">{activeCommentId?.substring(0, 12) || 'null'}</span></div>
+          <div>draftShapes.length: <span className="text-yellow-400">{draftShapes.length}</span></div>
           <div>shapesForCanvas: <span className="text-yellow-400">{shapesForCanvas.length}</span></div>
         </div>
       </div>
