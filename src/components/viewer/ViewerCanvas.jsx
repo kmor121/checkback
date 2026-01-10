@@ -993,11 +993,24 @@ const ViewerCanvas = forwardRef(({
           onBeginPaint(imgCoords.x, imgCoords.y, bgSize.width, bgSize.height);
         });
       }
-    } catch (err) {
+
+      // ★★★ DEBUG: 描画開始直後の状態を詳細ログ ★★★
+      const uniqueCidsAfter = [...new Set(renderedShapes.map(s => shapeCommentId(s)))].slice(0, 10);
+      console.log('[DRAW_DEBUG] handlePointerDown AFTER:', {
+        effectiveActiveId,
+        activeCommentId,
+        draftCommentId: draftCommentIdRef.current,
+        showAllPaint,
+        hidePaintUntilSelect,
+        renderedShapesLength: renderedShapes.length,
+        uniqueCommentIdsInRendered: uniqueCidsAfter,
+        newShapeCommentId: commentId,
+      });
+      } catch (err) {
       console.error('PointerDown Error:', err);
       setError(`PointerDown Error: ${err.message}`);
-    }
-  };
+      }
+      };
   
   // PointerMove: 描画中（CRITICAL: refベースで判定、propsに依存しない）
   const handlePointerMove = (e) => {
