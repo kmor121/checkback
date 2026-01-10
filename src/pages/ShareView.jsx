@@ -875,7 +875,8 @@ function ShareViewContent() {
         showToast('コメントを送信しました', 'success');
       }
 
-      // ★★★ CRITICAL: 描画クリアを最優先で実行 ★★★
+      // ★★★ CRITICAL: 描画クリアを最優先で実行（明示クリアトークンをインクリメント）★★★
+      setForceClearToken(prev => prev + 1);
       viewerCanvasRef.current?.afterSubmitClear();
       viewerCanvasRef.current?.clear();
       
