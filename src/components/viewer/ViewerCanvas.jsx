@@ -1322,10 +1322,12 @@ const ViewerCanvas = forwardRef(({
           setLastSuccessId(result?.dbId || normalizedShape.id);
           setLastError(null);
 
-          // CRITICAL: DBから返ってきた_idを既存shapeに上書き + dirty解除（Map方式）
+          // CRITICAL: DBから返ってきた_idを既存shapeに上書き + dirty解除（★★★ 不変更新 ★★★）
           const cur = shapesMapRef.current.get(normalizedShape.id);
           if (cur) {
-            shapesMapRef.current.set(normalizedShape.id, { ...cur, dbId: result?.dbId, _dirty: false });
+            const newMap = new Map(shapesMapRef.current);
+            newMap.set(normalizedShape.id, { ...cur, dbId: result?.dbId, _dirty: false });
+            shapesMapRef.current = newMap;
             bump();
             onShapesChange?.(getAllShapes());
           }
