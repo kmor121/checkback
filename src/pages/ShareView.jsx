@@ -1436,16 +1436,18 @@ function ShareViewContent() {
   <div className="max-w-full mx-auto h-screen flex flex-col">
     {/* ★★★ デバッグHUD（下書き状態表示）★★★ */}
     {DEBUG_MODE && (
-      <div className="fixed top-0 left-0 z-[9999] bg-black/90 text-green-400 text-xs font-mono p-2 max-w-xs">
+      <div className="fixed top-0 left-0 z-[9999] bg-black/90 text-green-400 text-xs font-mono p-2 max-w-sm">
         <div className="text-yellow-400 font-bold mb-1">📝 Draft Debug</div>
-        <div>targetKey: <span className="text-cyan-400">{draftDebugInfo.targetKey || 'null'}</span></div>
+        <div>targetKey: <span className="text-cyan-400 break-all">{draftDebugInfo.targetKey || 'null'}</span></div>
+        <div>loadDraftFound: <span className={draftDebugInfo.loadDraftFound ? 'text-green-400' : 'text-red-400'}>{draftDebugInfo.loadDraftFound ? 'true' : 'false'}</span></div>
         <div>draftLoadedCount: <span className="text-yellow-400">{draftDebugInfo.loadedCount}</span></div>
         <div>draftRenderedCount: <span className="text-yellow-400">{draftDebugInfo.renderedCount}</span></div>
         <div>draftSavedAt: <span className="text-cyan-400">{draftDebugInfo.savedAt || 'never'}</span></div>
         <div className="border-t border-gray-600 mt-1 pt-1">
-          <div>tempCommentId: <span className="text-cyan-400">{tempCommentId || 'null'}</span></div>
-          <div>paintSessionCommentId: <span className="text-cyan-400">{paintSessionCommentId || 'null'}</span></div>
-          <div>activeCommentId: <span className="text-cyan-400">{activeCommentId || 'null'}</span></div>
+          <div>tempCommentId: <span className="text-cyan-400">{tempCommentId?.substring(0, 20) || 'null'}</span></div>
+          <div>composerMode: <span className="text-cyan-400">{composerMode}</span></div>
+          <div>activeCommentId: <span className="text-cyan-400">{activeCommentId?.substring(0, 12) || 'null'}</span></div>
+          <div>shapesForCanvas: <span className="text-yellow-400">{shapesForCanvas.length}</span></div>
         </div>
       </div>
     )}
