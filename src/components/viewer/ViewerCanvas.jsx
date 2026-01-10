@@ -1107,10 +1107,12 @@ const ViewerCanvas = forwardRef(({
         });
       }
 
-      // CRITICAL: Map方式でupsert + dirty/localTs付与
+      // CRITICAL: Map方式でupsert + dirty/localTs付与（★★★ 不変更新 ★★★）
       const shapeWithDirty = { ...normalizedShape, _dirty: true, _localTs: Date.now() };
       addToUndoStack({ type: 'add', shapeId: normalizedShape.id });
-      shapesMapRef.current.set(shapeWithDirty.id, shapeWithDirty);
+      const newMap = new Map(shapesMapRef.current);
+      newMap.set(shapeWithDirty.id, shapeWithDirty);
+      shapesMapRef.current = newMap;
       bump();
       onShapesChange?.(getAllShapes());
       setSelectedId(normalizedShape.id);
@@ -1118,10 +1120,12 @@ const ViewerCanvas = forwardRef(({
       if (onSaveShape) {
         try {
           const result = await onSaveShape(normalizedShape, 'create');
-          // CRITICAL: dirty解除（Map方式）
+          // CRITICAL: dirty解除（★★★ 不変更新 ★★★）
           const cur = shapesMapRef.current.get(normalizedShape.id);
           if (cur) {
-            shapesMapRef.current.set(normalizedShape.id, { ...cur, dbId: result?.dbId, _dirty: false });
+            const dirtyMap = new Map(shapesMapRef.current);
+            dirtyMap.set(normalizedShape.id, { ...cur, dbId: result?.dbId, _dirty: false });
+            shapesMapRef.current = dirtyMap;
             bump();
             onShapesChange?.(getAllShapes());
           }
