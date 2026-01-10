@@ -241,6 +241,45 @@ function ShareViewContent() {
     localStorage.setItem(key, String(showAllPaint));
   }, [showAllPaint, token, shareLink?.file_id, currentPage]);
 
+  // ★★★ 初期化時に期限切れ下書きをクリーンアップ ★★★
+  useEffect(() => {
+    cleanupExpiredDrafts();
+  }, []);
+
+  // ★★★ 下書き保存関数（debounce付き）★★★
+  const saveDraftDebounced = React.useCallback((shapes, commentId, tempId) => {
+    if (!shareLink?.file_id) return;
+    
+    // 既存のタイマーをキャンセル
+    if (saveDraftTimeoutRef.current) {
+      clearTimeout(saveDraftTimeoutRef.current);
+    }
+    
+    saveDraftTimeoutRef.current = setTimeout(() => {
+      const key = getDraftKey(shareLink.file_id, commentId, tempId);
+      if (key && shapes.length > 0) {
+        saveDraft(key, shapes, { pageNo: currentPage });
+      } else if (key && shapes.length === 0) {
+        // shapesが空なら下書きを削除
+        deleteDraft(key);
+      }
+    }, 500); // 500msのdebounce
+  }, [shareLink?.file_id, currentPage]);
+
+  // ★★★ 下書き復元関数 ★★★
+  const restoreDraft = React.useCallback((commentId, tempId) => {
+    if (!shareLink?.file_id) return [];
+    
+    const key = getDraftKey(shareLink.file_id, commentId, tempId);
+    const draft = loadDraft(key);
+    
+    if (draft?.shapes && draft.shapes.length > 0) {
+      console.log('[ShareView] Restoring draft:', key, 'shapes:', draft.shapes.length);
+      return draft.shapes;
+    }
+    return [];
+  }, [shareLink?.file_id]);
+
   const handlePaintModeChange = (mode) => {
     if (!mode) {
       setPaintMode(false);
