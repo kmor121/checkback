@@ -1251,34 +1251,24 @@ function ShareViewContent() {
         const data = JSON.parse(ps.data_json);
         
         // ★★★ CRITICAL: DBの ps.comment_id を唯一の真実（source of truth）とする ★★★
-        const dbCommentId = ps.comment_id;
+        const rawShape = {
+          ...data,
+          id: ps.client_shape_id || ps.id,
+          dbId: ps.id,
+          tool: ps.shape_type,
+          comment_id: ps.comment_id,
+        };
+        
+        // ★★★ CRITICAL: normalizeShape で正規化（defaultCommentId=null でDB値保持）★★★
+        const normalized = normalizeShape(rawShape, null);
         
         // ★★★ CRITICAL: comment_idが空のshapeは除外（データ異常）★★★
-        if (dbCommentId == null || dbCommentId === '') {
+        if (!normalized || !normalized.comment_id) {
           console.warn('[ShareView] Skipping shape with empty comment_id:', ps.id);
           return null;
         }
         
-        console.log('[ShareView] parsing shape:', {
-          psId: ps.id,
-          psCommentId: ps.comment_id,
-          dataCommentId: data.comment_id,
-          finalCommentId: String(dbCommentId),
-        });
-        
-        // ★★★ CRITICAL: data_json内のcomment_id系フィールドを完全削除 ★★★
-        const cleanData = { ...data };
-        delete cleanData.comment_id;
-        delete cleanData.commentId;
-        delete cleanData.commentID;
-        
-        return {
-          ...cleanData,
-          id: ps.client_shape_id || ps.id,
-          dbId: ps.id,
-          tool: ps.shape_type,
-          comment_id: String(dbCommentId),  // ★ String型で統一
-        };
+        return normalized;
       } catch (e) {
         console.error('[ShareView] Failed to parse shape:', e);
         return null;
@@ -1286,10 +1276,10 @@ function ShareViewContent() {
     }).filter(Boolean);
 
     // ★★★ DEBUG: 結果のcomment_id分布を確認 ★★★
-    const uniqueCids = [...new Set(result.map(s => s.comment_id))];
+    const uniqueCids = [...new Set(result.map(s => resolveCommentId(s)))].filter(Boolean);
     console.log('[ShareView] allShapes result:', {
       count: result.length,
-      uniqueCommentIds: uniqueCids.slice(0, 10),
+      uniqueCommentIds: uniqueCids.slice(0, 10).map(id => id.substring(0, 12)),
     });
 
     return result;
