@@ -78,6 +78,7 @@ const ViewerCanvas = forwardRef(({
   showAllPaint = false,
   debugInfo = null,
   clearAfterSubmitNonce = 0,
+  forceClearToken = 0, // ★★★ P2: 明示クリア用トークン ★★★
 }, ref) => {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
