@@ -302,8 +302,8 @@ const ViewerCanvas = forwardRef(({
     const prev = prevActiveCommentIdRef.current;
     prevActiveCommentIdRef.current = activeCommentId;
 
-    // ★ 同じIDへの変更は無視
-    if (prev === activeCommentId) return;
+    // ★ 同じIDへの変更は無視（型も統一して比較）
+    if (String(prev ?? '') === String(activeCommentId ?? '')) return;
 
     if (DEBUG_MODE) {
       console.log('[ViewerCanvas] activeCommentId changed, clearing draft', { prev, next: activeCommentId });
@@ -312,12 +312,17 @@ const ViewerCanvas = forwardRef(({
     // ★★★ CRITICAL: コメント切替時は必ずcurrentShapeをクリア ★★★
     // これにより前コメントの描画中データが残らない
     setCurrentShape(null);
+    currentShapeRef2.current = null; // refも同期
     setIsDrawing(false);
+    isDrawingRef2.current = false; // refも同期
     setSelectedId(null);
     setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
 
     // ★★★ CRITICAL: draftCommentIdRefもクリア（新規描画用の仮IDをリセット）★★★
     draftCommentIdRef.current = null;
+    
+    // ★★★ CRITICAL: drawViewRefもクリア（座標系の混乱防止）★★★
+    drawViewRef.current = null;
 
     requestAnimationFrame(() => {
       if (transformerRef.current) {
