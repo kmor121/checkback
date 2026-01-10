@@ -973,39 +973,59 @@ function ShareViewContent() {
 
 
   // PaintShapeをViewerCanvas用の形式に変換（CRITICAL: 親側でフィルタ）
-  // ★★★ CRITICAL FIX: ...data のスプレッドが ps.comment_id を上書きしていた問題を修正 ★★★
+  // ★★★ CRITICAL FIX: data_json内のcomment_id系フィールドを完全削除してから展開 ★★★
   const allShapes = React.useMemo(() => {
     if (!isReady || !paintShapes) return [];
 
     console.log('[ShareView] allShapes recalculating, paintShapes count:', paintShapes.length);
 
-    return paintShapes.map(ps => {
+    const result = paintShapes.map(ps => {
       try {
         const data = JSON.parse(ps.data_json);
         
-        // ★★★ CRITICAL: DBの ps.comment_id を最優先で使う ★★★
-        // data_json 内の comment_id/commentId は仮のUUIDなので、必ず最後に上書きする
-        const dbCommentId = ps.comment_id;  // DBに保存された正しいReviewComment ID
+        // ★★★ CRITICAL: DBの ps.comment_id を唯一の真実（source of truth）とする ★★★
+        const dbCommentId = ps.comment_id;
+        
+        // ★★★ CRITICAL: comment_idが空のshapeは除外（データ異常）★★★
+        if (dbCommentId == null || dbCommentId === '') {
+          console.warn('[ShareView] Skipping shape with empty comment_id:', ps.id);
+          return null;
+        }
         
         console.log('[ShareView] parsing shape:', {
           psId: ps.id,
-          psCommentId: ps.comment_id,  // これが正しいID
-          dataCommentId: data.comment_id,  // これは仮UUID（無視すべき）
+          psCommentId: ps.comment_id,
+          dataCommentId: data.comment_id,
+          finalCommentId: String(dbCommentId),
         });
         
-        // ★★★ CRITICAL: スプレッドの後で comment_id を上書きして確定 ★★★
+        // ★★★ CRITICAL: data_json内のcomment_id系フィールドを完全削除 ★★★
+        const cleanData = { ...data };
+        delete cleanData.comment_id;
+        delete cleanData.commentId;
+        delete cleanData.commentID;
+        
         return {
-          ...data,  // まずdata_jsonの中身を展開
+          ...cleanData,
           id: ps.client_shape_id || ps.id,
           dbId: ps.id,
           tool: ps.shape_type,
-          comment_id: dbCommentId,  // ★ DBのcomment_idで上書き（最重要）
+          comment_id: String(dbCommentId),  // ★ String型で統一
         };
       } catch (e) {
         console.error('[ShareView] Failed to parse shape:', e);
         return null;
       }
     }).filter(Boolean);
+
+    // ★★★ DEBUG: 結果のcomment_id分布を確認 ★★★
+    const uniqueCids = [...new Set(result.map(s => s.comment_id))];
+    console.log('[ShareView] allShapes result:', {
+      count: result.length,
+      uniqueCommentIds: uniqueCids.slice(0, 10),
+    });
+
+    return result;
   }, [paintShapes, isReady]);
 
   // CRITICAL: 親側でフィルタリング（ViewerCanvasに渡すshapes）
