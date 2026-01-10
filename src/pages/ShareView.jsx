@@ -1159,15 +1159,20 @@ function ShareViewContent() {
   };
 
   const selectComment = (comment) => {
-    if (paintMode) {
-      showToast('ペイントを終了してから選択してください', 'info');
-      return;
-    }
-
     // 対応済みチェック
     if (comment.resolved) {
       showToast('対応済みのコメントは編集できません', 'info');
       return;
+    }
+
+    // ★★★ CRITICAL: paintMode中は自動で終了（警告廃止）★★★
+    if (paintMode) {
+      console.log('[EXIT_DEBUG] selectComment: auto-exit paintMode before switch');
+      if (composerMode === 'edit' || composerMode === 'reply') {
+        exitEditMode('auto_switch');
+      }
+      setPaintMode(false);
+      setTool('select');
     }
 
     // 同じコメントを再クリック → 選択解除＆新規モードに戻す
@@ -1178,16 +1183,9 @@ function ShareViewContent() {
     }
 
     // 別のコメントをクリック → 選択のみ（編集には入らない）
-    // ★★★ CRITICAL: 前の描画セッションをクリア（他コメント編集の描画が残らないように）★★★
-    if (paintMode) {
-      viewerCanvasRef.current?.clear();
-      setPaintMode(false);
-      setTool('select');
-    }
-    
     setCurrentPage(comment.page_no);
     setActiveCommentId(comment.id);
-    setPaintSessionCommentId(null); // CRITICAL: paintSessionをクリア
+    setPaintSessionCommentId(null);
     setIsDockOpen(true);
 
     // ★★★ CRITICAL: 既存コメント選択時は view 状態に（"新規作成中"バッジ防止）★★★
@@ -1209,15 +1207,11 @@ function ShareViewContent() {
       return;
     }
 
+    // ★★★ CRITICAL: paintMode中は自動で終了（警告廃止）★★★
     if (paintMode) {
-      showToast('ペイントを終了してから編集してください', 'info');
-      return;
-    }
-
-    // 対応済みチェック
-    if (comment.resolved) {
-      showToast('対応済みのコメントは編集できません', 'info');
-      return;
+      console.log('[EXIT_DEBUG] enterEdit: auto-exit paintMode before edit');
+      setPaintMode(false);
+      setTool('select');
     }
 
     setCurrentPage(comment.page_no);
@@ -1327,15 +1321,20 @@ function ShareViewContent() {
   };
 
   const handleStartReply = (parentComment) => {
-    if (paintMode) {
-      showToast('ペイントを終了してから返信してください', 'info');
-      return;
-    }
-
     // 対応済みチェック
     if (parentComment.resolved) {
       showToast('対応済みのコメントには返信できません', 'info');
       return;
+    }
+
+    // ★★★ CRITICAL: paintMode中は自動で終了（警告廃止）★★★
+    if (paintMode) {
+      console.log('[EXIT_DEBUG] handleStartReply: auto-exit paintMode before reply');
+      if (composerMode === 'edit') {
+        exitEditMode('auto_reply');
+      }
+      setPaintMode(false);
+      setTool('select');
     }
 
     setReplyingThreadId(parentComment.id);
@@ -1536,14 +1535,14 @@ function ShareViewContent() {
       ? allShapesNormalized
       : (paintContextId ? allShapesNormalized.filter(s => resolveCommentId(s) === paintContextId) : []);
     
-    // ★★★ CRITICAL: edit/new 下書き表示条件（boolean統一、ID分離）★★★
-    const showEditDraft = canvasReady && isEditMode && storageDraftReady;
-    const showNewDraft = canvasReady && isNewMode && storageDraftReady;
+    // ★★★ CRITICAL: edit/new 下書き表示条件（boolean完全統一、ID明確化）★★★
+    const showEditDraft = !!(canvasReady && isEditMode && storageDraftReady);
+    const showNewDraft = !!(canvasReady && isNewMode && storageDraftReady);
     const shouldShowAnyDraft = showEditDraft || showNewDraft;
-    const filterIdForDraft = draftFilterId || paintContextId;
+    const filterIdForDraft = isEditMode ? String(composerTargetCommentId) : (isNewMode ? String(tempCommentId) : null);
     
     const draftShapesForView = shouldShowAnyDraft && filterIdForDraft
-      ? draftShapesNormalized.filter(s => resolveCommentId(s) === filterIdForDraft)
+      ? draftShapesNormalized.filter(s => String(resolveCommentId(s) || '') === filterIdForDraft)
       : [];
     
     // ★★★ CRITICAL: DB + draft を合流（重複除去、draftが優先）★★★
@@ -1847,7 +1846,7 @@ function ShareViewContent() {
               </div>
             ) : (
               <ViewerCanvas
-                key={`${token}:${shareLink?.file_id}:${currentPage}`}
+                key={canvasContextKey}
                 ref={viewerCanvasRef}
                 fileUrl={file?.file_url}
                 mimeType={file?.mime_type}
