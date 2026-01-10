@@ -1288,9 +1288,11 @@ const ViewerCanvas = forwardRef(({
       // Undo履歴に追加
       addToUndoStack({ type: 'add', shapeId: normalizedShape.id });
 
-      // CRITICAL: Map方式でupsert（追加）+ dirty/localTs付与
+      // CRITICAL: Map方式でupsert（追加）+ dirty/localTs付与（★★★ 不変更新 ★★★）
       const shapeWithDirty = { ...normalizedShape, _dirty: true, _localTs: Date.now() };
-      shapesMapRef.current.set(shapeWithDirty.id, shapeWithDirty);
+      const newMap = new Map(shapesMapRef.current);
+      newMap.set(shapeWithDirty.id, shapeWithDirty);
+      shapesMapRef.current = newMap;
       bump();
       onShapesChange?.(getAllShapes()); // ★ 常に全量を渡す
       setCurrentShape(null);
