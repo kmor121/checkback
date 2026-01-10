@@ -222,12 +222,13 @@ const ViewerCanvas = forwardRef(({
   const mergedShapes = useMemo(() => getAllShapes(), [shapesVersion]);
   
   // CRITICAL: 実際に描画するshape配列（hidePaintUntilSelectで強制非表示）
-  // ★★★ CRITICAL FIX: mergedShapes（Map由来）ではなく、existingShapes（props）を直接使う ★★★
+  // ★★★ CRITICAL FIX: currentShapeとの重複を完全に排除 ★★★
   const renderedShapes = useMemo(() => {
     console.log('[ViewerCanvas] renderedShapes calculation:', {
       hidePaintUntilSelect,
       showAllPaint,
       activeCommentId,
+      currentShapeId: currentShape?.id,
       draftCommentId: draftCommentIdRef.current,
       lastStableId: lastStableCommentIdRef.current,
       existingShapesCount: existingShapes?.length || 0,
@@ -242,7 +243,13 @@ const ViewerCanvas = forwardRef(({
 
     // ★★★ CRITICAL: existingShapesを直接使う（親から渡されたフィルタ済みデータ）★★★
     // Map経由だと同期の問題が起きるので、propsを信頼する
-    const sourceShapes = existingShapes || [];
+    let sourceShapes = existingShapes || [];
+    
+    // ★★★ CRITICAL: 描画中のcurrentShapeとIDが重複するshapeは除外（二重描画防止）★★★
+    if (currentShape?.id) {
+      sourceShapes = sourceShapes.filter(s => s.id !== currentShape.id);
+      console.log('[ViewerCanvas] Excluded currentShape from renderedShapes:', currentShape.id);
+    }
     
     if (showAllPaint) {
       console.log('[ViewerCanvas] renderedShapes: showAllPaint mode, returning all', sourceShapes.length);
@@ -267,7 +274,7 @@ const ViewerCanvas = forwardRef(({
     });
     
     return sourceShapes;
-  }, [existingShapes, showAllPaint, activeCommentId, hidePaintUntilSelect]);
+  }, [existingShapes, showAllPaint, activeCommentId, hidePaintUntilSelect, currentShape]);
   
   // ★ CRITICAL: activeShapes を existingShapes から抽出（comment_id統一判定）
   const activeShapes = useMemo(() => {
@@ -1720,6 +1727,9 @@ const ViewerCanvas = forwardRef(({
   
   // Shape描画（正規化座標から復元）
   const renderShape = (shape, isExisting = false) => {
+    // ★★★ CRITICAL: 描画中のshape（currentShape）かどうかを判定 ★★★
+    const isDrawingThisShape = currentShape && currentShape.id === shape.id;
+    
     const isSelected = selectedId === shape.id;
     const canTransform = shape.tool === 'rect' || shape.tool === 'circle' || shape.tool === 'text' || shape.tool === 'arrow';
     // ★ CRITICAL: 選択可能か（クリックで選択）と編集可能か（移動/変形/削除）を分離
@@ -1730,19 +1740,21 @@ const ViewerCanvas = forwardRef(({
       key: shape.id,
       stroke: shape.stroke,
       strokeWidth: shape.strokeWidth,
-      listening: isSelectable, // ★選択可能な時は当たり判定ON（クリックで選択）
-      onPointerDown: isSelectable ? (e) => {
+      // ★★★ CRITICAL: 描画中のshapeは完全非インタラクティブ ★★★
+      listening: isSelectable && !isDrawingThisShape,
+      onPointerDown: (isSelectable && !isDrawingThisShape) ? (e) => {
         e.cancelBubble = true;
         setSelectedId(shape.id);
         if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
         if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
       } : undefined,
       ref: (node) => { if (node) shapeRefs.current[shape.id] = node; },
-      draggable: isEditable, // ★移動はpaintMode時のみ
-      onDragStart: isEditable ? (e) => handleDragStart(shape, e) : undefined,
-      onDragMove: isEditable ? (e) => handleDragMove(shape, e) : undefined,
-      onDragEnd: isEditable ? (e) => handleDragEnd(shape, e) : undefined,
-      onTransformEnd: (isEditable && canTransform) ? (e) => handleTransformEnd(shape, e) : undefined,
+      // ★★★ CRITICAL: 描画中のshapeはドラッグ不可 ★★★
+      draggable: isEditable && !isDrawingThisShape,
+      onDragStart: (isEditable && !isDrawingThisShape) ? (e) => handleDragStart(shape, e) : undefined,
+      onDragMove: (isEditable && !isDrawingThisShape) ? (e) => handleDragMove(shape, e) : undefined,
+      onDragEnd: (isEditable && !isDrawingThisShape) ? (e) => handleDragEnd(shape, e) : undefined,
+      onTransformEnd: (isEditable && canTransform && !isDrawingThisShape) ? (e) => handleTransformEnd(shape, e) : undefined,
     };
 
     // バウンディングボックス用の計算
@@ -2324,9 +2336,12 @@ const ViewerCanvas = forwardRef(({
             scaleX={contentScale}
             scaleY={contentScale}
           >
-            {/* CRITICAL: mergedShapesから renderedShapes のみ描画 */}
+            {/* ★★★ CRITICAL: 確定済みshapeのみ描画（currentShapeとの重複は既に除外済み）★★★ */}
             {renderedShapes.map(s => renderShape(s, true))}
+            
+            {/* ★★★ CRITICAL: 描画中のcurrentShapeは最後に独立して描画（二重描画防止）★★★ */}
             {currentShape && renderShape(currentShape, false)}
+            
             <Transformer ref={transformerRef} />
           </Group>
         </Layer>
