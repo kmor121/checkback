@@ -1408,55 +1408,22 @@ function ShareViewContent() {
                   selectComment(comment);
                 }}
                 onShapesChange={(updated) => {
-                  // ★★★ CRITICAL BUG FIX: 編集モードでは activeCommentId を使用 ★★★
-                  const isEdit = !!activeCommentId;
-                  const targetId = isEdit ? String(activeCommentId) : null;
+                  // ★★★ CRITICAL: 全ての描画変更はdraftShapesに保存（DB保存は送信時のみ）★★★
+                  const targetCommentId = paintSessionCommentId;
                   
                   console.log('[ShareView] onShapesChange called:', {
                     updatedCount: updated.length,
-                    isEdit,
-                    targetId,
+                    targetCommentId,
+                    tempCommentId,
                     activeCommentId,
-                    paintSessionCommentId,
                   });
                   
-                  if (!isEdit) {
-                    // 新規モード: draftShapesに保存
-                    draftShapesRef.current = updated;
-                    setDraftShapes(updated);
-                  } else {
-                    // ★★★ 編集モード: activeCommentId のshapeのみをマージ対象にする ★★★
-                    const targetShapes = allShapes.filter(s => String(s.comment_id) === targetId);
-                    const updatedExisting = targetShapes.map(s => {
-                      const localUpdate = updated.find(u => u.id === s.id);
-                      return localUpdate ? { ...s, ...localUpdate } : s;
-                    });
-                    
-                    // CRITICAL: 新規追加分もマージ（同じcomment_idのもののみ）
-                    const newShapes = updated.filter(u => !targetShapes.find(s => s.id === u.id));
-                    const merged = [...updatedExisting, ...newShapes];
-                    
-                    // ★ queryClientのキャッシュを直接更新（他のcomment_idのshapeは維持）
-                    queryClient.setQueryData(['paintShapes', token, shareLink?.file_id, currentPage], (old) => {
-                      if (!old) return old;
-                      // 他のcomment_idのshapeは維持
-                      const otherShapes = old.filter(ps => String(ps.comment_id) !== targetId);
-                      // このcomment_idのshapeは新しいデータで置換
-                      const updatedShapes = merged.map(shape => ({
-                        id: shape.dbId || shape.id,
-                        client_shape_id: shape.id,
-                        file_id: shareLink.file_id,
-                        share_token: token,
-                        comment_id: targetId,  // ★ activeCommentIdを使用
-                        page_no: currentPage,
-                        shape_type: shape.tool,
-                        data_json: JSON.stringify(shape),
-                        author_key: guestId,
-                        author_name: guestName,
-                      }));
-                      return [...otherShapes, ...updatedShapes];
-                    });
-                  }
+                  // メモリに保存
+                  draftShapesRef.current = updated;
+                  setDraftShapes(updated);
+                  
+                  // ★★★ localStorageに下書き保存（debounce付き）★★★
+                  saveDraftDebounced(updated, targetCommentId, tempCommentId);
                 }}
                 onBeginPaint={handleBeginPaint}
                 onSaveShape={handleSaveShape}
