@@ -209,21 +209,16 @@ const ViewerCanvas = forwardRef(({
   const isEditableShape2 = (shape) =>
     canMutate && isSelectableShape(shape);
   
-  // CRITICAL: 描画に使うcomment_idを取得（activeCommentIdまたは仮ID）
-  // ★★★ CRITICAL: effectiveActiveIdを優先（編集/選択/セッションで統一）★★★
+  // CRITICAL: 描画に使うcomment_idを取得（effectiveActiveIdまたは仮ID）
+  // ★★★ CRITICAL FIX: String型で返す（型統一）★★★
   const getCommentIdForDrawing = () => {
     // ★ effectiveActiveId（親から渡されたactiveCommentId）を優先
-    if (effectiveActiveId != null) return effectiveActiveId;
+    if (effectiveActiveId != null) return String(effectiveActiveId);
     // 仮ID生成（onBeginPaintは非同期で投げるだけ）
     if (!draftCommentIdRef.current) {
       draftCommentIdRef.current = generateUUID();
-      if (DEBUG_MODE) console.log('[ViewerCanvas] Generated new draftCommentId:', draftCommentIdRef.current);
     }
-    // ★ CRITICAL: 仮ID生成時はhidePaintUntilSelectを解除
-    if (hidePaintUntilSelect) {
-      setHidePaintUntilSelect(false);
-    }
-    return draftCommentIdRef.current;
+    return String(draftCommentIdRef.current);
   };
   
   // ★ CRITICAL: Mapが唯一の真実（mergedShapesはMap由来）
