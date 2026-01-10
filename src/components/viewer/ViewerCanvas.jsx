@@ -350,17 +350,21 @@ const ViewerCanvas = forwardRef(({
   useEffect(() => {
     if (clearAfterSubmitNonce !== prevNonceRef.current) {
       prevNonceRef.current = clearAfterSubmitNonce;
-      if (DEBUG_MODE) console.log('[ViewerCanvas] clearAfterSubmitNonce changed, clearing display state');
 
-      // CRITICAL: 強制非表示フラグON
-      setHidePaintUntilSelect(true);
-
-      // 描画表示をクリア（existingShapesは消さない）
-      lastStableCommentIdRef.current = null;
+      // ★★★ CRITICAL: 送信完了後は全ての編集状態を完全リセット ★★★
+      // draftCommentIdRef（前コメントのドラフト参照）
       draftCommentIdRef.current = null;
+      
+      // 選択中shapeId
       setSelectedId(null);
+      
+      // currentShape（描画中オブジェクト）
       setCurrentShape(null);
+      
+      // isDrawing
       setIsDrawing(false);
+      
+      // テキストエディタ
       setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
 
       // Transformer解除
