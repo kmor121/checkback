@@ -91,6 +91,7 @@ const ViewerCanvas = forwardRef(({
   onDeleteShape,
   onBeginPaint,
   paintMode = false,
+  draftReady = false, // ★★★ CRITICAL: draft hydrate完了フラグ ★★★
   tool = 'select',
   strokeColor = '#ff0000',
   strokeWidth = 2,
@@ -226,30 +227,26 @@ const ViewerCanvas = forwardRef(({
   // ★ CRITICAL: 選択に使うIDは activeCommentId または draftCommentId（ShareViewからの仮ID）
   // ★★★ A: draftCommentIdRef.currentではなく、propsのdraftCommentIdを優先 ★★★
   const effectiveActiveId = activeCommentId ?? draftCommentId ?? draftCommentIdRef.current ?? null;
-  
-  // ★ CRITICAL: 選択と編集を分離（表示フィルタ用 - paintMode必須）
-  const canSelect = paintMode && isEditMode;    // paintMode時のみ選択可能
-  const canMutate = paintMode && isEditMode;    // 移動/変形はpaintMode時だけ
-  const canEdit = canMutate;                    // 後方互換用エイリアス
+
+  // ★★★ CRITICAL: canEdit = paintMode && draftReady（hydrate完了必須）★★★
+  const canEdit = paintMode && draftReady && isEditMode;
+  const canSelect = canEdit;    // 選択もcanEditに統一
+  const canMutate = canEdit;    // 移動/変形もcanEditに統一
   
   // ★★★ NEW: 削除専用フラグ（paintMode不問、targetIdがあれば削除可能）★★★
   const targetIdForDelete = effectiveActiveId != null ? String(effectiveActiveId) : '';
   const canEditPaint = targetIdForDelete !== '';  // 削除操作の可否
 
-  // ★ このshapeを選択できるか（selectツール時 + targetIdがある場合）
-  // ★★★ FIX: 編集モードではpaintMode不問で選択可能にする ★★★
+  // ★★★ CRITICAL: 選択可能性（canEdit && selectツール && commentId一致）★★★
   const isSelectableShape = (shape) => {
-    // selectツールでなければ選択不可
+    if (!canEdit) return false;  // paintMode && draftReady 必須
     if (tool !== 'select') return false;
-    // targetIdがなければ選択不可
     if (effectiveActiveId == null) return false;
-    // comment_id一致チェック
     return sameId(shapeCommentId(shape), effectiveActiveId);
   };
 
-  // ★ このshapeを編集できるか（移動/変形用 - paintMode必須）
-  const isEditableShape2 = (shape) =>
-    canMutate && isSelectableShape(shape);
+  // ★★★ CRITICAL: 編集可能性（選択可能 = 編集可能）★★★
+  const isEditableShape2 = (shape) => isSelectableShape(shape);
   
   // CRITICAL: 描画に使うcomment_idを取得（paintContextId = draftCommentId が最優先）
   // ★★★ CRITICAL: draftCommentId（= paintContextId）を最優先、UUID生成禁止 ★★★
@@ -342,9 +339,9 @@ const ViewerCanvas = forwardRef(({
 
   // CRITICAL: 編集可能かをcomment_id一致で判定（sameId使用）
   const isEditableShape = (shape) => {
-    if (!canEdit) return false;                  // paintMode && tool==='select' の時だけ編集OK
-    if (activeCommentId == null) return false;   // 0を弾かないために == null を使う
-    return sameId(shapeCommentId(shape), activeCommentId);
+    if (!canEdit) return false;                  // paintMode && draftReady && tool==='select' の時だけ編集OK
+    if (effectiveActiveId == null) return false;
+    return sameId(shapeCommentId(shape), effectiveActiveId);
   };
   
   // fileUrl安定化（最後の有効URLを保持）
@@ -652,17 +649,17 @@ const ViewerCanvas = forwardRef(({
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
         return;
       }
-      
+
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        // ★★★ FIX: canEditPaintで判定（paintMode不問）★★★
-        if (canEditPaint && selectedId) {
-          const selectedShape = shapes.find(s => s.id === selectedId);
-          if (selectedShape) {
-            const shapeCommentIdValue = shapeCommentId(selectedShape);
-            if (sameId(shapeCommentIdValue, targetIdForDelete)) {
-              e.preventDefault();
-              handleDelete();
-            }
+        // ★★★ CRITICAL: canEdit で判定（paintMode && draftReady 必須）★★★
+        if (!canEdit || !selectedId) return;
+
+        const selectedShape = shapes.find(s => s.id === selectedId);
+        if (selectedShape) {
+          const shapeCommentIdValue = shapeCommentId(selectedShape);
+          if (sameId(shapeCommentIdValue, effectiveActiveId)) {
+            e.preventDefault();
+            handleDelete();
           }
         }
       } else if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
@@ -673,10 +670,10 @@ const ViewerCanvas = forwardRef(({
         performRedo();
       }
     };
-    
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [selectedId, shapes, undoStack, redoStack, canEditPaint, targetIdForDelete]);
+    }, [selectedId, shapes, undoStack, redoStack, canEdit, effectiveActiveId]);
 
   // ResizeObserver
   useEffect(() => {
@@ -846,30 +843,30 @@ const ViewerCanvas = forwardRef(({
     onShapesChange?.(getAllShapes());
   };
 
-  // CRITICAL: 単体削除（★★★ canEditPaintで判定、paintMode不問 ★★★）
+  // CRITICAL: 単体削除（★★★ canEdit で判定、paintMode && draftReady 必須 ★★★）
   const handleDelete = async () => {
     // ★★★ DEBUG: 単体削除の詳細ログ ★★★
     console.log('[ViewerCanvas] ========== HANDLE DELETE START ==========');
     console.log('[ViewerCanvas] handleDelete state:', { 
       selectedId, 
-      targetIdForDelete, 
-      canEditPaint, 
+      canEdit, 
       paintMode, 
+      draftReady,
       tool,
       shapesMapSize: shapesMapRef.current.size,
     });
-    
+
+    // ★★★ CRITICAL: canEdit 必須（paintMode && draftReady）★★★
+    if (!canEdit) {
+      console.log('[ViewerCanvas] Delete blocked: canEdit=false');
+      console.log('[ViewerCanvas] ========== HANDLE DELETE END (canEdit=false) ==========');
+      return;
+    }
+
     // ★★★ CRITICAL: selectedIdが必須 ★★★
     if (!selectedId) {
       console.log('[ViewerCanvas] Delete blocked: no selectedId');
       console.log('[ViewerCanvas] ========== HANDLE DELETE END (no selectedId) ==========');
-      return;
-    }
-    
-    // ★★★ CRITICAL: canEditPaintで削除可否を判定（paintMode不問）★★★
-    if (!canEditPaint) {
-      console.log('[ViewerCanvas] Delete blocked: canEditPaint=false (no targetId)');
-      console.log('[ViewerCanvas] ========== HANDLE DELETE END (canEditPaint=false) ==========');
       return;
     }
     
@@ -880,16 +877,16 @@ const ViewerCanvas = forwardRef(({
       console.log('[ViewerCanvas] ========== HANDLE DELETE END (shape not found) ==========');
       return;
     }
-    
-    // ★★★ CRITICAL: comment_id一致チェック（targetIdForDeleteと比較）★★★
+
+    // ★★★ CRITICAL: comment_id一致チェック（effectiveActiveIdと比較）★★★
     const shapeCommentIdValue = shapeCommentId(selectedShape);
     console.log('[ViewerCanvas] comment_id check:', { 
       shapeCommentIdValue, 
-      targetIdForDelete,
-      match: sameId(shapeCommentIdValue, targetIdForDelete),
+      effectiveActiveId,
+      match: sameId(shapeCommentIdValue, effectiveActiveId),
     });
-    
-    if (!sameId(shapeCommentIdValue, targetIdForDelete)) {
+
+    if (!sameId(shapeCommentIdValue, effectiveActiveId)) {
       console.log('[ViewerCanvas] Delete blocked: comment_id mismatch');
       console.log('[ViewerCanvas] ========== HANDLE DELETE END (comment_id mismatch) ==========');
       return;
@@ -1035,6 +1032,8 @@ const ViewerCanvas = forwardRef(({
       console.log('[ViewerCanvas] handlePointerDown called', {
         tool,
         paintMode,
+        draftReady,
+        canEdit,
         isDrawMode,
         isDrawing,
         textEditorVisible: textEditor.visible,
@@ -1042,6 +1041,14 @@ const ViewerCanvas = forwardRef(({
         hidePaintUntilSelect,
         currentShapeCommentId: currentShape?.comment_id,
       });
+    }
+
+    // ★★★ CRITICAL: 描画開始は canEdit 必須（paintMode && draftReady）★★★
+    if (!canEdit && tool !== 'text') {
+      if (DEBUG_MODE) {
+        console.log('[ViewerCanvas] PointerDown blocked: canEdit=false');
+      }
+      return;
     }
 
     // ★★★ CRITICAL: 描画開始時に古いcurrentShapeを強制クリア（前コメントのdraft残り防止）★★★
@@ -2823,6 +2830,7 @@ const ViewerCanvas = forwardRef(({
           <div style={{ marginBottom: '8px', borderBottom: '1px solid #333', paddingBottom: '6px' }}>
             <div><strong style={{ color: '#0ff' }}>Drawing:</strong></div>
             <div>paintMode: {paintMode ? 'ON' : 'OFF'}</div>
+            <div>draftReady: {draftReady ? 'YES' : 'NO'}</div>
             <div>tool: {tool}</div>
             <div>canEdit: {canEdit ? 'YES' : 'NO'}</div>
             <div>isDrawing: {isDrawing ? 'YES' : 'NO'}</div>

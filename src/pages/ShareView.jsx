@@ -351,6 +351,9 @@ function ShareViewContent() {
 
   // ★★★ CRITICAL FIX: hydratedKeyRef を string ref に変更（targetKey追跡用）★★★
   const hydratedKeyRef = useRef(null);
+
+  // ★★★ CRITICAL: draftReady フラグ（hydrate完了判定）★★★
+  const draftReady = !!targetKey && hydratedKeyRef.current === targetKey;
   
   useEffect(() => {
     // ★★★ CRITICAL: targetKey未確定時はスキップ（完了扱いにしない）★★★
@@ -1698,6 +1701,7 @@ function ShareViewContent() {
                 onSaveShape={handleSaveShape}
                 onDeleteShape={handleDeleteShape}
                 paintMode={isReady && paintMode && !!paintContextId}
+                draftReady={draftReady}
                 tool={tool}
                 onToolChange={setTool}
                 onStrokeColorChange={setStrokeColor}
