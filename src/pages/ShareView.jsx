@@ -352,27 +352,14 @@ function ShareViewContent() {
     });
   }, [targetKey, draftShapes.length]);
 
-  // ★★★ 下書き保存関数（debounce付き）★★★
+  // ★★★ 下書き保存関数（debounce付き）- 後方互換用、実際はuseEffectで自動保存 ★★★
   const saveDraftDebounced = React.useCallback((shapes, commentId, tempId) => {
-    if (!shareLink?.file_id) return;
-    
-    // 既存のタイマーをキャンセル
-    if (saveDraftTimeoutRef.current) {
-      clearTimeout(saveDraftTimeoutRef.current);
-    }
-    
-    saveDraftTimeoutRef.current = setTimeout(() => {
-      const key = getDraftKey(shareLink.file_id, commentId, tempId);
-      if (key && shapes.length > 0) {
-        saveDraft(key, shapes, { pageNo: currentPage });
-      } else if (key && shapes.length === 0) {
-        // shapesが空なら下書きを削除
-        deleteDraft(key);
-      }
-    }, 500); // 500msのdebounce
-  }, [shareLink?.file_id, currentPage]);
+    // ★★★ P3で自動保存されるため、ここでは何もしない ★★★
+    // （後方互換のため関数は残す）
+    console.log('[ShareView] saveDraftDebounced called (noop, auto-save handles this)');
+  }, []);
 
-  // ★★★ 下書き復元関数 ★★★
+  // ★★★ 下書き復元関数（後方互換用）★★★
   const restoreDraft = React.useCallback((commentId, tempId) => {
     if (!shareLink?.file_id) return [];
     
