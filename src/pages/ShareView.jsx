@@ -266,27 +266,91 @@ function ShareViewContent() {
     console.log('[ShareView] Saved tempCommentId to localStorage:', tempCommentId);
   }, [shareLink?.file_id, tempCommentId]);
 
-  // ★★★ 下書き自動復元（paintMode開始時に復元済みなので、ここでは初回ロード時のHUD用にカウントのみ）★★★
-  const [draftDebugInfo, setDraftDebugInfo] = useState({ targetKey: null, loadedCount: 0, renderedCount: 0, savedAt: null });
+  // ★★★ P1: targetKey を useMemo で安定計算（paintMode依存なし）★★★
+  const targetKey = React.useMemo(() => {
+    if (!shareLink?.file_id) return null;
+    
+    // 編集モード：既存commentId
+    // 新規モード：tempCommentId
+    const targetCommentId = composerMode === 'edit' ? composerTargetCommentId : null;
+    const effectiveTempId = targetCommentId ? null : tempCommentId;
+    
+    return getDraftKey(shareLink.file_id, targetCommentId, effectiveTempId);
+  }, [shareLink?.file_id, composerMode, composerTargetCommentId, tempCommentId]);
+
+  // ★★★ P2: targetKey 変更時に下書きを自動復元（paintMode依存なし）★★★
+  const prevTargetKeyRef = useRef(null);
+  useEffect(() => {
+    // targetKeyが変わった時のみ復元（初回含む）
+    if (targetKey === prevTargetKeyRef.current) return;
+    prevTargetKeyRef.current = targetKey;
+    
+    if (!targetKey) {
+      // キーがない場合は空にリセット
+      draftShapesRef.current = [];
+      setDraftShapes([]);
+      console.log('[ShareView] targetKey is null, clearing draftShapes');
+      return;
+    }
+    
+    const draft = loadDraft(targetKey);
+    const shapes = draft?.shapes || [];
+    
+    console.log('[ShareView] Auto-restore draft on targetKey change:', {
+      targetKey,
+      loadedCount: shapes.length,
+      savedAt: draft?.updatedAt,
+    });
+    
+    draftShapesRef.current = shapes;
+    setDraftShapes(shapes);
+    
+    if (shapes.length > 0) {
+      showToast(`${shapes.length}個の下書きを復元しました`, 'info');
+    }
+  }, [targetKey]);
+
+  // ★★★ P3: draftShapes 変更時に自動保存（debounce付き）★★★
+  useEffect(() => {
+    if (!targetKey) return;
+    if (draftShapes.length === 0) {
+      // 空になったら下書きを削除
+      deleteDraft(targetKey);
+      console.log('[ShareView] draftShapes empty, deleted draft:', targetKey);
+      return;
+    }
+    
+    // debounce保存
+    if (saveDraftTimeoutRef.current) {
+      clearTimeout(saveDraftTimeoutRef.current);
+    }
+    
+    saveDraftTimeoutRef.current = setTimeout(() => {
+      saveDraft(targetKey, draftShapes, { pageNo: currentPage });
+      console.log('[ShareView] Auto-saved draft:', targetKey, 'shapes:', draftShapes.length);
+    }, 500);
+    
+    return () => {
+      if (saveDraftTimeoutRef.current) {
+        clearTimeout(saveDraftTimeoutRef.current);
+      }
+    };
+  }, [targetKey, draftShapes, currentPage]);
+
+  // ★★★ デバッグHUD用の情報 ★★★
+  const [draftDebugInfo, setDraftDebugInfo] = useState({ targetKey: null, loadedCount: 0, renderedCount: 0, savedAt: null, loadDraftFound: false });
   
   useEffect(() => {
-    if (!shareLink?.file_id) return;
-    
-    // 現在のターゲットキーを計算
-    const targetCommentId = paintSessionCommentId || (composerMode === 'edit' ? composerTargetCommentId : null);
-    const currentTempId = tempCommentId;
-    const key = getDraftKey(shareLink.file_id, targetCommentId, targetCommentId ? null : currentTempId);
-    
-    // 下書きを試しに読み込んでデバッグ情報を更新
-    const draft = key ? loadDraft(key) : null;
+    const draft = targetKey ? loadDraft(targetKey) : null;
     
     setDraftDebugInfo({
-      targetKey: key,
+      targetKey: targetKey,
       loadedCount: draft?.shapes?.length || 0,
       renderedCount: draftShapes.length,
       savedAt: draft?.updatedAt || null,
+      loadDraftFound: !!draft,
     });
-  }, [shareLink?.file_id, paintSessionCommentId, composerMode, composerTargetCommentId, tempCommentId, draftShapes.length]);
+  }, [targetKey, draftShapes.length]);
 
   // ★★★ 下書き保存関数（debounce付き）★★★
   const saveDraftDebounced = React.useCallback((shapes, commentId, tempId) => {
