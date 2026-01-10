@@ -1756,14 +1756,16 @@ const ViewerCanvas = forwardRef(({
     clear: () => {
       if (DEBUG_MODE) console.log('[ViewerCanvas] clear() called');
       // ★ CRITICAL: Mapはクリアしない（existingShapesは保持）
-      // draftShapesのみクリア（comment_idがdraftCommentIdRefのもの）
+      // draftShapesのみクリア（comment_idがdraftCommentIdRefのもの）（★★★ 不変更新 ★★★）
       const draftId = draftCommentIdRef.current;
       if (draftId) {
+        const newMap = new Map(shapesMapRef.current);
         for (const [id, shape] of shapesMapRef.current.entries()) {
           if (shape.comment_id === draftId || shape._dirty) {
-            shapesMapRef.current.delete(id);
+            newMap.delete(id);
           }
         }
+        shapesMapRef.current = newMap;
       }
       bump();
       setCurrentShape(null);
@@ -1778,14 +1780,16 @@ const ViewerCanvas = forwardRef(({
     afterSubmitClear: () => {
       if (DEBUG_MODE) console.log('[ViewerCanvas] afterSubmitClear called');
       
-      // ★★★ CRITICAL: dirtyなshapeのみ削除（DBに保存済みのshapeは残す）★★★
+      // ★★★ CRITICAL: dirtyなshapeのみ削除（DBに保存済みのshapeは残す）（★★★ 不変更新 ★★★）
       const draftId = draftCommentIdRef.current;
+      const newMap = new Map(shapesMapRef.current);
       for (const [id, shape] of shapesMapRef.current.entries()) {
         // draftCommentIdに紐づくshapeまたはdirtyなshapeを削除
         if ((draftId && shape.comment_id === draftId) || shape._dirty) {
-          shapesMapRef.current.delete(id);
+          newMap.delete(id);
         }
       }
+      shapesMapRef.current = newMap;
       bump();
       
       setHidePaintUntilSelect(true);
