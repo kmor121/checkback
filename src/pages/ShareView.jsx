@@ -456,13 +456,14 @@ function ShareViewContent() {
     }
   };
 
-  // ★★★ CRITICAL: 全削除処理を統一（編集モード・新規モード両対応）★★★
+  // ★★★ CRITICAL: 全削除処理（楽観的UI：ローカル即時削除→DB削除）★★★
   const handleClearAll = async () => {
     // ★★★ CRITICAL: targetIdは編集中コメント > 選択中コメント の優先順 ★★★
     const targetId = String(composerTargetCommentId ?? activeCommentId ?? '');
     
     // ★★★ DEBUG HUD: 削除前の状態を出力 ★★★
-    const deleteAllCandidateCount = paintShapes.filter(s => String(s.comment_id ?? '') === targetId).length;
+    const shapesToDelete = paintShapes.filter(s => String(s.comment_id ?? '') === targetId);
+    const deleteAllCandidateCount = shapesToDelete.length;
     console.log('[handleClearAll] ========== DELETE ALL START ==========');
     console.log('[handleClearAll] targetId:', targetId);
     console.log('[handleClearAll] deleteAllCandidateCount:', deleteAllCandidateCount);
@@ -473,57 +474,67 @@ function ShareViewContent() {
       paintSessionCommentId,
     });
     
-    try {
-      // ★★★ 1. draftShapesをクリア（新規・編集両方で実行）★★★
-      const draftCount = draftShapesRef.current.length;
-      draftShapesRef.current = [];
-      setDraftShapes([]);
-      
-      // ★★★ 2. targetIdが空なら新規モード（draftのみ削除で完了）★★★
-      if (!targetId) {
-        viewerCanvasRef.current?.clear();
-        showToast(`${draftCount}個の描画をクリアしました`);
-        console.log('[handleClearAll] draft only, deletedLocalCount:', draftCount, 'deletedDbCount:', 0);
-        return;
-      }
-      
-      // ★★★ 3. 既存コメントの描画をDBから削除（編集モード）★★★
-      // ★★★ CRITICAL: author_key条件を外して全削除（自分以外の描画も消す仕様に）★★★
-      const shapesToDelete = paintShapes.filter(s => {
-        const shapeCommentId = String(s.comment_id ?? '');
-        return shapeCommentId === targetId;
-      });
-      
-      console.log('[handleClearAll] DB shapes to delete:', {
-        targetId,
-        shapesToDeleteCount: shapesToDelete.length,
-        shapeIds: shapesToDelete.map(s => s.id),
-      });
-      
-      let deletedDbCount = 0;
-      for (const shape of shapesToDelete) {
-        try {
-          await base44.entities.PaintShape.delete(shape.id);
-          deletedDbCount++;
-        } catch (e) {
-          console.error('[handleClearAll] Failed to delete shape:', shape.id, e);
-        }
-      }
-
-      await queryClient.invalidateQueries({ queryKey: ['paintShapes', token, shareLink?.file_id, currentPage] });
+    // ★★★ 1. draftShapesを即時クリア（新規・編集両方で実行）★★★
+    const draftCount = draftShapesRef.current.length;
+    draftShapesRef.current = [];
+    setDraftShapes([]);
+    
+    // ★★★ 2. targetIdが空なら新規モード（draftのみ削除で完了）★★★
+    if (!targetId) {
       viewerCanvasRef.current?.clear();
-      
-      const totalDeleted = draftCount + deletedDbCount;
-      console.log('[handleClearAll] ========== DELETE ALL COMPLETE ==========');
-      console.log('[handleClearAll] deletedLocalCount:', draftCount);
-      console.log('[handleClearAll] deletedDbCount:', deletedDbCount);
-      console.log('[handleClearAll] totalDeleted:', totalDeleted);
-      
+      showToast(`${draftCount}個の描画をクリアしました`);
+      console.log('[handleClearAll] draft only, deletedLocalCount:', draftCount, 'deletedDbCount:', 0);
+      return;
+    }
+    
+    // ★★★ 3. 楽観的UI：DBより先にローカルキャッシュを即時削除 ★★★
+    const idsToDelete = shapesToDelete.map(s => s.id);
+    const backupShapes = [...paintShapes]; // 失敗時の復元用
+    
+    // ★ queryClientのキャッシュから即時削除（即座に再描画される）
+    queryClient.setQueryData(['paintShapes', token, shareLink?.file_id, currentPage], (old) => {
+      if (!old) return old;
+      return old.filter(s => !idsToDelete.includes(s.id));
+    });
+    
+    // ViewerCanvas側もクリア
+    viewerCanvasRef.current?.clear();
+    
+    console.log('[handleClearAll] Optimistic update done, idsToDelete:', idsToDelete.length);
+    
+    // ★★★ 4. DB削除を実行（バックグラウンド） ★★★
+    let deletedDbCount = 0;
+    let hasError = false;
+    
+    for (const shape of shapesToDelete) {
+      try {
+        await base44.entities.PaintShape.delete(shape.id);
+        deletedDbCount++;
+      } catch (e) {
+        console.error('[handleClearAll] Failed to delete shape:', shape.id, e);
+        hasError = true;
+      }
+    }
+    
+    // ★★★ 5. 結果処理 ★★★
+    if (hasError && deletedDbCount < idsToDelete.length) {
+      // 一部失敗：キャッシュを復元してユーザーに通知
+      console.warn('[handleClearAll] Some deletes failed, reverting cache');
+      queryClient.setQueryData(['paintShapes', token, shareLink?.file_id, currentPage], backupShapes);
+      showToast(`一部削除に失敗しました（${deletedDbCount}/${idsToDelete.length}）`, 'error');
+    } else {
+      // 成功：念のためinvalidate（他クライアントとの整合性）
+      await queryClient.invalidateQueries({ queryKey: ['paintShapes', token, shareLink?.file_id, currentPage] });
+    }
+    
+    const totalDeleted = draftCount + deletedDbCount;
+    console.log('[handleClearAll] ========== DELETE ALL COMPLETE ==========');
+    console.log('[handleClearAll] deletedLocalCount:', draftCount);
+    console.log('[handleClearAll] deletedDbCount:', deletedDbCount);
+    console.log('[handleClearAll] totalDeleted:', totalDeleted);
+    
+    if (!hasError) {
       showToast(`${totalDeleted}個の描画を削除しました`, 'success');
-    } catch (error) {
-      console.error('[handleClearAll] ERROR:', error);
-      const errorMsg = error.message || String(error);
-      showToast(`削除失敗: ${errorMsg}`, 'error');
     }
   };
 
