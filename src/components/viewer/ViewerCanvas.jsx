@@ -438,7 +438,7 @@ const ViewerCanvas = forwardRef(({
   // ★★★ CRITICAL FIX: 不変更新（新しいMapを作成）して確実に再レンダリング ★★★
   useEffect(() => {
     if (!existingShapes) return;
-    
+
     console.log('[ViewerCanvas] existingShapes useEffect:', {
       length: existingShapes.length,
       activeCommentId,
@@ -446,11 +446,11 @@ const ViewerCanvas = forwardRef(({
       mapSize: shapesMapRef.current.size,
       shapeIds: existingShapes.map(s => ({ id: s.id?.substring?.(0, 8), cid: s.comment_id })),
     });
-    
+
     // ★★★ CRITICAL: 新しいMapを作成（不変更新）★★★
     const newMap = new Map(shapesMapRef.current);
     let changed = false;
-    
+
     for (const s of existingShapes) {
       // ★★★ CRITICAL: comment_idが空のshapeは取り込まない（意図せず表示されないように）★★★
       const cid = shapeCommentId(s);
@@ -458,17 +458,32 @@ const ViewerCanvas = forwardRef(({
         console.log('[ViewerCanvas] Skipping shape with empty comment_id:', s.id?.substring?.(0, 8));
         continue;
       }
-      
+
       const prev = newMap.get(s.id);
+
+      // ★★★ CRITICAL GUARD: 既存shapeのcomment_idが変わる更新は拒否（comment_idは不変）★★★
+      if (prev) {
+        const prevCid = shapeCommentId(prev);
+        const nextCid = String(cid);
+        if (prevCid != null && prevCid !== '' && String(prevCid) !== nextCid) {
+          console.warn('[ViewerCanvas] BLOCKED: comment_id change attempt!', {
+            shapeId: s.id?.substring?.(0, 8),
+            prevCid,
+            nextCid,
+          });
+          continue; // この更新はスキップ
+        }
+      }
+
       // dirtyローカルがあるならローカルを優先（巻き戻り防止）
       if (prev?._dirty) continue;
-      
+
       // それ以外はserverを取り込む（upsert）
       const next = prev ? { ...prev, ...s } : s;
       newMap.set(s.id, next);
       changed = true;
     }
-    
+
     // ★★★ CRITICAL: changedに関わらず必ずbump()を呼ぶ（初期ロード時にrenderedShapesが再計算されるように）★★★
     console.log('[ViewerCanvas] Map updated (immutable), new size:', newMap.size, 'changed:', changed);
     shapesMapRef.current = newMap;
