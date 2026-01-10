@@ -432,69 +432,36 @@ function ShareViewContent() {
 
 
 
-  // CRITICAL: _idベース保存で増殖・not found対策
+  // ★★★ CRITICAL: 描画確定時はDB保存せず、localStorageのみに保存 ★★★
   const handleSaveShape = async (shape, mode) => {
     if (!isReady) {
       console.warn('[ShareView] Not ready yet, save aborted');
       return;
     }
     
-    try {
-      const targetCommentId = paintSessionCommentId;
-      
-      // Draft（新規コメント）の場合はメモリに保存のみ（ref即時更新）
-      if (!targetCommentId) {
-        if (mode === 'create') {
-          draftShapesRef.current = [...draftShapesRef.current, shape];
-        } else {
-          draftShapesRef.current = draftShapesRef.current.map(s => (s.id === shape.id ? shape : s));
-        }
-        setDraftShapes(draftShapesRef.current);
-        return { draft: true };
-      }
-
-      // 既存コメントの場合はDBに保存
-      const shapeData = {
-        file_id: shareLink.file_id,
-        share_token: token,
-        comment_id: targetCommentId,
-        page_no: currentPage,
-        client_shape_id: shape.id,
-        shape_type: shape.tool,
-        data_json: JSON.stringify(shape),
-        author_key: guestId,
-        author_name: guestName || 'Guest',
-      };
-      
-      let result;
-      
-      if (shape.dbId) {
-        try {
-          result = await base44.entities.PaintShape.update(shape.dbId, shapeData);
-          if (DEBUG_MODE) console.log('[ShareView] Updated existing shape:', shape.dbId);
-        } catch (err) {
-          if (err.message?.includes('not found') || err.message?.includes('Not Found')) {
-            console.warn('[ShareView] Update failed (not found), creating:', shape.dbId);
-            result = await base44.entities.PaintShape.create(shapeData);
-          } else {
-            throw err;
-          }
-        }
-      } else {
-        result = await base44.entities.PaintShape.create(shapeData);
-        if (DEBUG_MODE) console.log('[ShareView] Created new shape:', result.id);
-      }
-
-      // ★★★ CRITICAL: invalidateを完全に削除（onShapesChangeで直接キャッシュ更新済み）★★★
-      console.log('[ShareView] Shape saved, cache updated via onShapesChange');
-
-      return { ...result, dbId: result.id };
-    } catch (error) {
-      console.error('[ShareView] Save shape error:', error);
-      const errorMsg = error.response?.data?.error || error.message || String(error);
-      showToast(`保存失敗: ${errorMsg}`, 'error');
-      throw new Error(errorMsg);
+    const targetCommentId = paintSessionCommentId;
+    
+    // ★★★ CRITICAL: DB保存は行わない（送信時にまとめて保存）★★★
+    // メモリ（draftShapesRef）のみ更新
+    if (mode === 'create') {
+      draftShapesRef.current = [...draftShapesRef.current, shape];
+    } else {
+      draftShapesRef.current = draftShapesRef.current.map(s => (s.id === shape.id ? shape : s));
     }
+    setDraftShapes(draftShapesRef.current);
+    
+    // ★★★ localStorageに下書き保存（debounce付き）★★★
+    saveDraftDebounced(draftShapesRef.current, targetCommentId, tempCommentId);
+    
+    console.log('[ShareView] Shape saved to draft (NOT DB):', {
+      shapeId: shape.id,
+      mode,
+      targetCommentId,
+      tempCommentId,
+      totalDraftCount: draftShapesRef.current.length,
+    });
+    
+    return { draft: true };
   };
 
   const handleDeleteShape = async (shape) => {
