@@ -580,6 +580,31 @@ function ShareViewContent() {
           body: composerText,
         });
         
+        // ★★★ 編集モードでも下書きshapesをDBに保存 ★★★
+        if (shapesToCommit.length > 0) {
+          console.log('[ShareView] Saving draft shapes to DB (edit mode):', shapesToCommit.length);
+          for (const shape of shapesToCommit) {
+            await base44.entities.PaintShape.create({
+              file_id: shareLink.file_id,
+              share_token: token,
+              comment_id: composerTargetCommentId,
+              page_no: currentPage,
+              client_shape_id: shape.id,
+              shape_type: shape.tool,
+              data_json: JSON.stringify(shape),
+              author_key: guestId,
+              author_name: guestName,
+            });
+          }
+        }
+        
+        // ★★★ 送信成功後にlocalStorageの下書きを削除 ★★★
+        const editDraftKey = getDraftKey(shareLink.file_id, composerTargetCommentId, null);
+        if (editDraftKey) {
+          deleteDraft(editDraftKey);
+          console.log('[ShareView] Deleted edit draft after submit:', editDraftKey);
+        }
+        
         // 添付ファイルがあれば追加
         if (pendingFiles.length > 0) {
           for (const file of pendingFiles) {
