@@ -464,38 +464,28 @@ function ShareViewContent() {
     return { draft: true };
   };
 
+  // ★★★ CRITICAL: 削除もDB操作せず、localStorageのみ ★★★
   const handleDeleteShape = async (shape) => {
     if (!isReady) {
       console.warn('[ShareView] Not ready yet, delete aborted');
       return;
     }
     
-    try {
-      // Draft中の場合はメモリから削除（ref即時更新）
-      if (!paintSessionCommentId) {
-        draftShapesRef.current = draftShapesRef.current.filter(s => s.id !== shape.id);
-        setDraftShapes(draftShapesRef.current);
-        return;
-      }
-
-      // CRITICAL: 必ずdbId(_id)で削除（client_shape_idは使わない）
-      if (shape.dbId) {
-        await base44.entities.PaintShape.delete(shape.dbId);
-        if (DEBUG_MODE) console.log('[ShareView] Deleted shape by dbId:', shape.dbId);
-      } else {
-        console.warn('[ShareView] No dbId for shape, cannot delete:', shape.id);
-        showToast('削除できませんでした（IDが見つかりません）', 'error');
-        return;
-      }
-
-      await queryClient.invalidateQueries({ queryKey: ['paintShapes', token, shareLink?.file_id, currentPage] });
-      showToast('削除完了', 'success');
-    } catch (error) {
-      console.error('[ShareView] Delete shape error:', error);
-      const errorMsg = error.response?.data?.error || error.message || String(error);
-      showToast(`削除失敗: ${errorMsg}`, 'error');
-      throw new Error(errorMsg);
-    }
+    const targetCommentId = paintSessionCommentId;
+    
+    // メモリから削除（ref即時更新）
+    draftShapesRef.current = draftShapesRef.current.filter(s => s.id !== shape.id);
+    setDraftShapes(draftShapesRef.current);
+    
+    // ★★★ localStorageに下書き保存（debounce付き）★★★
+    saveDraftDebounced(draftShapesRef.current, targetCommentId, tempCommentId);
+    
+    console.log('[ShareView] Shape deleted from draft (NOT DB):', {
+      shapeId: shape.id,
+      targetCommentId,
+      tempCommentId,
+      remainingDraftCount: draftShapesRef.current.length,
+    });
   };
 
   // ★★★ CRITICAL: 全削除処理（楽観的UI：ローカル即時削除→DB削除）★★★
