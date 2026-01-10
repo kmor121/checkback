@@ -227,17 +227,21 @@ const ViewerCanvas = forwardRef(({
   const mergedShapes = useMemo(() => getAllShapes(), [shapesVersion]);
   
   // CRITICAL: 実際に描画するshape配列（hidePaintUntilSelectで強制非表示）
-  // ★★★ CRITICAL FIX: currentShapeとの重複を完全に排除 ★★★
+  // ★★★ ROOT FIX: shapesMapRef (shapesVersion) 由来のみから生成し、existingShapesを直接使わない ★★★
   const renderedShapes = useMemo(() => {
+    // ★★★ CRITICAL: Map由来のshapes（shapesVersionで再計算トリガー）★★★
+    const mapShapes = getAllShapes();
+    
     console.log('[ViewerCanvas] renderedShapes calculation:', {
       hidePaintUntilSelect,
       showAllPaint,
       activeCommentId,
+      effectiveActiveId,
       currentShapeId: currentShape?.id,
       draftCommentId: draftCommentIdRef.current,
       lastStableId: lastStableCommentIdRef.current,
-      existingShapesCount: existingShapes?.length || 0,
-      mergedShapesCount: mergedShapes.length,
+      mapShapesCount: mapShapes.length,
+      shapesVersion,
     });
 
     // ★送信完了後は強制非表示
@@ -246,8 +250,8 @@ const ViewerCanvas = forwardRef(({
       return [];
     }
 
-    // ★★★ CRITICAL: existingShapesを直接使う（親から渡されたフィルタ済みデータ）★★★
-    let sourceShapes = existingShapes || [];
+    // ★★★ CRITICAL: Map由来のshapesのみを使用（existingShapesは直接参照しない）★★★
+    let sourceShapes = mapShapes;
 
     // ★★★ CRITICAL: 描画中のcurrentShapeとIDが重複するshapeは除外（二重描画防止）★★★
     if (currentShape?.id) {
@@ -262,16 +266,22 @@ const ViewerCanvas = forwardRef(({
     const renderTargetId =
       activeCommentId ?? draftCommentIdRef.current ?? lastStableCommentIdRef.current ?? null;
 
+    console.log('[ViewerCanvas] renderTargetId:', renderTargetId, 'sourceShapes before filter:', sourceShapes.length);
+
     if (renderTargetId == null) {
       return [];
     }
 
-    // ★★★ CRITICAL: currentShapeがある場合、そのcomment_idもチェック ★★★
-    // currentShapeのcomment_idがrenderTargetIdと異なる場合は表示しない（切替時のチラつき防止）
-    // → currentShapeはrenderShape内で別途描画されるので、ここでは除外済み
+    // ★★★ CRITICAL: renderTargetIdに一致するshapeのみをフィルタ ★★★
+    const filtered = sourceShapes.filter(s => {
+      const cid = shapeCommentId(s);
+      return cid != null && sameId(cid, renderTargetId);
+    });
 
-    return sourceShapes;
-  }, [existingShapes, showAllPaint, activeCommentId, hidePaintUntilSelect, currentShape]);
+    console.log('[ViewerCanvas] renderedShapes filtered:', filtered.length, 'for targetId:', renderTargetId);
+
+    return filtered;
+  }, [shapesVersion, showAllPaint, activeCommentId, hidePaintUntilSelect, currentShape]);
   
   // ★ CRITICAL: activeShapes を existingShapes から抽出（comment_id統一判定）
   const activeShapes = useMemo(() => {
