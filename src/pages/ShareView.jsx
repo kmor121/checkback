@@ -543,18 +543,21 @@ function ShareViewContent() {
     
     // ★★★ CRITICAL: DB保存は行わない（送信時にまとめて保存）★★★
     // P2 FIX: functional update で確実に追記（置き換えではなく追記）
+    // ★★★ P2 FIX: _dirty=true を付与してViewerCanvasのFULL SYNCで消されないようにする ★★★
+    const shapeWithDirty = { ...shapeWithId, _dirty: true, _localTs: Date.now() };
+    
     setDraftShapes(prev => {
       if (mode === 'create') {
         // 同じIDが既に存在する場合は追記しない（重複防止）
-        if (prev.some(s => s.id === shapeWithId.id)) {
+        if (prev.some(s => s.id === shapeWithDirty.id)) {
           return prev;
         }
-        const next = [...prev, shapeWithId];
+        const next = [...prev, shapeWithDirty];
         draftShapesRef.current = next;
         return next;
       } else {
         // update mode: 既存shapeを置き換え
-        const next = prev.map(s => (s.id === shapeWithId.id ? shapeWithId : s));
+        const next = prev.map(s => (s.id === shapeWithDirty.id ? shapeWithDirty : s));
         draftShapesRef.current = next;
         return next;
       }
