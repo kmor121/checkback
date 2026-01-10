@@ -345,13 +345,18 @@ function ShareViewContent() {
     composerMode === 'new' ? 'new' :
     null;
 
-  // ★★★ CRITICAL: 下書き表示判定（edit or new、view/reply時は非表示）★★★
-  const shouldShowDraft = React.useMemo(() => {
-    return composerMode === 'edit' || composerMode === 'new';
-  }, [composerMode]);
-
   // temp かどうかの判定
   const isTempCid = (cid) => typeof cid === 'string' && cid.startsWith('temp_');
+  
+  // ★★★ CRITICAL: mode判定（boolean統一、TDZ回避）★★★
+  const isEditMode = composerMode === 'edit' && !!composerTargetCommentId;
+  const isNewMode = composerMode === 'new' && !!tempCommentId;
+  
+  // ★★★ CRITICAL: 下書き表示判定（edit or new、view/reply時は非表示）★★★
+  const shouldShowDraft = paintMode && (isEditMode || isNewMode);
+  
+  // ★★★ CRITICAL: draft filter用のID（型統一）★★★
+  const draftFilterId = isEditMode ? String(composerTargetCommentId) : (isNewMode ? String(tempCommentId) : null);
 
   // ★★★ CRITICAL: targetKey（scope分離版、view時はnullで表示しない）★★★
   const targetKey = React.useMemo(() => {
@@ -397,8 +402,9 @@ function ShareViewContent() {
     });
   }, [shouldShowDraft, composerMode, draftScope, targetKey]);
   
-  // ★★★ CRITICAL: storage由来draft準備完了（ちらつき防止）★★★
-  const storageDraftReady = !!targetKey && hydratedKeyState === targetKey;
+  // ★★★ CRITICAL: cache即座復元でready（hydrate待ちの空白時間を無くす）★★★
+  const hasCacheForKey = !!targetKey && draftCacheRef.current.has(targetKey);
+  const storageDraftReady = !!targetKey && (hasCacheForKey || hydratedKeyState === targetKey);
   
   // ★★★ CRITICAL: 下書きをcanvasに混ぜるか（storage準備完了 && mode判定）★★★
   const includeDraftInCanvas = React.useMemo(() => {
@@ -406,7 +412,7 @@ function ShareViewContent() {
   }, [shouldShowDraft, storageDraftReady]);
 
   // ★★★ CRITICAL: draftReady フラグ（hydrate完了判定、state化で再レンダー保証）★★★
-  const draftReady = !!targetKey && hydratedKeyState === targetKey;
+  const draftReady = storageDraftReady;
   
   useEffect(() => {
     // ★★★ CRITICAL: targetKey未確定時はスキップ（完了扱いにしない）★★★
@@ -435,7 +441,12 @@ function ShareViewContent() {
     const cached = draftCacheRef.current.get(targetKey) || [];
     draftShapesRef.current = cached;
     setDraftShapes(cached);
-    console.log('[draft] cache restored:', { targetKey: targetKey.substring(0, 30), cachedCount: cached.length });
+    console.log('[DRAFT_DEBUG] cache restored:', JSON.stringify({
+      targetKey: targetKey.substring(0, 30),
+      cachedCount: cached.length,
+      composerMode,
+      draftScope,
+    }));
     
     // ★★★ P1: localStorage読み込み → 正規化 → キャッシュ更新 ★★★
     const draft = loadDraft(targetKey);
@@ -1485,12 +1496,15 @@ function ShareViewContent() {
     });
   }, [paintContextId, shouldShowDraft, storageDraftReady, composerMode, activeCommentId, tempCommentId]);
 
-  // ★★★ CRITICAL: canvasContextKey（paintContextIdベース、切替でMap完全リセット）★★★
+  // ★★★ CRITICAL: canvasContextKey（mode/scope含めて完全分離、Map reset確実化）★★★
   const canvasContextKey = React.useMemo(() => {
     const fileId = shareLink?.file_id || 'no-file';
     if (showAllPaint) return `${fileId}:all`;
-    return `${fileId}:paint:${paintContextId || 'none'}`;
-  }, [shareLink?.file_id, showAllPaint, paintContextId]);
+    const mode = composerMode || 'view';
+    const scope = draftScope || 'none';
+    const showDraft = shouldShowDraft ? 'draft' : 'nodraft';
+    return `${fileId}:${mode}:${scope}:${paintContextId || 'none'}:${showDraft}`;
+  }, [shareLink?.file_id, showAllPaint, composerMode, draftScope, paintContextId, shouldShowDraft]);
 
   // ★★★ C: チラつき防止 - DB素材が読み込まれるまでドラフトを表示しない ★★★
   const canvasReady = React.useMemo(() => {
@@ -1522,14 +1536,14 @@ function ShareViewContent() {
       ? allShapesNormalized
       : (paintContextId ? allShapesNormalized.filter(s => resolveCommentId(s) === paintContextId) : []);
     
-    // ★★★ CRITICAL: edit/new 下書きを明示的に分離（view時は非表示）★★★
-    const isEditMode = composerMode === 'edit';
-    const isNewMode = composerMode === 'new';
-    const shouldShowEditDraft = canvasReady && isEditMode && storageDraftReady && paintContextId;
-    const shouldShowNewDraft = canvasReady && isNewMode && storageDraftReady && paintContextId;
+    // ★★★ CRITICAL: edit/new 下書き表示条件（boolean統一、ID分離）★★★
+    const showEditDraft = canvasReady && isEditMode && storageDraftReady;
+    const showNewDraft = canvasReady && isNewMode && storageDraftReady;
+    const shouldShowAnyDraft = showEditDraft || showNewDraft;
+    const filterIdForDraft = draftFilterId || paintContextId;
     
-    const draftShapesForView = (shouldShowEditDraft || shouldShowNewDraft)
-      ? draftShapesNormalized.filter(s => resolveCommentId(s) === paintContextId)
+    const draftShapesForView = shouldShowAnyDraft && filterIdForDraft
+      ? draftShapesNormalized.filter(s => resolveCommentId(s) === filterIdForDraft)
       : [];
     
     // ★★★ CRITICAL: DB + draft を合流（重複除去、draftが優先）★★★
@@ -1541,12 +1555,15 @@ function ShareViewContent() {
       paintContextId: paintContextId?.substring(0, 12) || 'null',
       composerMode,
       draftScope,
-      shouldShowDraft,
+      targetKey: targetKey?.substring(0, 30) || 'null',
       isEditMode,
       isNewMode,
-      shouldShowEditDraft,
-      shouldShowNewDraft,
+      shouldShowDraft,
+      showEditDraft,
+      showNewDraft,
+      shouldShowAnyDraft,
       storageDraftReady,
+      hasCacheForKey,
       canvasReady,
       shapesLoaded,
       dbCount: dbShapesForView.length,

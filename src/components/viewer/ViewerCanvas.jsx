@@ -501,7 +501,7 @@ const ViewerCanvas = forwardRef(({
   }, [forceClearToken]);
 
   // ★★★ CRITICAL FIX: existingShapesで完全同期（upsertではなく置換）★★★
-  // ★★★ CONTEXT切替時はincoming空でもMapクリア（切替時のみ保持禁止）★★★
+  // ★★★ CRITICAL: 空配列同期の扱い（preserveOnEmpty不使用、常に上書き）★★★
   useEffect(() => {
     if (!existingShapes) return;
 
@@ -509,9 +509,19 @@ const ViewerCanvas = forwardRef(({
     const prevMapSize = shapesMapRef.current.size;
     const ctx = canvasContextKey || 'no-ctx';
 
-    // ★★★ CRITICAL: incoming empty でも context切替後なら一度はクリア済み ★★★
+    // ★★★ CRITICAL: incoming empty時も必ずMapをクリア（空＝意図的な空と判断）★★★
+    if (incomingEmpty && prevMapSize > 0) {
+      console.log('[ViewerCanvas] FULL SYNC: incoming empty, clearing Map', {
+        ctx,
+        prevMapSize,
+      });
+      shapesMapRef.current = new Map();
+      bump();
+      return;
+    }
+
     if (incomingEmpty) {
-      console.log('[ViewerCanvas] FULL SYNC SKIPPED: incoming empty', {
+      console.log('[ViewerCanvas] FULL SYNC SKIPPED: incoming empty, Map already empty', {
         ctx,
         prevMapSize,
       });
