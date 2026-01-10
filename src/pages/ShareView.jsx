@@ -322,12 +322,19 @@ function ShareViewContent() {
   }, [targetKey]);
 
   // ★★★ P3: draftShapes 変更時に自動保存（debounce付き）★★★
+  // ★★★ FIX: 空になっただけでdeleteDraftしない、didHydrateDraftRefでガード ★★★
   useEffect(() => {
     if (!targetKey) return;
+    
+    // ★★★ 復元完了前はautosaveしない ★★★
+    if (!didHydrateDraftRef.current) {
+      console.log('[draft] autosave SKIPPED (not hydrated yet):', { targetKey, draftShapesLength: draftShapes.length });
+      return;
+    }
+    
+    // ★★★ FIX: 空になっただけでは削除しない（明示操作時のみ削除）★★★
     if (draftShapes.length === 0) {
-      // 空になったら下書きを削除
-      deleteDraft(targetKey);
-      console.log('[ShareView] draftShapes empty, deleted draft:', targetKey);
+      console.log('[draft] autosave SKIPPED (empty, but not deleting):', { targetKey });
       return;
     }
     
@@ -338,7 +345,7 @@ function ShareViewContent() {
     
     saveDraftTimeoutRef.current = setTimeout(() => {
       saveDraft(targetKey, draftShapes, { pageNo: currentPage });
-      console.log('[ShareView] Auto-saved draft:', targetKey, 'shapes:', draftShapes.length);
+      console.log('[draft] autosave fired:', { targetKey, shapesCount: draftShapes.length });
     }, 500);
     
     return () => {
