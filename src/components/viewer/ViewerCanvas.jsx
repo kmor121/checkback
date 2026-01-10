@@ -724,7 +724,7 @@ const ViewerCanvas = forwardRef(({
     onShapesChange?.(getAllShapes());
   };
 
-  // CRITICAL: 削除（Map方式）
+  // CRITICAL: 削除（★★★ 不変更新で新しいMapを作成 ★★★）
   const handleDelete = async () => {
     if (!canEdit || !selectedId) return;
     
@@ -744,8 +744,10 @@ const ViewerCanvas = forwardRef(({
       transformerRef.current.getLayer()?.batchDraw();
     }
     
-    // Optimistic update（Mapから削除）
-    shapesMapRef.current.delete(selectedId);
+    // Optimistic update（★★★ CRITICAL: 新しいMapを作成 ★★★）
+    const newMap = new Map(shapesMapRef.current);
+    newMap.delete(selectedId);
+    shapesMapRef.current = newMap;
     bump();
     onShapesChange?.(getAllShapes());
     setSelectedId(null);
@@ -762,8 +764,10 @@ const ViewerCanvas = forwardRef(({
         console.error('Delete shape error:', err);
         setLastSaveStatus('error');
         setLastError(err.message);
-        // 失敗時はrevert（Mapに戻す）
-        shapesMapRef.current.set(shape.id, shape);
+        // 失敗時はrevert（★★★ CRITICAL: 新しいMapを作成 ★★★）
+        const revertMap = new Map(shapesMapRef.current);
+        revertMap.set(shape.id, shape);
+        shapesMapRef.current = revertMap;
         bump();
         onShapesChange?.(getAllShapes());
       }
