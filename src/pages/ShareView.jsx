@@ -568,26 +568,17 @@ function ShareViewContent() {
 
   // ★★★ CRITICAL: 全削除処理（下書きのみクリア、DBは送信時まで触らない）★★★
   const handleClearAll = async () => {
-    const targetCommentId = paintSessionCommentId;
-    
     console.log('[handleClearAll] ========== CLEAR ALL START ==========');
     console.log('[handleClearAll] draftShapesCount:', draftShapesRef.current.length);
-    console.log('[handleClearAll] targetCommentId:', targetCommentId);
-    console.log('[handleClearAll] tempCommentId:', tempCommentId);
+    console.log('[handleClearAll] targetKey:', targetKey);
     
     const draftCount = draftShapesRef.current.length;
     
-    // ★★★ 1. メモリから全削除 ★★★
+    // ★★★ 1. メモリから全削除（useEffectでlocalStorage自動削除される）★★★
     draftShapesRef.current = [];
     setDraftShapes([]);
     
-    // ★★★ 2. localStorageの下書きも削除 ★★★
-    const key = getDraftKey(shareLink?.file_id, targetCommentId, tempCommentId);
-    if (key) {
-      deleteDraft(key);
-    }
-    
-    // ★★★ 3. ViewerCanvasもクリア ★★★
+    // ★★★ 2. ViewerCanvasもクリア ★★★
     viewerCanvasRef.current?.clear();
     
     console.log('[handleClearAll] ========== CLEAR ALL COMPLETE ==========');
