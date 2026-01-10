@@ -616,7 +616,8 @@ function ShareViewContent() {
       console.log('[draft] deleteDraft called (clearAll):', targetKey);
     }
     
-    // ★★★ 3. ViewerCanvasもクリア ★★★
+    // ★★★ 3. ViewerCanvasもクリア（明示クリアトークンをインクリメント）★★★
+    setForceClearToken(prev => prev + 1);
     viewerCanvasRef.current?.clear();
     
     console.log('[handleClearAll] ========== CLEAR ALL COMPLETE ==========');
