@@ -2524,31 +2524,7 @@ const ViewerCanvas = forwardRef(({
           </Group>
         </Layer>
         
-        {/* ★ DEBUGオーバーレイ Layer（最前面） */}
-        {DEBUG_MODE && (
-          <Layer listening={false}>
-            <Rect x={5} y={5} width={280} height={160} fill="rgba(0,0,0,0.8)" cornerRadius={4} />
-            <Text 
-              x={10} 
-              y={10} 
-              text={[
-                `shapes(state): ${shapes.length}`,
-                `existingShapes(props): ${existingShapes?.length ?? 0}`,
-                `mergedShapes: ${mergedShapes.length}`,
-                `renderedShapes: ${renderedShapes?.length ?? 0}`,
-                `renderTargetId: ${String(activeCommentId ?? draftCommentIdRef.current ?? lastStableCommentIdRef.current ?? 'null')}`,
-                `---`,
-                `paintMode: ${paintMode}`,
-                `tool: ${tool}`,
-                `activeCommentId: ${String(activeCommentId ?? 'null')}`,
-                `lastStableId: ${String(lastStableCommentIdRef.current ?? 'null')}`,
-              ].join('\n')}
-              fontSize={11} 
-              fill="white" 
-              lineHeight={1.3}
-            />
-          </Layer>
-        )}
+        {/* ★ DEBUGオーバーレイ Layer削除（DOM HUDに統合） */}
       </Stage>
       
       {/* デバッグオーバーレイ（拡張版） */}
