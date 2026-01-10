@@ -1822,13 +1822,25 @@ const ViewerCanvas = forwardRef(({
 
   // ★★★ CRITICAL: debugHudData の useMemo は全ての hooks の後、早期return の前に配置 ★★★
   const debugHudData = useMemo(() => {
-    const uniqueCids = [...new Set(renderedShapes.map(s => shapeCommentId(s)).filter(Boolean))].slice(0, 5);
+    const uniqueCids = [...new Set(renderedShapes.map(s => shapeCommentId(s)).filter(Boolean))].slice(0, 10);
+    
+    // comment_idごとの件数を集計
+    const countsByCommentId = {};
+    renderedShapes.forEach(s => {
+      const cid = shapeCommentId(s);
+      if (cid != null && cid !== '') {
+        const cidStr = String(cid).substring(0, 12);
+        countsByCommentId[cidStr] = (countsByCommentId[cidStr] || 0) + 1;
+      }
+    });
+    
     return {
       activeCommentId: String(activeCommentId ?? 'null'),
       effectiveActiveId: String(effectiveActiveId ?? 'null'),
       draftCommentId: String(draftCommentIdRef.current ?? 'null'),
       renderedShapesLength: renderedShapes.length,
       uniqueCommentIds: uniqueCids.map(id => String(id).substring(0, 12)),
+      countsByCommentId,
     };
   }, [activeCommentId, effectiveActiveId, renderedShapes]);
 
