@@ -66,14 +66,20 @@ const resolveCommentId = (s) => {
 };
 
 // ★★★ CRITICAL: shape正規化（入れ子を平坦化、comment_id を canonical 化）★★★
-const normalizeShape = (s) => {
+// defaultCommentId: shapeにcomment_idが無い場合のみ使用（既存値は上書きしない）
+const normalizeShape = (s, defaultCommentId = null) => {
   if (!s) return null;
   
   // 入れ子を平坦化
   const base = s.data ? { ...s, ...s.data } : (s.shape ? { ...s, ...s.shape } : s);
   
   // comment_id を canonical 化
-  const commentId = resolveCommentId(base);
+  let commentId = resolveCommentId(base);
+  
+  // ★ CRITICAL: 既存comment_idがある場合は保持、無い場合のみdefaultを使用
+  if (commentId == null || commentId === '') {
+    commentId = defaultCommentId != null ? String(defaultCommentId) : null;
+  }
   
   return {
     ...base,
@@ -345,11 +351,8 @@ function ShareViewContent() {
     const draft = loadDraft(targetKey);
     const shapes = draft?.shapes || [];
     
-    // ★★★ CRITICAL: 復元直後に normalizeShape で完全正規化（入れ子・キー揺れ吸収）★★★
-    const normalizedShapes = shapes.map(s => normalizeShape(s)).filter(Boolean).map(s => ({
-      ...s,
-      comment_id: s.comment_id || String(tempCommentId || ''),
-    }));
+    // ★★★ CRITICAL: 復元直後に normalizeShape で完全正規化（defaultにtempCommentId使用）★★★
+    const normalizedShapes = shapes.map(s => normalizeShape(s, tempCommentId)).filter(Boolean);
     
     draftShapesRef.current = normalizedShapes;
     setDraftShapes(normalizedShapes);
@@ -1292,13 +1295,13 @@ function ShareViewContent() {
     return result;
   }, [paintShapes, isReady]);
 
-  // ★★★ CRITICAL FIX: renderTargetCommentId の優先順位修正（activeCommentId 最優先）★★★
+  // ★★★ CRITICAL FIX: renderTargetCommentId の優先順位（選択中コメント最優先）★★★
   const renderTargetCommentId = React.useMemo(() => {
     if (showAllPaint) return null;
-    // ★ CRITICAL: activeCommentId が最優先（コメント選択時は必ず表示）
-    if (activeCommentId) return String(activeCommentId);
-    // activeCommentId が無い時のみ tempCommentId を使う（新規コメント下書き）
-    if (tempCommentId) return String(tempCommentId);
+    // ★ CRITICAL: 選択中コメント（activeCommentId）が最優先
+    if (activeCommentId != null && activeCommentId !== '') return String(activeCommentId);
+    // 選択中コメントが無い時のみ tempCommentId（新規下書き）
+    if (tempCommentId != null && tempCommentId !== '') return String(tempCommentId);
     return null;
   }, [showAllPaint, activeCommentId, tempCommentId]);
 
@@ -1312,7 +1315,7 @@ function ShareViewContent() {
   }, [renderTargetCommentId, activeCommentId, tempCommentId]);
 
   // CRITICAL: 親側でフィルタリング（ViewerCanvasに渡すshapes）
-  // ★★★ CRITICAL FIX: resolveCommentId でキー揺れを完全吸収 ★★★
+  // ★★★ CRITICAL FIX: normalizeShape で正規化してからフィルタ ★★★
   const shapesForCanvas = React.useMemo(() => {
     console.log('[ShareView] shapesForCanvas calculation:', {
       renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
@@ -1321,21 +1324,27 @@ function ShareViewContent() {
       allShapesCount: allShapes.length,
     });
     
+    // ★★★ CRITICAL: allShapes は既に正規化済み（defaultCommentId=null で DB値保持）★★★
+    const allShapesNormalized = allShapes;
+    
+    // ★★★ CRITICAL: draftShapes を正規化（defaultCommentId=tempCommentId）★★★
+    const draftShapesNormalized = draftShapes.map(s => normalizeShape(s, tempCommentId)).filter(Boolean);
+    
     // ★★★ CRITICAL: showAllPaint時はDB shapes + draftShapes を全て表示 ★★★
     if (showAllPaint) {
-      const draftIds = new Set(draftShapes.map(s => s.id));
-      const dbShapesWithoutDuplicates = allShapes.filter(s => !draftIds.has(s.id));
-      return [...dbShapesWithoutDuplicates, ...draftShapes];
+      const draftIds = new Set(draftShapesNormalized.map(s => s.id));
+      const dbShapesWithoutDuplicates = allShapesNormalized.filter(s => !draftIds.has(s.id));
+      return [...dbShapesWithoutDuplicates, ...draftShapesNormalized];
     }
     
     // ★★★ CRITICAL FIX: renderTargetCommentId でフィルタ（resolveCommentId使用）★★★
     const dbShapesFiltered = renderTargetCommentId
-      ? allShapes.filter(s => resolveCommentId(s) === renderTargetCommentId)
+      ? allShapesNormalized.filter(s => resolveCommentId(s) === renderTargetCommentId)
       : [];
     
     const draftShapesFiltered = renderTargetCommentId
-      ? draftShapes.filter(s => resolveCommentId(s) === renderTargetCommentId)
-      : draftShapes;
+      ? draftShapesNormalized.filter(s => resolveCommentId(s) === renderTargetCommentId)
+      : draftShapesNormalized;
     
     // ★★★ CRITICAL: DB shapes + draftShapes を合流（draftが優先） ★★★
     const draftIds = new Set(draftShapesFiltered.map(s => s.id));
@@ -1350,7 +1359,7 @@ function ShareViewContent() {
     });
     
     return merged;
-  }, [allShapes, showAllPaint, renderTargetCommentId, draftShapes]);
+  }, [allShapes, showAllPaint, renderTargetCommentId, draftShapes, tempCommentId]);
 
   // 親コメントと返信を分離（条件付きreturnの前に配置）
   const filteredComments = React.useMemo(() => {

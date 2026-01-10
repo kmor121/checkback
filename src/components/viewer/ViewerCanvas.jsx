@@ -34,10 +34,14 @@ const resolveCommentId = (s) => {
 };
 
 // ★★★ CRITICAL: shape正規化（入れ子を平坦化、comment_id を canonical 化）★★★
-const normalizeShape = (s) => {
+// defaultCommentId: shapeにcomment_idが無い場合のみ使用（既存値は上書きしない）
+const normalizeShape = (s, defaultCommentId = null) => {
   if (!s) return null;
   const base = s.data ? { ...s, ...s.data } : (s.shape ? { ...s, ...s.shape } : s);
-  const commentId = resolveCommentId(base);
+  let commentId = resolveCommentId(base);
+  if (commentId == null || commentId === '') {
+    commentId = defaultCommentId != null ? String(defaultCommentId) : null;
+  }
   return {
     ...base,
     comment_id: commentId,
@@ -515,8 +519,8 @@ const ViewerCanvas = forwardRef(({
     const newMap = new Map();
 
     for (const s of existingShapes) {
-      // ★★★ CRITICAL: normalizeShape で正規化してから取り込み ★★★
-      const normalized = normalizeShape(s);
+      // ★★★ CRITICAL: normalizeShape で正規化（defaultCommentId=null でDB値保持）★★★
+      const normalized = normalizeShape(s, null);
 
       // comment_idが空のshapeは取り込まない
       const cid = resolveCommentId(normalized);
