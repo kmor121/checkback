@@ -204,11 +204,11 @@ const ViewerCanvas = forwardRef(({
   const targetIdForDelete = effectiveActiveId != null ? String(effectiveActiveId) : '';
   const canEditPaint = targetIdForDelete !== '';  // 削除操作の可否
 
-  // ★ このshapeを選択できるか（編集モード時はpaintMode不問で選択可能）
+  // ★ このshapeを選択できるか（paintMode && selectツール時のみ）
   const isSelectableShape = (shape) =>
     canSelect && effectiveActiveId != null && sameId(shapeCommentId(shape), effectiveActiveId);
 
-  // ★ このshapeを編集できるか（編集モード時はpaintMode不問で編集可能）
+  // ★ このshapeを編集できるか（移動/変形用 - paintMode必須）
   const isEditableShape2 = (shape) =>
     canMutate && isSelectableShape(shape);
   
