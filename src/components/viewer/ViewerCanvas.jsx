@@ -1796,7 +1796,6 @@ const ViewerCanvas = forwardRef(({
     undo: performUndo,
     redo: performRedo,
     clear: () => {
-      if (DEBUG_MODE) console.log('[ViewerCanvas] clear() called');
       // ★ CRITICAL: Mapはクリアしない（existingShapesは保持）
       // draftShapesのみクリア（comment_idがdraftCommentIdRefのもの）（★★★ 不変更新 ★★★）
       const draftId = draftCommentIdRef.current;
@@ -1815,8 +1814,7 @@ const ViewerCanvas = forwardRef(({
       setRedoStack([]);
       setSelectedId(null);
       setIsDrawing(false);
-      draftCommentIdRef.current = null; // CRITICAL: 仮IDもリセット
-      // ★ lastStableCommentIdRefとhidePaintUntilSelectはクリアしない（コメント選択状態を維持）
+      draftCommentIdRef.current = null;
     },
     // CRITICAL: 送信完了後の強制クリア（ref経由で確実に実行）
     afterSubmitClear: () => {
