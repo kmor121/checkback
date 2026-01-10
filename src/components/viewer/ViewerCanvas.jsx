@@ -196,9 +196,10 @@ const ViewerCanvas = forwardRef(({
   const effectiveActiveId = activeCommentId ?? draftCommentIdRef.current ?? null;
   
   // ★ CRITICAL: 選択と編集を分離
-  // ★★★ FIX: paintMode時のみshapeを選択可能にする（コメント選択だけでは選択不可）★★★
-  const canSelect = paintMode && isEditMode;    // paintMode時のみ選択可能
-  const canMutate = paintMode && isEditMode;    // 移動/変形/削除はpaintMode時だけ
+  // ★★★ FIX: 編集モード（activeCommentId != null）のときはpaintMode不問で操作許可 ★★★
+  const isInEditSession = activeCommentId != null;  // 既存コメント編集中
+  const canSelect = (paintMode && isEditMode) || (isInEditSession && isEditMode);
+  const canMutate = (paintMode && isEditMode) || (isInEditSession && isEditMode);
   const canEdit = canMutate;                    // 後方互換用エイリアス
 
   // ★ このshapeを選択できるか（paintMode時のみ、effectiveActiveId使用で仮ID対応）
