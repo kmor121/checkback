@@ -1073,19 +1073,15 @@ const ViewerCanvas = forwardRef(({
       });
     }
 
-    // ★★★ B: tool='select'時は描画開始しない（明示ログ）★★★
+    // ★★★ B: tool='select'時は描画開始しない（明示ログ、常時出力）★★★
     if (tool === 'select') {
-      if (DEBUG_MODE) {
-        console.log('[ViewerCanvas] PointerDown blocked: tool=select (not a draw tool)');
-      }
+      console.log('[ViewerCanvas] PointerDown blocked: tool=select', { paintMode, canDrawNew, draftReady });
       return;
     }
     
     // ★★★ CRITICAL: 描画開始は canDrawNew でOK（draftReady不要）★★★
     if (!canDrawNew && tool !== 'text') {
-      if (DEBUG_MODE) {
-        console.log('[ViewerCanvas] PointerDown blocked: canDrawNew=false', { paintMode });
-      }
+      console.log('[ViewerCanvas] PointerDown blocked: canDrawNew=false', { paintMode, tool });
       return;
     }
 

@@ -145,7 +145,9 @@ function ShareViewContent() {
   const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
   const didInitActiveRef = useRef(false);
-  const lastActiveCommentIdRef = useRef(null); // paintContextId補完用
+  const stablePaintContextIdRef = useRef(null); // A: 一瞬もnullにしない安定ID
+  const lastMergedShapesRef = useRef([]); // D: チラつき防止用
+  const debugLogBufferRef = useRef([]); // Debug: ログ保持用
 
   // DEBUG: Trace ReviewComment.create calls
   useEffect(() => {
@@ -324,30 +326,41 @@ function ShareViewContent() {
     console.log('[ShareView] Saved tempCommentId to localStorage:', tempCommentId);
   }, [shareLink?.file_id, tempCommentId]);
 
-  // ★★★ CRITICAL: paintContextId（唯一の真実、表示・描画・下書き全て統一）★★★
-  // ★★★ C: チラつき防止 - 一瞬nullになったらlastを使う ★★★
-  const paintContextId = React.useMemo(() => {
+  // ★★★ A: computed版（通常計算）★★★
+  const computedPaintContextId = React.useMemo(() => {
     if (showAllPaint) return null;
     
-    // ★ CRITICAL: 優先順位固定（edit > active > new時のみtemp）
-    let computed = null;
-    if (composerMode === 'edit' && composerTargetCommentId) computed = String(composerTargetCommentId);
-    else if (activeCommentId) computed = String(activeCommentId);
-    else if (composerMode === 'new' && tempCommentId) computed = String(tempCommentId);
+    if (composerMode === 'edit' && composerTargetCommentId) return String(composerTargetCommentId);
+    if (activeCommentId) return String(activeCommentId);
+    if (composerMode === 'new' && tempCommentId) return String(tempCommentId);
     
-    // ★★★ C: computedがnullの場合はlastActiveCommentIdRefで補完（チラつき根絶）★★★
-    if (!computed && lastActiveCommentIdRef.current) {
-      console.log('[paintContextId]補完:', lastActiveCommentIdRef.current.substring(0, 12));
-      return lastActiveCommentIdRef.current;
-    }
-    
-    // 確定したらlastに保存
-    if (computed) {
-      lastActiveCommentIdRef.current = computed;
-    }
-    
-    return computed;
+    return null;
   }, [showAllPaint, composerMode, composerTargetCommentId, activeCommentId, tempCommentId]);
+  
+  // ★★★ A: stable版（一瞬もnullにしない、前回値保持）★★★
+  const stablePaintContextId = React.useMemo(() => {
+    const prev = stablePaintContextIdRef.current;
+    const computed = computedPaintContextId;
+    
+    // computed有効値なら即座に更新
+    if (computed) {
+      stablePaintContextIdRef.current = computed;
+      return computed;
+    }
+    
+    // computed=nullでも前回値があれば保持（チラつき防止）
+    if (prev) {
+      const log = `[stablePaintContextId] preserve: ${prev.substring(0, 12)} (computed=null)`;
+      console.log(log);
+      debugLogBufferRef.current.push(log);
+      return prev;
+    }
+    
+    return null;
+  }, [computedPaintContextId]);
+  
+  // ★★★ A: 以降は全てstablePaintContextIdを使用（computed不使用）★★★
+  const paintContextId = stablePaintContextId;
 
   // ★★★ CRITICAL: renderTargetCommentId は paintContextId と完全同一（Single Source of Truth）★★★
   const renderTargetCommentId = paintContextId;
@@ -582,13 +595,9 @@ function ShareViewContent() {
   }, [shareLink?.file_id]);
 
   const handlePaintModeChange = (mode) => {
-    console.log('[ShareView] paint start request:', { 
-      mode,
-      composerMode, 
-      activeCommentId: activeCommentId?.substring(0, 12) || 'null', 
-      tempCommentId: tempCommentId?.substring(0, 12) || 'null', 
-      paintContextId: paintContextId?.substring(0, 12) || 'null' 
-    });
+    const log = `[ShareView] paint request: mode=${mode} composerMode=${composerMode} activeCommentId=${activeCommentId?.substring(0, 12) || 'null'} tempCommentId=${tempCommentId?.substring(0, 12) || 'null'}`;
+    console.log(log);
+    debugLogBufferRef.current.push(log);
 
     if (!mode) {
       setPaintMode(false);
@@ -599,6 +608,15 @@ function ShareViewContent() {
     if (!guestName.trim()) {
       setShowNameDialog(true);
       return;
+    }
+    
+    // ★★★ B: paint ON時は同一ハンドラ内で tool強制切替（useEffect任せ禁止）★★★
+    const currentTool = tool;
+    if (currentTool === 'select' || !currentTool) {
+      const drawTool = lastDrawToolRef.current || 'pen';
+      setTool(drawTool);
+      console.log('[ShareView] B: tool forced to', drawTool);
+      debugLogBufferRef.current.push(`[B] tool forced: ${drawTool}`);
     }
 
     // 編集セッションか新規セッションかを判定
@@ -660,16 +678,7 @@ function ShareViewContent() {
     setIsDockOpen(true);
   };
   
-  // ★★★ B: paintMode ON時に tool='select'なら自動で描画ツールに変更 ★★★
-  useEffect(() => {
-    if (paintMode && (tool === 'select' || !tool)) {
-      const drawTool = lastDrawToolRef.current || 'pen';
-      console.log('[ShareView] auto-switch to draw tool:', drawTool);
-      setTool(drawTool);
-    }
-  }, [paintMode, tool]);
-  
-  // ★★★ B: 描画ツール使用時に最後のツールを記録 ★★★
+  // ★★★ B: 描画ツール使用時に最後のツールを記録（useEffect維持）★★★
   useEffect(() => {
     if (['pen', 'rect', 'circle', 'arrow', 'text'].includes(tool)) {
       lastDrawToolRef.current = tool;
@@ -1191,22 +1200,25 @@ function ShareViewContent() {
       return;
     }
 
-    // ★★★ A: paintMode中は自動OFF（exitEditModeは呼ばず、下書き削除しない）★★★
+    // ★★★ C: paintMode中は自動OFF（exitEditModeは呼ばず、下書き削除しない）★★★
     if (paintMode) {
-      console.log('[EXIT_DEBUG] selectComment: auto-exit paintMode (keep draft)');
+      const log = '[EXIT_DEBUG] selectComment: auto-OFF (draft preserved)';
+      console.log(log);
+      debugLogBufferRef.current.push(log);
       setPaintMode(false);
       setTool('select');
     }
 
-    // ★★★ A: 同じコメント再クリック → composerModeだけview（activeCommentIdは維持）★★★
+    // ★★★ C: 同じコメント再クリック → composerModeだけview（activeCommentIdは維持）★★★
     if (activeCommentId === comment.id) {
-      console.log('[EXIT_DEBUG] selectComment deselect (same comment, keep activeCommentId)');
+      const log = '[EXIT_DEBUG] deselect same (activeCommentId preserved)';
+      console.log(log);
+      debugLogBufferRef.current.push(log);
       setComposerMode('view');
       setComposerTargetCommentId(null);
       setComposerText('');
       setPendingFiles([]);
       setReplyingThreadId(null);
-      // activeCommentIdは維持（paintContextId null化を防ぐ）
       return;
     }
 
@@ -1237,27 +1249,27 @@ function ShareViewContent() {
       return;
     }
 
-    // ★★★ A: paintMode中は自動OFF（exitEditModeは呼ばず、下書き削除しない）★★★
+    // ★★★ C: paintMode中は自動OFF（下書き削除しない）★★★
     if (paintMode) {
-      console.log('[EXIT_DEBUG] enterEdit: auto-exit paintMode (keep draft)');
+      const log = '[EXIT_DEBUG] enterEdit: auto-OFF (draft preserved)';
+      console.log(log);
+      debugLogBufferRef.current.push(log);
       setPaintMode(false);
       setTool('select');
     }
 
+    // ★★★ A: ID確定→mode切替の順序保証（composerTargetCommentId先行）★★★
     setCurrentPage(comment.page_no);
     setActiveCommentId(comment.id);
-    setComposerMode('edit');
-    setComposerTargetCommentId(comment.id);
+    setComposerTargetCommentId(comment.id); // 先に確定
     setComposerText(comment.body || '');
+    setComposerMode('edit'); // 後でmode切替
     setIsDockOpen(true);
 
-    // 編集開始時はペイント/ドラフトを解除して事故防止
-    setPaintMode(false);
     setPaintSessionCommentId(null);
     setDraftShapes([]);
     draftShapesRef.current = [];
     
-    // ★★★ P1: 前のdraftkeyをクリア（edit開始時に新しいキーでhydrate）★★★
     hydratedKeyRef.current = null;
     setHydratedKeyState(null);
   };
@@ -1266,18 +1278,13 @@ function ShareViewContent() {
     enterEdit(comment);
   };
 
-  // ★★★ A: 編集モード解除の統一関数（明示キャンセル時のみ下書き削除）★★★
+  // ★★★ C: 編集モード解除の統一関数（明示キャンセル時のみ下書き削除）★★★
   const exitEditMode = (reason = 'unknown') => {
-    console.log('[EXIT_DEBUG] exitEditMode START:', {
-      reason,
-      composerMode,
-      composerTargetCommentId: composerTargetCommentId?.substring(0, 12) || 'null',
-      activeCommentId: activeCommentId?.substring(0, 12) || 'null',
-      draftShapesCount: draftShapesRef.current.length,
-      cacheSize: draftCacheRef.current.size,
-    });
+    const log = `[EXIT_DEBUG] exitEditMode: reason=${reason} mode=${composerMode} target=${composerTargetCommentId?.substring(0, 12) || 'null'}`;
+    console.log(log);
+    debugLogBufferRef.current.push(log);
 
-    // ★★★ A: 明示キャンセル時のみ下書き削除（auto_switch/deselect_same/auto_replyでは削除しない）★★★
+    // ★★★ C: 明示キャンセル時のみ下書き削除（auto系では削除しない）★★★
     const shouldDeleteDraft = ['cancel_button', 'cancel_x', 'clear_all'].includes(reason);
 
     if (shouldDeleteDraft && composerMode === 'edit' && composerTargetCommentId && shareLink?.file_id) {
@@ -1285,10 +1292,14 @@ function ShareViewContent() {
       if (editKey) {
         deleteDraft(editKey);
         draftCacheRef.current.delete(editKey);
-        console.log('[EXIT_DEBUG] Deleted edit draft (explicit cancel):', editKey, 'reason:', reason);
+        const delLog = `[EXIT_DEBUG] Draft deleted: ${editKey.substring(0, 30)} reason=${reason}`;
+        console.log(delLog);
+        debugLogBufferRef.current.push(delLog);
       }
     } else {
-      console.log('[EXIT_DEBUG] Draft preserved (auto switch):', reason);
+      const preserveLog = `[EXIT_DEBUG] Draft preserved: reason=${reason}`;
+      console.log(preserveLog);
+      debugLogBufferRef.current.push(preserveLog);
     }
     
     // ViewerCanvasの描画をクリア
@@ -1361,9 +1372,11 @@ function ShareViewContent() {
       return;
     }
 
-    // ★★★ A: paintMode中は自動OFF（exitEditModeは呼ばず、下書き削除しない）★★★
+    // ★★★ C: paintMode中は自動OFF（下書き削除しない）★★★
     if (paintMode) {
-      console.log('[EXIT_DEBUG] handleStartReply: auto-exit paintMode (keep draft)');
+      const log = '[EXIT_DEBUG] handleStartReply: auto-OFF (draft preserved)';
+      console.log(log);
+      debugLogBufferRef.current.push(log);
       setPaintMode(false);
       setTool('select');
     }
@@ -1547,7 +1560,13 @@ function ShareViewContent() {
   }, [shareLink?.file_id, showAllPaint, composerMode, draftScope, paintContextId, shouldShowDraft]);
   
   // ★★★ D: Canvas遷移中フラグ（incoming empty時のMap保持用）★★★
-  const isCanvasTransitioning = shapesFetching || !storageDraftReady;
+  const [contextSwitchingUntil, setContextSwitchingUntil] = useState(0);
+  const isCanvasTransitioning = shapesFetching || !storageDraftReady || Date.now() < contextSwitchingUntil;
+  
+  // ★★★ D: context切替時に200ms遷移期間を設定 ★★★
+  useEffect(() => {
+    setContextSwitchingUntil(Date.now() + 200);
+  }, [canvasInternalResetKey]);
 
   // ★★★ C: チラつき防止 - DB素材が読み込まれるまでドラフトを表示しない ★★★
   const canvasReady = React.useMemo(() => {
@@ -1594,7 +1613,7 @@ function ShareViewContent() {
     const dbShapesWithoutDuplicates = dbShapesForView.filter(s => !draftIds.has(s.id));
     const merged = [...dbShapesWithoutDuplicates, ...draftShapesForView];
     
-    console.log('[ShareView] shapesForCanvas result:', JSON.stringify({
+    const resultLog = JSON.stringify({
       paintContextId: paintContextId?.substring(0, 12) || 'null',
       composerMode,
       draftScope,
@@ -1612,8 +1631,21 @@ function ShareViewContent() {
       dbCount: dbShapesForView.length,
       draftCount: draftShapesForView.length,
       mergedTotal: merged.length,
-    }));
+      isTransitioning: isCanvasTransitioning,
+    });
+    console.log('[ShareView] shapesForCanvas result:', resultLog);
+    debugLogBufferRef.current.push(`[shapesForCanvas] ${resultLog}`);
     
+    // ★★★ D: 遷移中で空の場合は前回値を保持（チラつき防止）★★★
+    if (isCanvasTransitioning && merged.length === 0 && lastMergedShapesRef.current.length > 0) {
+      const preserveLog = `[D] preserve last merged: ${lastMergedShapesRef.current.length} (transitioning)`;
+      console.log(preserveLog);
+      debugLogBufferRef.current.push(preserveLog);
+      return lastMergedShapesRef.current;
+    }
+    
+    // 確定したら保存
+    lastMergedShapesRef.current = merged;
     return merged;
   }, [allShapes, draftShapes, showAllPaint, paintContextId, shouldShowDraft, storageDraftReady, composerMode, tempCommentId, canvasReady]);
 
@@ -1978,6 +2010,43 @@ function ShareViewContent() {
               />
             )}
 
+            {/* Debugコピーボタン */}
+            {DEBUG_MODE && (
+              <div className="absolute top-4 left-4 z-50">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const debugData = {
+                      composerMode,
+                      activeCommentId: activeCommentId?.substring(0, 12) || 'null',
+                      composerTargetCommentId: composerTargetCommentId?.substring(0, 12) || 'null',
+                      tempCommentId: tempCommentId?.substring(0, 12) || 'null',
+                      computedPaintContextId: computedPaintContextId?.substring(0, 12) || 'null',
+                      stablePaintContextId: stablePaintContextId?.substring(0, 12) || 'null',
+                      targetKey: targetKey?.substring(0, 30) || 'null',
+                      paintMode,
+                      tool,
+                      shapesFetching,
+                      shapesLoaded,
+                      isCanvasTransitioning,
+                      storageDraftReady,
+                      dbShapesCount: paintShapes.length,
+                      draftShapesCount: draftShapes.length,
+                      mergedCount: shapesForCanvas.length,
+                      recentLogs: debugLogBufferRef.current.slice(-50),
+                    };
+                    const text = JSON.stringify(debugData, null, 2);
+                    navigator.clipboard.writeText(text);
+                    showToast('Debug情報をコピーしました', 'success');
+                  }}
+                  className="text-xs"
+                >
+                  📋 Debug
+                </Button>
+              </div>
+            )}
+            
             {/* ズーム制御 */}
             <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-2 flex items-center gap-2">
               <Button variant="outline" size="icon" onClick={() => setZoom(Math.max(50, zoom - 25))}>
