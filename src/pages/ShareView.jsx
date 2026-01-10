@@ -56,6 +56,14 @@ import {
 
 const DEBUG_MODE = import.meta.env.VITE_DEBUG === 'true';
 
+// ★★★ CRITICAL: SSR安全なUUID生成（crypto.randomUUID代替）★★★
+const safeUUID = () => {
+  if (typeof globalThis !== 'undefined' && globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+  return `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+};
+
 // ★★★ CRITICAL: commentId解決ユーティリティ（キー揺れ完全吸収、入れ子対応）★★★
 const resolveCommentId = (s) => {
   const v = s?.comment_id ?? s?.commentId ?? s?.commentID ?? 
@@ -84,7 +92,7 @@ const normalizeShape = (s, defaultCommentId = null) => {
   return {
     ...base,
     comment_id: commentId,
-    id: base.id || base.client_shape_id || crypto.randomUUID(),
+    id: base.id || base.client_shape_id || safeUUID(),
   };
 };
 
@@ -155,8 +163,8 @@ function ShareViewContent() {
     setTimeout(() => setToast({ show: false, message: '', type: 'success' }), type === 'info' ? 5000 : 3000);
   };
   
-  // token取得：URLパラメータから
-  const params = new URLSearchParams(window.location.search);
+  // ★★★ CRITICAL: SSRガード（window未定義時は空params）★★★
+  const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
   const token = params.get('token');
 
   useEffect(() => {
@@ -1123,7 +1131,7 @@ function ShareViewContent() {
     const editingComment = comments.find(c => c.id === composerTargetCommentId);
     const hasUnsavedChanges = editingComment && composerText.trim() !== (editingComment.body || '').trim();
 
-    if (hasUnsavedChanges && !window.confirm('編集内容を破棄しますか？')) {
+    if (hasUnsavedChanges && typeof window !== 'undefined' && !window.confirm('編集内容を破棄しますか？')) {
       return;
     }
 
@@ -1164,7 +1172,7 @@ function ShareViewContent() {
 
   // コメント削除（関連PaintShapeも削除）
   const handleDeleteComment = async (comment) => {
-    if (!window.confirm('このコメントと関連する描画を削除しますか？')) {
+    if (typeof window !== 'undefined' && !window.confirm('このコメントと関連する描画を削除しますか？')) {
       return;
     }
 
@@ -1194,6 +1202,10 @@ function ShareViewContent() {
 
   // コメントURLをコピー
   const handleCopyCommentUrl = (comment) => {
+    if (typeof window === 'undefined' || !navigator.clipboard) {
+      showToast('コピーに失敗しました', 'error');
+      return;
+    }
     const url = `${window.location.origin}${window.location.pathname}?token=${token}&comment=${comment.id}`;
     navigator.clipboard.writeText(url).then(() => {
       showToast('URLをコピーしました', 'success');
@@ -1417,7 +1429,9 @@ function ShareViewContent() {
       // パスワードハッシュと比較（実装は簡易版：実際は backend function で検証）
       // ここでは password_hash が存在すれば単純比較
       if (shareLink.password_hash === password) {
-        sessionStorage.setItem(`passwordVerified_${token}`, '1');
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.setItem(`passwordVerified_${token}`, '1');
+        }
         setIsPasswordVerified(true);
         setShowPasswordDialog(false);
         setPassword('');
@@ -1583,6 +1597,7 @@ function ShareViewContent() {
             <Button 
               variant="outline"
               onClick={() => {
+                if (typeof document === 'undefined') return;
                 const link = document.createElement('a');
                 link.href = file.file_url;
                 link.download = file.original_filename || file.title || 'download';
