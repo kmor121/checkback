@@ -357,14 +357,6 @@ function ShareViewContent() {
   const shouldShowDraft = React.useMemo(() => {
     return composerMode === 'edit' || composerMode === 'new';
   }, [composerMode]);
-  
-  // ★★★ CRITICAL: storage由来draft準備完了（ちらつき防止）★★★
-  const storageDraftReady = !!targetKey && hydratedKeyState === targetKey;
-  
-  // ★★★ CRITICAL: 下書きをcanvasに混ぜるか（storage準備完了 && mode判定）★★★
-  const includeDraftInCanvas = React.useMemo(() => {
-    return shouldShowDraft && storageDraftReady;
-  }, [shouldShowDraft, storageDraftReady]);
 
   // temp かどうかの判定
   const isTempCid = (cid) => typeof cid === 'string' && cid.startsWith('temp_');
@@ -377,6 +369,14 @@ function ShareViewContent() {
     }
     return getDraftKey(shareLink.file_id, paintContextId, null);
   }, [shareLink?.file_id, paintContextId]);
+  
+  // ★★★ CRITICAL: storage由来draft準備完了（ちらつき防止）★★★
+  const storageDraftReady = !!targetKey && hydratedKeyState === targetKey;
+  
+  // ★★★ CRITICAL: 下書きをcanvasに混ぜるか（storage準備完了 && mode判定）★★★
+  const includeDraftInCanvas = React.useMemo(() => {
+    return shouldShowDraft && storageDraftReady;
+  }, [shouldShowDraft, storageDraftReady]);
 
   // ★★★ CRITICAL FIX: hydratedKeyRef を string ref に変更（targetKey追跡用）★★★
   const hydratedKeyRef = useRef(null);
