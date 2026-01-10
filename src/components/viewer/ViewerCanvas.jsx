@@ -116,7 +116,10 @@ const ViewerCanvas = forwardRef(({
   // CRITICAL: activeCommentId変化検知用
   const prevActiveCommentIdRef = useRef(activeCommentId);
   const draftCommentIdRef = useRef(null); // 仮コメントID（描画開始時にactiveCommentIdが無い場合）
-  const lastStableCommentIdRef = useRef(activeCommentId ?? null); // 最後に有効だったコメントID（一瞬null対策）
+  // ★★★ REMOVED: lastStableCommentIdRef - fallback禁止のため完全削除 ★★★
+  
+  // デバッグHUD用ログ履歴
+  const [debugHudLogs, setDebugHudLogs] = useState([]);
   
   // ★ Map方式では shapes state は不要（getAllShapes()を使う）
   // 後方互換のためのダミー（実際はMapを参照）
