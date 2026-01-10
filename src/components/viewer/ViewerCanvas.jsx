@@ -2031,77 +2031,76 @@ const ViewerCanvas = forwardRef(({
       const bboxH = Math.max(20, (Math.max(...ys) - Math.min(...ys)) + pad * 2);
 
       return (
-        <React.Fragment key={shape.id}>
-          <Group
-            ref={(node) => { if (node) shapeRefs.current[shape.id] = node; }}
-            x={groupX}
-            y={groupY}
-            listening={isSelectable && !isDrawingShape}
-            draggable={isEditable && !isDrawingShape}
-            onPointerDown={(isSelectable && !isDrawingShape) ? (e) => {
-              e.cancelBubble = true;
-              setSelectedId(shape.id);
-              if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
-              if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
-            } : undefined}
-            onDragStart={(isEditable && !isDrawingShape) ? (e) => handleDragStart(shape, e) : undefined}
-            onDragMove={(isEditable && !isDrawingShape) ? (e) => handleDragMove(shape, e) : undefined}
-            onDragEnd={(isEditable && !isDrawingShape) ? (e) => handleDragEnd(shape, e) : undefined}
-          >
-            <Line 
-              stroke={shape.stroke}
-              strokeWidth={shape.strokeWidth}
-              points={points} 
-              tension={0.5} 
-              lineCap="round" 
-              lineJoin="round" 
-              fill={undefined}
-              listening={false}
+        <Group
+          key={shape.id}
+          ref={(node) => { if (node) shapeRefs.current[shape.id] = node; }}
+          x={groupX}
+          y={groupY}
+          listening={isSelectable && !isDrawingShape}
+          draggable={isEditable && !isDrawingShape}
+          onPointerDown={(isSelectable && !isDrawingShape) ? (e) => {
+            e.cancelBubble = true;
+            setSelectedId(shape.id);
+            if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
+            if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
+          } : undefined}
+          onDragStart={(isEditable && !isDrawingShape) ? (e) => handleDragStart(shape, e) : undefined}
+          onDragMove={(isEditable && !isDrawingShape) ? (e) => handleDragMove(shape, e) : undefined}
+          onDragEnd={(isEditable && !isDrawingShape) ? (e) => handleDragEnd(shape, e) : undefined}
+        >
+          <Line 
+            stroke={shape.stroke}
+            strokeWidth={shape.strokeWidth}
+            points={points} 
+            tension={0.5} 
+            lineCap="round" 
+            lineJoin="round" 
+            fill={undefined}
+            listening={false}
+          />
+          {!isDrawingShape && (
+            <Rect 
+              x={bboxX} 
+              y={bboxY} 
+              width={bboxW} 
+              height={bboxH} 
+              fill="rgba(0,0,0,0.01)"
+              listening={isSelectable}
             />
-            {!isDrawingShape && (
+          )}
+          {isSelected && !isDrawingShape && (
+            <>
               <Rect 
                 x={bboxX} 
                 y={bboxY} 
                 width={bboxW} 
                 height={bboxH} 
-                fill="rgba(0,0,0,0.01)"
-                listening={isSelectable}
+                stroke="#3b82f6"
+                strokeWidth={1}
+                dash={[4, 4]}
+                listening={false}
               />
-            )}
-            {isSelected && !isDrawingShape && (
-              <>
-                <Rect 
-                  x={bboxX} 
-                  y={bboxY} 
-                  width={bboxW} 
-                  height={bboxH} 
-                  stroke="#3b82f6"
-                  strokeWidth={1}
-                  dash={[4, 4]}
-                  listening={false}
-                />
-                <Rect
-                  x={bboxX + 2}
-                  y={bboxY + 2}
-                  width={28}
-                  height={14}
-                  fill="#3b82f6"
-                  cornerRadius={2}
-                  listening={false}
-                />
-                <Text
-                  x={bboxX + 6}
-                  y={bboxY + 4}
-                  text="ペン"
-                  fontSize={10}
-                  fill="white"
-                  listening={false}
-                />
-              </>
-            )}
-          </Group>
+              <Rect
+                x={bboxX + 2}
+                y={bboxY + 2}
+                width={28}
+                height={14}
+                fill="#3b82f6"
+                cornerRadius={2}
+                listening={false}
+              />
+              <Text
+                x={bboxX + 6}
+                y={bboxY + 4}
+                text="ペン"
+                fontSize={10}
+                fill="white"
+                listening={false}
+              />
+            </>
+          )}
           {boundingBox && <Rect x={boundingBox.x} y={boundingBox.y} width={boundingBox.width} height={boundingBox.height} stroke="rgba(255,0,0,0.3)" strokeWidth={1} dash={[5,5]} fill={undefined} listening={false} />}
-        </React.Fragment>
+        </Group>
       );
     } else if (shape.tool === 'rect') {
       // 正規化座標を優先（必ずこれから復元）
