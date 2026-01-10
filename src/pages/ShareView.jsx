@@ -1028,10 +1028,18 @@ function ShareViewContent() {
     return result;
   }, [paintShapes, isReady]);
 
+  // ★★★ CRITICAL BUG FIX: 編集モード中は activeCommentId のみを targetId として使用 ★★★
+  // paintSessionCommentId は「新規コメント作成中」のみ使用する
+  const isEditMode = !!activeCommentId;
+  const targetIdForShapes = isEditMode
+    ? String(activeCommentId)
+    : (paintSessionCommentId ? String(paintSessionCommentId) : null);
+
   // CRITICAL: 親側でフィルタリング（ViewerCanvasに渡すshapes）
-  // ★★★ CRITICAL FIX: 型を統一して比較（文字列に変換）★★★
   const shapesForCanvas = React.useMemo(() => {
     console.log('[ShareView] shapesForCanvas calculation:', {
+      isEditMode,
+      targetIdForShapes,
       showAllPaint,
       activeCommentId,
       paintSessionCommentId,
@@ -1040,33 +1048,31 @@ function ShareViewContent() {
     });
     
     if (showAllPaint) return [...allShapes, ...draftShapes];
-    if (!activeCommentId && !paintSessionCommentId) return draftShapes;
-    
-    const targetId = paintSessionCommentId || activeCommentId;
-    const targetIdStr = String(targetId);
+    if (!targetIdForShapes && draftShapes.length === 0) return [];
+    if (!targetIdForShapes) return draftShapes;
     
     const filtered = allShapes.filter(s => {
       const shapeCommentId = s.comment_id;
-      const matches = shapeCommentId != null && String(shapeCommentId) === targetIdStr;
-      
-      console.log('[ShareView] shape filter check:', {
-        shapeId: s.id?.substring?.(0, 8),
-        shapeCommentId,
-        targetIdStr,
-        matches,
-      });
-      
-      return matches;
+      if (shapeCommentId == null || shapeCommentId === '') return false;
+      return String(shapeCommentId) === targetIdForShapes;
     });
     
+    // ★★★ 安全策: 複数のcomment_idが混ざっていたら警告 ★★★
+    const uniqueCommentIds = [...new Set(filtered.map(s => s.comment_id))];
+    if (uniqueCommentIds.length > 1) {
+      console.warn('[ShareView] WARNING: Multiple comment_ids in filtered shapes!', uniqueCommentIds);
+    }
+    
     console.log('[ShareView] shapesForCanvas result:', {
+      targetId: targetIdForShapes,
       filteredCount: filtered.length,
       draftShapesCount: draftShapes.length,
       total: filtered.length + draftShapes.length,
+      uniqueCommentIds,
     });
     
     return [...filtered, ...draftShapes];
-  }, [allShapes, showAllPaint, activeCommentId, paintSessionCommentId, draftShapes]);
+  }, [allShapes, showAllPaint, targetIdForShapes, draftShapes, isEditMode]);
 
   // 親コメントと返信を分離（条件付きreturnの前に配置）
   const filteredComments = React.useMemo(() => {
