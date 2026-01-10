@@ -56,6 +56,12 @@ import {
 
 const DEBUG_MODE = import.meta.env.VITE_DEBUG === 'true';
 
+// ★★★ CRITICAL: commentId解決ユーティリティ（キー揺れ完全吸収）★★★
+const resolveCommentId = (s) => {
+  const v = s?.comment_id ?? s?.commentId ?? s?.commentID ?? s?.comment?.id;
+  return v == null ? null : String(v);
+};
+
 function ShareViewContent() {
   const [guestName, setGuestName] = useState('');
   const [guestId, setGuestId] = useState('');
@@ -319,15 +325,21 @@ function ShareViewContent() {
     const draft = loadDraft(targetKey);
     const shapes = draft?.shapes || [];
     
-    draftShapesRef.current = shapes;
-    setDraftShapes(shapes);
+    // ★★★ CRITICAL: 復元直後に comment_id を正規化（キー揺れ吸収）★★★
+    const normalizedShapes = shapes.map(s => ({
+      ...s,
+      comment_id: resolveCommentId(s) || String(tempCommentId || ''),
+    }));
+    
+    draftShapesRef.current = normalizedShapes;
+    setDraftShapes(normalizedShapes);
     
     // ★★★ CRITICAL: hydrate完了後にキーを記録 ★★★
     hydratedKeyRef.current = targetKey;
     
     console.log('[draft] hydrate end:', {
       targetKey: targetKey.substring(0, 30),
-      loadedCount: shapes.length,
+      loadedCount: normalizedShapes.length,
       savedAt: draft?.updatedAt,
       scopeId: shareLink?.file_id?.substring(0, 12),
       tempCommentId: tempCommentId?.substring(0, 12) || 'null',
@@ -574,9 +586,11 @@ function ShareViewContent() {
       return;
     }
     
+    // ★★★ CRITICAL: comment_id を正規化して保存（キー揺れ防止）★★★
     const shapeWithDirty = { 
       ...shapeWithId, 
-      comment_id: effectiveDraftCommentId,
+      comment_id: String(effectiveDraftCommentId),
+      commentId: String(effectiveDraftCommentId),  // 念のため両方
       _dirty: true, 
       _localTs: Date.now() 
     };
@@ -1258,34 +1272,36 @@ function ShareViewContent() {
     return result;
   }, [paintShapes, isReady]);
 
-  // ★★★ CRITICAL BUG FIX: 編集モード中は activeCommentId のみを targetId として使用 ★★★
-  // paintSessionCommentId は「新規コメント作成中」のみ使用する
-  // ★★★ REQUIRED: renderTargetCommentId を確定値で渡す（リロード直後でも下書き表示） ★★★
-  // activeCommentId > draftShapes有無 > null の優先順でフィルタ対象を決定
+  // ★★★ CRITICAL FIX: isEditMode判定（編集 vs 新規を明確に分離）★★★
+  const isEditMode = composerMode === 'edit' && !!composerTargetCommentId;
+  
+  // ★★★ CRITICAL FIX: 新規時はactiveCommentIdを無視、tempCommentIdのみ使用 ★★★
   const renderTargetCommentId = React.useMemo(() => {
-    if (activeCommentId) return String(activeCommentId);
-    // ★★★ CRITICAL FIX: 新規コメントモード（activeCommentId無し）では tempCommentId を必ず使用 ★★★
-    // draftShapes.length に依存させない（レース防止）
-    if (!activeCommentId && tempCommentId) return String(tempCommentId);
+    if (showAllPaint) return null;
+    // 編集モード: activeCommentId 優先
+    if (isEditMode && activeCommentId) return String(activeCommentId);
+    // 新規モード: tempCommentId のみ（activeCommentId が残っていても無視）
+    if (!isEditMode && tempCommentId) return String(tempCommentId);
     return null;
-  }, [activeCommentId, tempCommentId]);
+  }, [showAllPaint, isEditMode, activeCommentId, tempCommentId]);
 
   // ★★★ DEBUG: renderTargetCommentId 算出ログ ★★★
   useEffect(() => {
     console.log('[ShareView] renderTargetCommentId resolved:', {
+      isEditMode,
       activeCommentId: activeCommentId?.substring(0, 12) || 'null',
       tempCommentId: tempCommentId?.substring(0, 12) || 'null',
       renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
     });
-  }, [renderTargetCommentId, activeCommentId, tempCommentId]);
+  }, [renderTargetCommentId, isEditMode, activeCommentId, tempCommentId]);
 
   // CRITICAL: 親側でフィルタリング（ViewerCanvasに渡すshapes）
-  // ★★★ P2: draftShapesを確実にCanvasに合流させる ★★★
+  // ★★★ CRITICAL FIX: resolveCommentId でキー揺れを完全吸収 ★★★
   const shapesForCanvas = React.useMemo(() => {
     console.log('[ShareView] shapesForCanvas calculation:', {
-      renderTargetCommentId,
+      renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
       showAllPaint,
-      activeCommentId,
+      isEditMode,
       draftShapesCount: draftShapes.length,
       allShapesCount: allShapes.length,
     });
@@ -1297,32 +1313,29 @@ function ShareViewContent() {
       return [...dbShapesWithoutDuplicates, ...draftShapes];
     }
     
-    // ★★★ CRITICAL: renderTargetCommentId がなければ draftShapes のみ表示 ★★★
-    if (!renderTargetCommentId) {
-      return draftShapes;
-    }
+    // ★★★ CRITICAL FIX: renderTargetCommentId でフィルタ（resolveCommentId使用）★★★
+    const dbShapesFiltered = renderTargetCommentId
+      ? allShapes.filter(s => resolveCommentId(s) === renderTargetCommentId)
+      : [];
     
-    // renderTargetCommentId でDB shapesをフィルタ
-    const filtered = allShapes.filter(s => {
-      const shapeCommentId = s.comment_id;
-      if (shapeCommentId == null || shapeCommentId === '') return false;
-      return String(shapeCommentId) === renderTargetCommentId;
-    });
+    const draftShapesFiltered = renderTargetCommentId
+      ? draftShapes.filter(s => resolveCommentId(s) === renderTargetCommentId)
+      : draftShapes;
     
     // ★★★ CRITICAL: DB shapes + draftShapes を合流（draftが優先） ★★★
-    const draftIds = new Set(draftShapes.map(s => s.id));
-    const dbShapesWithoutDuplicates = filtered.filter(s => !draftIds.has(s.id));
-    const merged = [...dbShapesWithoutDuplicates, ...draftShapes];
+    const draftIds = new Set(draftShapesFiltered.map(s => s.id));
+    const dbShapesWithoutDuplicates = dbShapesFiltered.filter(s => !draftIds.has(s.id));
+    const merged = [...dbShapesWithoutDuplicates, ...draftShapesFiltered];
     
     console.log('[ShareView] shapesForCanvas result:', {
-      renderTargetCommentId,
-      dbFilteredCount: filtered.length,
-      draftCount: draftShapes.length,
+      renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
+      dbFilteredCount: dbShapesFiltered.length,
+      draftFilteredCount: draftShapesFiltered.length,
       mergedTotal: merged.length,
     });
     
     return merged;
-  }, [allShapes, showAllPaint, renderTargetCommentId, draftShapes]);
+  }, [allShapes, showAllPaint, renderTargetCommentId, isEditMode, draftShapes]);
 
   // 親コメントと返信を分離（条件付きreturnの前に配置）
   const filteredComments = React.useMemo(() => {

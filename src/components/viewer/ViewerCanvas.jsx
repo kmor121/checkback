@@ -24,8 +24,12 @@ function normalizeFileUrl(url) {
   }
 }
 
-// ★ CRITICAL: comment_id判定ユーティリティ（フィールド名/型ブレ吸収）
-const shapeCommentId = (s) => s?.comment_id ?? s?.commentId ?? s?.commentID ?? null;
+// ★★★ CRITICAL: commentId解決ユーティリティ（キー揺れ完全吸収）★★★
+const resolveCommentId = (s) => {
+  const v = s?.comment_id ?? s?.commentId ?? s?.commentID ?? s?.comment?.id;
+  return v == null ? null : String(v);
+};
+const shapeCommentId = resolveCommentId;  // 後方互換エイリアス
 const sameId = (a, b) => String(a ?? '') === String(b ?? '');
 
 // 背景画像コンポーネント（チラつき防止：前の画像を保持）
@@ -277,17 +281,17 @@ const ViewerCanvas = forwardRef(({
       sourceShapes = sourceShapes.filter(s => s.id !== currentShape.id);
     }
 
-    // ★★★ targetIdに一致するshapeのみをフィルタ ★★★
+    // ★★★ CRITICAL FIX: resolveCommentId でフィルタ（キー揺れ吸収）★★★
     const filtered = sourceShapes.filter(s => {
-      const cid = shapeCommentId(s);
+      const cid = resolveCommentId(s);
       if (cid == null || cid === '') return false;
-      return String(cid) === targetId;
+      return cid === targetId;
     });
 
     // ★★★ DEBUG: 件数付きログ（原因特定用） ★★★
     const beforeCount = sourceShapes.length;
     const afterCount = filtered.length;
-    const sampleCids = [...new Set(filtered.map(s => shapeCommentId(s)).filter(Boolean))].slice(0, 3).map(id => String(id).substring(0, 8));
+    const sampleCids = [...new Set(filtered.map(s => resolveCommentId(s)).filter(Boolean))].slice(0, 3).map(id => id.substring(0, 8));
     console.log('[renderedShapes]', {
       targetId: targetId.substring(0, 12) || '(none)',
       source: beforeCount,
