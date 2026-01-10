@@ -321,17 +321,18 @@ function ShareViewContent() {
     console.log('[ShareView] Saved tempCommentId to localStorage:', tempCommentId);
   }, [shareLink?.file_id, tempCommentId]);
 
-  // ★★★ P1: targetKey を useMemo で安定計算（paintMode依存なし）★★★
+  // ★★★ CRITICAL: targetKey（draftStorageKey）を draftContextId から生成 ★★★
   const targetKey = React.useMemo(() => {
-    if (!shareLink?.file_id) return null;
+    if (!shareLink?.file_id || !draftContextId) return null;
     
-    // 編集モード：既存commentId
-    // 新規モード：tempCommentId
-    const targetCommentId = composerMode === 'edit' ? composerTargetCommentId : null;
-    const effectiveTempId = targetCommentId ? null : tempCommentId;
-    
-    return getDraftKey(shareLink.file_id, targetCommentId, effectiveTempId);
-  }, [shareLink?.file_id, composerMode, composerTargetCommentId, tempCommentId]);
+    // activeCommentIdがあればそれ、なければtempCommentId
+    if (activeCommentId != null && activeCommentId !== '') {
+      return getDraftKey(shareLink.file_id, draftContextId, null);
+    } else if (tempCommentId != null && tempCommentId !== '') {
+      return getDraftKey(shareLink.file_id, null, draftContextId);
+    }
+    return null;
+  }, [shareLink?.file_id, draftContextId, activeCommentId, tempCommentId]);
 
   // ★★★ CRITICAL FIX: hydratedKeyRef を string ref に変更（targetKey追跡用）★★★
   const hydratedKeyRef = useRef(null);
@@ -1297,6 +1298,14 @@ function ShareViewContent() {
     return result;
   }, [paintShapes, isReady]);
 
+  // ★★★ CRITICAL: draftContextId（下書き紐づけ先、activeCommentId最優先）★★★
+  const draftContextId = React.useMemo(() => {
+    if (showAllPaint) return null;
+    if (activeCommentId != null && activeCommentId !== '') return String(activeCommentId);
+    if (tempCommentId != null && tempCommentId !== '') return String(tempCommentId);
+    return null;
+  }, [showAllPaint, activeCommentId, tempCommentId]);
+
   // ★★★ CRITICAL FIX: renderTargetCommentId の優先順位（選択中コメント最優先）★★★
   const renderTargetCommentId = React.useMemo(() => {
     if (showAllPaint) return null;
@@ -1313,8 +1322,9 @@ function ShareViewContent() {
       activeCommentId: activeCommentId?.substring(0, 12) || 'null',
       tempCommentId: tempCommentId?.substring(0, 12) || 'null',
       renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
+      draftContextId: draftContextId?.substring(0, 12) || 'null',
     });
-  }, [renderTargetCommentId, activeCommentId, tempCommentId]);
+  }, [renderTargetCommentId, activeCommentId, tempCommentId, draftContextId]);
 
   // ★★★ CRITICAL: canvasContextKey（コメント切替検知用）★★★
   const canvasContextKey = React.useMemo(() => {
@@ -1693,7 +1703,7 @@ function ShareViewContent() {
                 onBeginPaint={handleBeginPaint}
                 onSaveShape={handleSaveShape}
                 onDeleteShape={handleDeleteShape}
-                paintMode={isReady && paintMode && (activeCommentId || tempCommentId)}
+                paintMode={isReady && paintMode && !!draftContextId}
                 tool={tool}
                 onToolChange={setTool}
                 onStrokeColorChange={setStrokeColor}
@@ -1704,7 +1714,7 @@ function ShareViewContent() {
                 showBoundingBoxes={showBoundingBoxes}
                 showAllPaint={showAllPaint}
                 forceClearToken={forceClearToken}
-                draftCommentId={tempCommentId}
+                draftCommentId={draftContextId}
                 renderTargetCommentId={renderTargetCommentId}
                 debugInfo={{
                   isReady: isReady,
