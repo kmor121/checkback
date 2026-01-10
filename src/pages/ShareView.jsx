@@ -321,6 +321,14 @@ function ShareViewContent() {
     console.log('[ShareView] Saved tempCommentId to localStorage:', tempCommentId);
   }, [shareLink?.file_id, tempCommentId]);
 
+  // ★★★ CRITICAL: draftContextId（下書き紐づけ先、activeCommentId最優先）★★★
+  const draftContextId = React.useMemo(() => {
+    if (showAllPaint) return null;
+    if (activeCommentId != null && activeCommentId !== '') return String(activeCommentId);
+    if (tempCommentId != null && tempCommentId !== '') return String(tempCommentId);
+    return null;
+  }, [showAllPaint, activeCommentId, tempCommentId]);
+
   // ★★★ CRITICAL: targetKey（draftStorageKey）を draftContextId から生成 ★★★
   const targetKey = React.useMemo(() => {
     if (!shareLink?.file_id || !draftContextId) return null;
@@ -1297,14 +1305,6 @@ function ShareViewContent() {
 
     return result;
   }, [paintShapes, isReady]);
-
-  // ★★★ CRITICAL: draftContextId（下書き紐づけ先、activeCommentId最優先）★★★
-  const draftContextId = React.useMemo(() => {
-    if (showAllPaint) return null;
-    if (activeCommentId != null && activeCommentId !== '') return String(activeCommentId);
-    if (tempCommentId != null && tempCommentId !== '') return String(tempCommentId);
-    return null;
-  }, [showAllPaint, activeCommentId, tempCommentId]);
 
   // ★★★ CRITICAL FIX: renderTargetCommentId の優先順位（選択中コメント最優先）★★★
   const renderTargetCommentId = React.useMemo(() => {
