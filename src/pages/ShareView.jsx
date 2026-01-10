@@ -829,6 +829,10 @@ function ShareViewContent() {
       
       // ★★★ 仮IDもリセット（次の新規コメント用に新しいIDを発行させる）★★★
       setTempCommentId(null);
+      // localStorageからも削除
+      if (shareLink?.file_id) {
+        localStorage.removeItem(`tempCommentId:${shareLink.file_id}`);
+      }
       
       // invalidateは少し遅らせて描画クリアを確実に先に完了させる
       setTimeout(async () => {
