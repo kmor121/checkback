@@ -190,14 +190,15 @@ const ViewerCanvas = forwardRef(({
   const effectiveActiveId = activeCommentId ?? draftCommentIdRef.current ?? null;
   
   // ★ CRITICAL: 選択と編集を分離
-  const canSelect = isEditMode;                 // 選択だけは常にOK
+  // ★★★ FIX: paintMode時のみshapeを選択可能にする（コメント選択だけでは選択不可）★★★
+  const canSelect = paintMode && isEditMode;    // paintMode時のみ選択可能
   const canMutate = paintMode && isEditMode;    // 移動/変形/削除はpaintMode時だけ
   const canEdit = canMutate;                    // 後方互換用エイリアス
-  
-  // ★ このshapeを選択できるか（effectiveActiveId使用で仮ID対応）
+
+  // ★ このshapeを選択できるか（paintMode時のみ、effectiveActiveId使用で仮ID対応）
   const isSelectableShape = (shape) =>
     canSelect && effectiveActiveId != null && sameId(shapeCommentId(shape), effectiveActiveId);
-  
+
   // ★ このshapeを編集できるか（paintMode時のみ）
   const isEditableShape2 = (shape) =>
     canMutate && isSelectableShape(shape);
@@ -296,6 +297,7 @@ const ViewerCanvas = forwardRef(({
   }, [fileUrl]);
 
   // CRITICAL: activeCommentId変化時のリセット（描画中は絶対にリセットしない）
+  // ★★★ FIX: コメント選択変更時は必ずselectedIdをクリア（shape選択状態を解除）★★★
   useEffect(() => {
     const prev = prevActiveCommentIdRef.current;
     prevActiveCommentIdRef.current = activeCommentId;
@@ -310,16 +312,9 @@ const ViewerCanvas = forwardRef(({
       console.log('[ViewerCanvas] activeCommentId changed, resetting', { prev, next: activeCommentId });
     }
 
-    // ✅ 仮IDが残ってる間は仮IDを優先して"同じコメント扱い"にする
-    const effectiveId = draftCommentIdRef.current ?? activeCommentId ?? null;
-
-    // ✅ 選択は「同じコメントなら維持」、違うコメントor消えたら解除
-    setSelectedId(prevSel => {
-      if (!prevSel) return null;
-      const sel = (shapesRef.current ?? []).find(s => s.id === prevSel);
-      if (!sel) return null;
-      return (effectiveId != null && sameId(shapeCommentId(sel), effectiveId)) ? prevSel : null;
-    });
+    // ★★★ FIX: コメント選択が変わったら常にshape選択を解除 ★★★
+    // paintModeでない限り、shapeは選択状態にならない
+    setSelectedId(null);
 
     setCurrentShape(null);
     setIsDrawing(false);
