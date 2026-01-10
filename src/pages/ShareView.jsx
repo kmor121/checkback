@@ -806,11 +806,10 @@ function ShareViewContent() {
           }
         }
         
-        // ★★★ 送信成功後にlocalStorageの下書きを削除 ★★★
-        const draftKey = getDraftKey(shareLink.file_id, null, tempCommentId);
-        if (draftKey) {
-          deleteDraft(draftKey);
-          console.log('[ShareView] Deleted draft after submit:', draftKey);
+        // ★★★ 送信成功後にlocalStorageの下書きを削除（targetKeyを使用）★★★
+        if (targetKey) {
+          deleteDraft(targetKey);
+          console.log('[ShareView] Deleted draft after submit:', targetKey);
         }
 
         // 添付ファイルがあればアップロード＆保存
