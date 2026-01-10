@@ -1431,8 +1431,11 @@ const ViewerCanvas = forwardRef(({
       onShapesChange?.(getAllShapes()); // ★ 常に全量を渡す
       setCurrentShape(null);
 
-      // ★★★ CRITICAL: 描画直後に選択状態にする（ツールは戻さない）★★★
+      // ★★★ CRITICAL: 描画直後に選択状態にし、ツールをselectに戻す ★★★
       setSelectedId(normalizedShape.id);
+      if (onToolChange) {
+        onToolChange('select');
+      }
 
       // DB保存前の検証（一時フィールドが残っていないことを確認）
       if (DEBUG_MODE) {
