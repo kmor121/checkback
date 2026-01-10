@@ -223,12 +223,16 @@ const ViewerCanvas = forwardRef(({
   
   // CRITICAL: 描画に使うcomment_idを取得（effectiveActiveIdまたは仮ID）
   // ★★★ CRITICAL FIX: String型で返す（型統一）★★★
+  // ★★★ A: ShareViewから渡されたdraftCommentId(=tempCommentId)を最優先で使用 ★★★
   const getCommentIdForDrawing = () => {
     // ★ effectiveActiveId（親から渡されたactiveCommentId）を優先
     if (effectiveActiveId != null) return String(effectiveActiveId);
-    // 仮ID生成（onBeginPaintは非同期で投げるだけ）
+    // ★★★ A: ShareViewから渡されたdraftCommentIdを使用（内部生成しない）★★★
+    if (draftCommentId != null) return String(draftCommentId);
+    // フォールバック: 内部で仮ID生成（これは使われないはず）
     if (!draftCommentIdRef.current) {
       draftCommentIdRef.current = generateUUID();
+      console.warn('[ViewerCanvas] getCommentIdForDrawing: fallback to internal UUID (this should not happen)');
     }
     return String(draftCommentIdRef.current);
   };
