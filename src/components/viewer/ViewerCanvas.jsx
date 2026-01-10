@@ -247,11 +247,11 @@ const ViewerCanvas = forwardRef(({
   const renderedShapes = useMemo(() => {
     // ★★★ CRITICAL: Map由来のshapes（shapesVersionで再計算トリガー）★★★
     const mapShapes = getAllShapes();
-    
-    // ★★★ CRITICAL FIX: fallback完全禁止 - effectiveActiveIdのみ使用 ★★★
-    // effectiveActiveId = activeCommentId ?? draftCommentIdRef.current ?? null
-    const targetId = effectiveActiveId != null ? String(effectiveActiveId) : '';
-    
+
+    // ★★★ REQUIRED: renderTargetCommentId を最優先で使用（リロード後の下書き復元対応）★★★
+    // renderTargetCommentId がなければ effectiveActiveId / showAllPaint で判定
+    let targetId = renderTargetCommentId ? String(renderTargetCommentId) : '';
+
     // ★★★ CRITICAL: showAllPaint時は全shape表示 ★★★
     if (showAllPaint) {
       let sourceShapes = mapShapes;
@@ -261,12 +261,12 @@ const ViewerCanvas = forwardRef(({
       return sourceShapes;
     }
 
-    // ★★★ CRITICAL FIX: targetIdが空の場合は必ず空配列（fallback禁止）★★★
+    // ★★★ CRITICAL: targetIdが空の場合は空配列（renderTargetCommentIdなし=表示対象がない）★★★
     if (targetId === '') {
       return [];
     }
 
-    // ★★★ CRITICAL: Map由来のshapesのみを使用（existingShapesは直接参照しない）★★★
+    // ★★★ CRITICAL: Map由来のshapesのみを使用 ★★★
     let sourceShapes = mapShapes;
 
     // ★★★ CRITICAL: 描画中のcurrentShapeとIDが重複するshapeは除外（二重描画防止）★★★
@@ -274,44 +274,26 @@ const ViewerCanvas = forwardRef(({
       sourceShapes = sourceShapes.filter(s => s.id !== currentShape.id);
     }
 
-    // ★★★ DEBUG: フィルタ前の状態を詳細ログ ★★★
-    const uniqueCidsBeforeFilter = [...new Set(sourceShapes.map(s => shapeCommentId(s)).filter(Boolean))];
-    console.log('[renderedShapes] before filter:', {
-      targetId,
-      sourceShapesCount: sourceShapes.length,
-      uniqueCommentIds: uniqueCidsBeforeFilter.slice(0, 10).map(id => String(id).substring(0, 12)),
-    });
-
-    // ★★★ CRITICAL: targetIdに一致するshapeのみをフィルタ（commentId空のshapeは除外）★★★
+    // ★★★ targetIdに一致するshapeのみをフィルタ ★★★
     const filtered = sourceShapes.filter(s => {
       const cid = shapeCommentId(s);
-      // commentIdがnull/空のshapeは除外（混入防止）
       if (cid == null || cid === '') return false;
-      const cidStr = String(cid);
-      const matches = cidStr === targetId;
-      
-      // ★★★ DEBUG: マッチしない場合の詳細ログ ★★★
-      if (!matches && DEBUG_MODE) {
-        console.log('[renderedShapes] shape filtered out:', {
-          shapeId: s.id?.substring(0, 8),
-          shapeCid: cidStr.substring(0, 12),
-          targetId: targetId.substring(0, 12),
-        });
-      }
-      
-      return matches;
+      return String(cid) === targetId;
     });
 
-    // ★★★ DEBUG: フィルタ後の状態を詳細ログ ★★★
-    const uniqueCidsAfterFilter = [...new Set(filtered.map(s => shapeCommentId(s)).filter(Boolean))];
-    console.log('[renderedShapes] after filter:', {
-      targetId: targetId.substring(0, 12),
-      filteredCount: filtered.length,
-      uniqueCommentIds: uniqueCidsAfterFilter.slice(0, 10).map(id => String(id).substring(0, 12)),
+    // ★★★ DEBUG: 件数付きログ（原因特定用） ★★★
+    const beforeCount = sourceShapes.length;
+    const afterCount = filtered.length;
+    const sampleCids = [...new Set(filtered.map(s => shapeCommentId(s)).filter(Boolean))].slice(0, 3).map(id => String(id).substring(0, 8));
+    console.log('[renderedShapes]', {
+      targetId: targetId.substring(0, 12) || '(none)',
+      source: beforeCount,
+      after: afterCount,
+      samples: sampleCids.join(','),
     });
 
     return filtered;
-  }, [shapesVersion, showAllPaint, effectiveActiveId, currentShape]);
+  }, [shapesVersion, showAllPaint, renderTargetCommentId, currentShape]);
   
   // ★ CRITICAL: activeShapes を existingShapes から抽出（comment_id統一判定）
   const activeShapes = useMemo(() => {
