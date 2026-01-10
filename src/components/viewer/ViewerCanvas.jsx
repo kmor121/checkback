@@ -1481,10 +1481,12 @@ const ViewerCanvas = forwardRef(({
         setLastSuccessId(result?.dbId || updatedShape.id);
         setLastError(null);
         
-        // CRITICAL: dirty解除（Map方式）
+        // CRITICAL: dirty解除（★★★ 不変更新 ★★★）
         const cur = shapesMapRef.current.get(updatedShape.id);
         if (cur) {
-          shapesMapRef.current.set(updatedShape.id, { ...cur, dbId: result?.dbId, _dirty: false });
+          const newMap = new Map(shapesMapRef.current);
+          newMap.set(updatedShape.id, { ...cur, dbId: result?.dbId, _dirty: false });
+          shapesMapRef.current = newMap;
           bump();
           onShapesChange?.(getAllShapes());
         }
@@ -1492,8 +1494,10 @@ const ViewerCanvas = forwardRef(({
         console.error('Update shape error:', err);
         setLastSaveStatus('error');
         setLastError(err.message);
-        // 失敗時はrevert（Map方式）
-        shapesMapRef.current.set(shape.id, shape);
+        // 失敗時はrevert（★★★ 不変更新 ★★★）
+        const revertMap = new Map(shapesMapRef.current);
+        revertMap.set(shape.id, shape);
+        shapesMapRef.current = revertMap;
         bump();
         onShapesChange?.(getAllShapes());
       } finally {
