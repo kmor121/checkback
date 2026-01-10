@@ -321,10 +321,6 @@ function ShareViewContent() {
     console.log('[ShareView] Saved tempCommentId to localStorage:', tempCommentId);
   }, [shareLink?.file_id, tempCommentId]);
 
-  // ★★★ CRITICAL: renderTargetCommentId は paintContextId と完全同一（Single Source of Truth）★★★
-  const renderTargetCommentId = paintContextId;
-  const viewContextId = paintContextId;
-
   // ★★★ CRITICAL: paintContextId（唯一の真実、表示・描画・下書き全て統一）★★★
   const paintContextId = React.useMemo(() => {
     if (showAllPaint) return null;
@@ -336,6 +332,10 @@ function ShareViewContent() {
     
     return null;
   }, [showAllPaint, composerMode, composerTargetCommentId, activeCommentId, tempCommentId]);
+
+  // ★★★ CRITICAL: renderTargetCommentId は paintContextId と完全同一（Single Source of Truth）★★★
+  const renderTargetCommentId = paintContextId;
+  const viewContextId = paintContextId;
 
   // ★★★ CRITICAL: 下書き表示判定（edit or new、viewでは非表示）★★★
   const shouldShowDraft = React.useMemo(() => {
