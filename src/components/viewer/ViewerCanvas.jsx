@@ -79,6 +79,7 @@ const ViewerCanvas = forwardRef(({
   debugInfo = null,
   clearAfterSubmitNonce = 0,
   forceClearToken = 0, // ★★★ P2: 明示クリア用トークン ★★★
+  draftCommentId = null, // ★★★ A: ShareViewからの新規コメント用ID ★★★
 }, ref) => {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
