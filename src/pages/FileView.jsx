@@ -279,18 +279,20 @@ function FileViewContent() {
 
   // ★★★ CRITICAL: 全削除処理を統一（編集モード・新規モード両対応）★★★
   const handleClearAll = async () => {
+    // ★★★ CRITICAL: targetIdは編集中コメント > 選択中コメント の優先順 ★★★
+    const targetId = String(composerTargetCommentId ?? activeCommentId ?? '');
+    
+    // ★★★ DEBUG HUD: 削除前の状態を出力 ★★★
+    console.log('[handleClearAll] ========== DELETE ALL START ==========');
+    console.log('[handleClearAll] targetId:', targetId);
+    console.log('[handleClearAll] draftShapesCount:', draftShapes.length);
+    console.log('[handleClearAll] state:', {
+      composerTargetCommentId,
+      activeCommentId,
+      paintSessionCommentId,
+    });
+    
     try {
-      // ★★★ CRITICAL: targetIdは編集中コメント > 選択中コメント > セッションの優先順 ★★★
-      const targetId = String(composerTargetCommentId ?? activeCommentId ?? '');
-      
-      console.log('[handleClearAll] called:', {
-        composerTargetCommentId,
-        activeCommentId,
-        paintSessionCommentId,
-        targetId,
-        draftShapesCount: draftShapes.length,
-      });
-      
       // ★★★ 1. draftShapesをクリア（新規・編集両方で実行）★★★
       const draftCount = draftShapes.length;
       setDraftShapes([]);
@@ -299,7 +301,7 @@ function FileViewContent() {
       if (!targetId) {
         viewerCanvasRef.current?.clear();
         showToast(`${draftCount}個の描画をクリアしました`);
-        console.log('[handleClearAll] draft only, deletedCount:', draftCount);
+        console.log('[handleClearAll] draft only, deletedLocalCount:', draftCount, 'deletedDbCount:', 0);
         return;
       }
       
@@ -310,24 +312,36 @@ function FileViewContent() {
         page_no: 1,
       });
       
+      const deleteAllCandidateCount = shapes.length;
+      console.log('[handleClearAll] deleteAllCandidateCount:', deleteAllCandidateCount);
       console.log('[handleClearAll] DB shapes to delete:', {
         targetId,
         shapesToDeleteCount: shapes.length,
         shapeIds: shapes.map(s => s.id),
       });
       
+      let deletedDbCount = 0;
       for (const shape of shapes) {
-        await base44.entities.PaintShape.delete(shape.id);
+        try {
+          await base44.entities.PaintShape.delete(shape.id);
+          deletedDbCount++;
+        } catch (e) {
+          console.error('[handleClearAll] Failed to delete shape:', shape.id, e);
+        }
       }
       
       await queryClient.invalidateQueries(['paintShapes', fileId, 1]);
       viewerCanvasRef.current?.clear();
       
-      const totalDeleted = draftCount + shapes.length;
+      const totalDeleted = draftCount + deletedDbCount;
+      console.log('[handleClearAll] ========== DELETE ALL COMPLETE ==========');
+      console.log('[handleClearAll] deletedLocalCount:', draftCount);
+      console.log('[handleClearAll] deletedDbCount:', deletedDbCount);
+      console.log('[handleClearAll] totalDeleted:', totalDeleted);
+      
       showToast(`${totalDeleted}個の描画を削除しました`);
-      console.log('[handleClearAll] completed, deletedCount:', totalDeleted);
     } catch (error) {
-      console.error('Clear all error:', error);
+      console.error('[handleClearAll] ERROR:', error);
       const errorMsg = error.message || String(error);
       showToast(`削除失敗: ${errorMsg}`, 'error');
     }
