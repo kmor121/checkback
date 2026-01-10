@@ -86,6 +86,9 @@ function ShareViewContent() {
   const draftShapesRef = useRef([]);
   const [canvasSessionNonce, setCanvasSessionNonce] = useState(0);
   
+  // ★★★ P2: 明示クリア用トークン（全削除/送信成功後のみインクリメント）★★★
+  const [forceClearToken, setForceClearToken] = useState(0);
+  
   // ★★★ 新規コメント用の仮ID（localStorage下書き用）★★★
   const [tempCommentId, setTempCommentId] = useState(null);
   const saveDraftTimeoutRef = useRef(null);
