@@ -177,6 +177,9 @@ function FileViewContent() {
     return null;
   };
 
+  // ★★★ CRITICAL: 描画完了検知用のref（invalidate延期に使用）★★★
+  const pendingInvalidateRef = useRef(false);
+  
   const handleSaveShape = async (shape, mode) => {
     try {
       const targetCommentId = paintSessionCommentId;
@@ -209,19 +212,10 @@ function FileViewContent() {
         throw new Error(result.data.error);
       }
 
-      // CRITICAL: allShapesを即座に更新（ViewerCanvasのprops同期対策）
-      queryClient.setQueryData(['paintShapes', fileId, 1], (old) => {
-        if (!old) return old;
-        const exists = old.find(ps => ps.id === result.data.dbId || ps.client_shape_id === shape.id);
-        if (exists) {
-          return old.map(ps => (ps.id === result.data.dbId || ps.client_shape_id === shape.id) 
-            ? { ...ps, data_json: JSON.stringify(shape) } 
-            : ps);
-        }
-        return old;
-      });
-
-      await queryClient.invalidateQueries(['paintShapes', fileId, 1]);
+      // ★★★ CRITICAL: invalidateを即座に実行せず、フラグだけ立てる ★★★
+      // 描画完了（PointerUp）後に一括invalidateすることでジャンプを防止
+      console.log('[FileView] Shape saved, marking for delayed invalidate');
+      pendingInvalidateRef.current = true;
 
       return result.data;
     } catch (error) {
@@ -764,6 +758,14 @@ function FileViewContent() {
             onSaveShape={handleSaveShape}
             onDeleteShape={handleDeleteShape}
             onBeginPaint={handleBeginPaint}
+            onDrawComplete={() => {
+              // ★★★ CRITICAL: 描画完了時に遅延invalidateを実行 ★★★
+              if (pendingInvalidateRef.current) {
+                console.log('[FileView] Draw complete, executing delayed invalidate');
+                pendingInvalidateRef.current = false;
+                queryClient.invalidateQueries(['paintShapes', fileId, 1]);
+              }
+            }}
             paintMode={paintMode}
             tool={tool}
             onToolChange={setTool}

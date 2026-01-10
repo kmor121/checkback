@@ -357,6 +357,9 @@ function ShareViewContent() {
 
 
 
+  // ★★★ CRITICAL: 描画完了検知用のref（invalidate延期に使用）★★★
+  const pendingInvalidateRef = useRef(false);
+  
   // CRITICAL: _idベース保存で増殖・not found対策
   const handleSaveShape = async (shape, mode) => {
     if (!isReady) {
@@ -410,19 +413,10 @@ function ShareViewContent() {
         if (DEBUG_MODE) console.log('[ShareView] Created new shape:', result.id);
       }
 
-      // CRITICAL: paintShapesを即座に更新（ViewerCanvasのprops同期対策）
-      queryClient.setQueryData(['paintShapes', token, shareLink?.file_id, currentPage], (old) => {
-        if (!old) return old;
-        const exists = old.find(ps => ps.id === result.id || ps.client_shape_id === shape.id);
-        if (exists) {
-          return old.map(ps => (ps.id === result.id || ps.client_shape_id === shape.id) 
-            ? { ...ps, data_json: JSON.stringify(shape) } 
-            : ps);
-        }
-        return old;
-      });
-
-      await queryClient.invalidateQueries({ queryKey: ['paintShapes', token, shareLink?.file_id, currentPage] });
+      // ★★★ CRITICAL: invalidateを即座に実行せず、フラグだけ立てる ★★★
+      // 描画完了（PointerUp）後に一括invalidateすることでジャンプを防止
+      console.log('[ShareView] Shape saved, marking for delayed invalidate');
+      pendingInvalidateRef.current = true;
 
       return { ...result, dbId: result.id };
     } catch (error) {
@@ -1324,6 +1318,14 @@ function ShareViewContent() {
                 onBeginPaint={handleBeginPaint}
                 onSaveShape={handleSaveShape}
                 onDeleteShape={handleDeleteShape}
+                onDrawComplete={() => {
+                  // ★★★ CRITICAL: 描画完了時に遅延invalidateを実行 ★★★
+                  if (pendingInvalidateRef.current) {
+                    console.log('[ShareView] Draw complete, executing delayed invalidate');
+                    pendingInvalidateRef.current = false;
+                    queryClient.invalidateQueries({ queryKey: ['paintShapes', token, shareLink?.file_id, currentPage] });
+                  }
+                }}
                 paintMode={isReady && paintMode}
                 tool={tool}
                 onToolChange={setTool}

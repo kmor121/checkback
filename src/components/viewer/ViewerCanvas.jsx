@@ -66,6 +66,7 @@ const ViewerCanvas = forwardRef(({
   onSaveShape,
   onDeleteShape,
   onBeginPaint,
+  onDrawComplete, // ★★★ CRITICAL: 描画完了コールバック（invalidate延期用）★★★
   paintMode = false,
   tool = 'select',
   strokeColor = '#ff0000',
@@ -1303,10 +1304,15 @@ const ViewerCanvas = forwardRef(({
         }
         }
 
-        // ★★★ CRITICAL: 描画完了時にview固定を解除 ★★★
+        // ★★★ CRITICAL: 描画完了時にview固定を解除 & 親にinvalidateを通知 ★★★
         drawViewRef.current = null;
         if (DEBUG_MODE) {
           console.log('[ViewerCanvas] drawViewRef cleared (draw complete)');
+        }
+        
+        // ★★★ CRITICAL: 親コンポーネントに描画完了を通知（invalidate延期用）★★★
+        if (onDrawComplete) {
+          onDrawComplete();
         }
         } catch (err) {
         console.error('PointerUp Error:', err);
