@@ -758,13 +758,33 @@ const ViewerCanvas = forwardRef(({
   };
 
   // CRITICAL: 削除（★★★ 不変更新で新しいMapを作成 ★★★）
+  // ★★★ FIX: 編集モード時はpaintMode/canEditガード不要で削除可能 ★★★
   const handleDelete = async () => {
-    if (!canEdit || !selectedId) return;
+    console.log('[ViewerCanvas] handleDelete called:', { selectedId, canEdit, isInEditSession, paintMode, tool });
+    
+    // ★★★ CRITICAL FIX: 編集セッション中はpaintModeに関係なく削除を許可 ★★★
+    const canDeleteNow = canEdit || isInEditSession;
+    if (!canDeleteNow || !selectedId) {
+      console.log('[ViewerCanvas] Delete blocked: canDeleteNow=', canDeleteNow, 'selectedId=', selectedId);
+      return;
+    }
     
     // CRITICAL: 編集可能なIDのみ削除を許可（isEditableShape関数で判定）
     const selectedShape = shapesMapRef.current.get(selectedId);
-    if (!selectedShape || !isEditableShape(selectedShape)) {
-      console.log('[ViewerCanvas] Delete blocked: not editable');
+    if (!selectedShape) {
+      console.log('[ViewerCanvas] Delete blocked: shape not found');
+      return;
+    }
+    
+    // ★★★ FIX: 編集セッション中はcomment_id一致チェックのみで削除許可 ★★★
+    if (isInEditSession) {
+      const shapeCommentIdValue = shapeCommentId(selectedShape);
+      if (!sameId(shapeCommentIdValue, activeCommentId)) {
+        console.log('[ViewerCanvas] Delete blocked: comment_id mismatch', { shapeCommentIdValue, activeCommentId });
+        return;
+      }
+    } else if (!isEditableShape(selectedShape)) {
+      console.log('[ViewerCanvas] Delete blocked: not editable (paintMode check failed)');
       return;
     }
     
