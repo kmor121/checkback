@@ -204,9 +204,16 @@ const ViewerCanvas = forwardRef(({
   const targetIdForDelete = effectiveActiveId != null ? String(effectiveActiveId) : '';
   const canEditPaint = targetIdForDelete !== '';  // 削除操作の可否
 
-  // ★ このshapeを選択できるか（paintMode && selectツール時のみ）
-  const isSelectableShape = (shape) =>
-    canSelect && effectiveActiveId != null && sameId(shapeCommentId(shape), effectiveActiveId);
+  // ★ このshapeを選択できるか（selectツール時 + targetIdがある場合）
+  // ★★★ FIX: 編集モードではpaintMode不問で選択可能にする ★★★
+  const isSelectableShape = (shape) => {
+    // selectツールでなければ選択不可
+    if (tool !== 'select') return false;
+    // targetIdがなければ選択不可
+    if (effectiveActiveId == null) return false;
+    // comment_id一致チェック
+    return sameId(shapeCommentId(shape), effectiveActiveId);
+  };
 
   // ★ このshapeを編集できるか（移動/変形用 - paintMode必須）
   const isEditableShape2 = (shape) =>
