@@ -358,6 +358,10 @@ function ShareViewContent() {
     return composerMode === 'edit' || composerMode === 'new';
   }, [composerMode]);
 
+  // ★★★ CRITICAL FIX: hydratedKeyRef を string ref に変更（targetKey追跡用）★★★
+  const hydratedKeyRef = useRef(null);
+  const [hydratedKeyState, setHydratedKeyState] = useState(null);
+
   // temp かどうかの判定
   const isTempCid = (cid) => typeof cid === 'string' && cid.startsWith('temp_');
 
@@ -377,10 +381,6 @@ function ShareViewContent() {
   const includeDraftInCanvas = React.useMemo(() => {
     return shouldShowDraft && storageDraftReady;
   }, [shouldShowDraft, storageDraftReady]);
-
-  // ★★★ CRITICAL FIX: hydratedKeyRef を string ref に変更（targetKey追跡用）★★★
-  const hydratedKeyRef = useRef(null);
-  const [hydratedKeyState, setHydratedKeyState] = useState(null);
 
   // ★★★ CRITICAL: draftReady フラグ（hydrate完了判定、state化で再レンダー保証）★★★
   const draftReady = !!targetKey && hydratedKeyState === targetKey;
