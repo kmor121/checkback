@@ -626,48 +626,44 @@ function FileViewContent() {
     return result;
   }, [paintShapes]);
 
-  // CRITICAL: ViewerCanvasに渡すshapes（activeCommentIdがある時のみ）
-  // ★★★ CRITICAL FIX: 型を統一して比較し、デバッグログを追加 ★★★
+  // ★★★ CRITICAL: effectiveActiveId を統一的に使用（編集 > 選択 > セッション）★★★
+  const effectiveActiveId = composerTargetCommentId ?? activeCommentId ?? paintSessionCommentId ?? null;
+
+  // CRITICAL: ViewerCanvasに渡すshapes（effectiveActiveIdがある時のみ）
+  // ★★★ CRITICAL FIX: effectiveActiveIdを使用して編集/選択を統一 ★★★
   const shapesForCanvas = React.useMemo(() => {
     console.log('[FileView] shapesForCanvas calculation:', {
+      effectiveActiveId,
+      composerTargetCommentId,
       activeCommentId,
       paintSessionCommentId,
       draftShapesCount: draftShapes.length,
       allShapesCount: allShapes.length,
     });
     
-    // activeCommentIdが無い場合は空配列（描画を表示しない）
-    if (!activeCommentId && !paintSessionCommentId && draftShapes.length === 0) {
+    // effectiveActiveIdが無い場合は空配列（描画を表示しない）
+    if (!effectiveActiveId && draftShapes.length === 0) {
       console.log('[FileView] shapesForCanvas: returning empty (no target)');
       return [];
     }
     
-    const targetId = activeCommentId || paintSessionCommentId;
-    if (!targetId) {
+    if (!effectiveActiveId) {
       console.log('[FileView] shapesForCanvas: returning draftShapes only');
       return draftShapes;
     }
     
     // ★★★ CRITICAL: 型を統一して比較（文字列に変換）★★★
-    const targetIdStr = String(targetId);
+    const targetIdStr = String(effectiveActiveId);
     
     console.log('[FileView] filtering shapes for targetId:', targetIdStr);
-    console.log('[FileView] allShapes comment_ids:', allShapes.map(s => ({ id: s.id?.substring?.(0, 8), cid: s.comment_id })));
     
     const filtered = allShapes.filter(s => {
       const shapeCommentId = s.comment_id;
       // ★★★ CRITICAL: null/undefinedチェックと文字列比較 ★★★
       if (shapeCommentId == null) {
-        console.log('[FileView] shape has no comment_id:', s.id?.substring?.(0, 8));
         return false;
       }
-      const matches = String(shapeCommentId) === targetIdStr;
-      
-      if (matches) {
-        console.log('[FileView] MATCH found:', { shapeId: s.id?.substring?.(0, 8), shapeCommentId, targetIdStr });
-      }
-      
-      return matches;
+      return String(shapeCommentId) === targetIdStr;
     });
     
     console.log('[FileView] shapesForCanvas result:', {
@@ -678,7 +674,7 @@ function FileViewContent() {
     });
     
     return [...filtered, ...draftShapes];
-  }, [allShapes, activeCommentId, paintSessionCommentId, draftShapes]);
+  }, [allShapes, effectiveActiveId, draftShapes]);
 
   const filteredComments = comments.filter(c => {
     if (commentFilter === 'resolved' && !c.resolved) return false;
@@ -800,19 +796,19 @@ function FileViewContent() {
             showAllPaint={false}
             clearAfterSubmitNonce={clearAfterSubmitNonce}
             onShapesChange={(updated) => {
-              // ★★★ CRITICAL: 編集モード時も即座に反映（描画中の座標はローカルstate優先）★★★
+              // ★★★ CRITICAL: ref経由で最新IDを取得（stale closure回避）★★★
+              const currentEffectiveId = effectiveActiveIdRef.current;
               console.log('[FileView] onShapesChange called:', {
                 updatedCount: updated.length,
-                paintSessionCommentId,
-                mode: paintSessionCommentId ? 'EDIT' : 'NEW',
+                currentEffectiveId,
+                mode: currentEffectiveId ? 'EDIT' : 'NEW',
               });
               
-              if (!paintSessionCommentId) {
+              if (!currentEffectiveId) {
                 // 新規モード: draftShapesに保存
                 setDraftShapes(updated);
               } else {
                 // ★★★ 編集モード: shapesForCanvasを即座に更新（invalidate待たない）★★★
-                // これによりcurrentShapeとの座標系不整合を回避
                 const updatedExisting = allShapes.map(s => {
                   const localUpdate = updated.find(u => u.id === s.id);
                   return localUpdate ? { ...s, ...localUpdate } : s;
@@ -829,7 +825,7 @@ function FileViewContent() {
                     id: shape.dbId || shape.id,
                     client_shape_id: shape.id,
                     file_id: fileId,
-                    comment_id: paintSessionCommentId,
+                    comment_id: currentEffectiveId,  // ★ ref経由の最新IDを使用
                     page_no: 1,
                     shape_type: shape.tool,
                     data_json: JSON.stringify(shape),
