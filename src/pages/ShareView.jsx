@@ -339,20 +339,33 @@ function ShareViewContent() {
   const renderTargetCommentId = paintContextId;
   const viewContextId = paintContextId;
 
+  // ★★★ CRITICAL: draftScope（TDZ回避のため単純const、useMemoより先に定義）★★★
+  const draftScope = 
+    composerMode === 'edit' ? 'edit' :
+    composerMode === 'new' ? 'new' :
+    null;
+
   // ★★★ CRITICAL: 下書き表示判定（edit or new、view/reply時は非表示）★★★
   const shouldShowDraft = React.useMemo(() => {
     return composerMode === 'edit' || composerMode === 'new';
   }, [composerMode]);
-  
-  // ★★★ DEBUG: shouldShowDraft変化ログ ★★★
-  useEffect(() => {
-    console.log('[DRAFT_DEBUG] shouldShowDraft changed:', {
-      shouldShowDraft,
-      composerMode,
-      draftScope,
-      targetKey: targetKey?.substring(0, 30) || 'null',
-    });
-  }, [shouldShowDraft, composerMode, draftScope, targetKey]);
+
+  // temp かどうかの判定
+  const isTempCid = (cid) => typeof cid === 'string' && cid.startsWith('temp_');
+
+  // ★★★ CRITICAL: targetKey（scope分離版、view時はnullで表示しない）★★★
+  const targetKey = React.useMemo(() => {
+    if (!shareLink?.file_id || !paintContextId || !draftScope) return null;
+    
+    if (draftScope === 'edit') {
+      return getDraftKey(shareLink.file_id, paintContextId, null, 'edit');
+    }
+    if (draftScope === 'new') {
+      return getDraftKey(shareLink.file_id, null, paintContextId, 'new');
+    }
+    
+    return null;
+  }, [shareLink?.file_id, paintContextId, draftScope]);
 
   // ★★★ CRITICAL FIX: hydratedKeyRef を string ref に変更（targetKey追跡用）★★★
   const hydratedKeyRef = useRef(null);
@@ -373,30 +386,16 @@ function ShareViewContent() {
       setHydratedKeyState(null);
     }
   }, [paintContextId]);
-
-  // temp かどうかの判定
-  const isTempCid = (cid) => typeof cid === 'string' && cid.startsWith('temp_');
-
-  // ★★★ CRITICAL: draftScope（edit/new分離、view時はnone）★★★
-  const draftScope = React.useMemo(() => {
-    if (composerMode === 'edit') return 'edit';
-    if (composerMode === 'new') return 'new';
-    return null;
-  }, [composerMode]);
-
-  // ★★★ CRITICAL: targetKey（scope分離版、view時はnullで表示しない）★★★
-  const targetKey = React.useMemo(() => {
-    if (!shareLink?.file_id || !paintContextId || !draftScope) return null;
-    
-    if (draftScope === 'edit') {
-      return getDraftKey(shareLink.file_id, paintContextId, null, 'edit');
-    }
-    if (draftScope === 'new') {
-      return getDraftKey(shareLink.file_id, null, paintContextId, 'new');
-    }
-    
-    return null;
-  }, [shareLink?.file_id, paintContextId, draftScope]);
+  
+  // ★★★ DEBUG: shouldShowDraft変化ログ ★★★
+  useEffect(() => {
+    console.log('[DRAFT_DEBUG] shouldShowDraft changed:', {
+      shouldShowDraft,
+      composerMode,
+      draftScope,
+      targetKey: targetKey?.substring(0, 30) || 'null',
+    });
+  }, [shouldShowDraft, composerMode, draftScope, targetKey]);
   
   // ★★★ CRITICAL: storage由来draft準備完了（ちらつき防止）★★★
   const storageDraftReady = !!targetKey && hydratedKeyState === targetKey;
