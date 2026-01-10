@@ -296,29 +296,28 @@ const ViewerCanvas = forwardRef(({
     }
   }, [fileUrl]);
 
-  // CRITICAL: activeCommentId変化時のリセット（描画中は絶対にリセットしない）
-  // ★★★ FIX: コメント選択変更時は必ずselectedIdをクリア（shape選択状態を解除）★★★
+  // CRITICAL: activeCommentId変化時のリセット
+  // ★★★ FIX: コメント切替時は必ずcurrentShape/draftをクリア（前コメントの描画残り防止）★★★
   useEffect(() => {
     const prev = prevActiveCommentIdRef.current;
     prevActiveCommentIdRef.current = activeCommentId;
 
-    // ★超重要: 描画中 or currentShapeがある場合は絶対にリセットしない
-    if (isDrawing || currentShape) {
-      if (DEBUG_MODE) console.log('[ViewerCanvas] skip reset (drawing in progress)');
-      return;
-    }
+    // ★ 同じIDへの変更は無視
+    if (prev === activeCommentId) return;
 
     if (DEBUG_MODE) {
-      console.log('[ViewerCanvas] activeCommentId changed, resetting', { prev, next: activeCommentId });
+      console.log('[ViewerCanvas] activeCommentId changed, clearing draft', { prev, next: activeCommentId });
     }
 
-    // ★★★ FIX: コメント選択が変わったら常にshape選択を解除 ★★★
-    // paintModeでない限り、shapeは選択状態にならない
-    setSelectedId(null);
-
+    // ★★★ CRITICAL: コメント切替時は必ずcurrentShapeをクリア ★★★
+    // これにより前コメントの描画中データが残らない
     setCurrentShape(null);
     setIsDrawing(false);
+    setSelectedId(null);
     setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
+
+    // ★★★ CRITICAL: draftCommentIdRefもクリア（新規描画用の仮IDをリセット）★★★
+    draftCommentIdRef.current = null;
 
     requestAnimationFrame(() => {
       if (transformerRef.current) {
@@ -326,7 +325,7 @@ const ViewerCanvas = forwardRef(({
         transformerRef.current.getLayer()?.batchDraw();
       }
     });
-  }, [activeCommentId, isDrawing, currentShape]);
+  }, [activeCommentId]);
   
   // CRITICAL: lastStableCommentIdRefを更新（activeCommentIdが有効な時のみ）
   useEffect(() => {
