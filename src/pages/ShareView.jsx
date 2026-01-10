@@ -667,11 +667,10 @@ function ShareViewContent() {
           }
         }
         
-        // ★★★ 送信成功後にlocalStorageの下書きを削除 ★★★
-        const editDraftKey = getDraftKey(shareLink.file_id, composerTargetCommentId, null);
-        if (editDraftKey) {
-          deleteDraft(editDraftKey);
-          console.log('[ShareView] Deleted edit draft after submit:', editDraftKey);
+        // ★★★ 送信成功後にlocalStorageの下書きを削除（targetKeyを使用）★★★
+        if (targetKey) {
+          deleteDraft(targetKey);
+          console.log('[ShareView] Deleted edit draft after submit:', targetKey);
         }
         
         // 添付ファイルがあれば追加
