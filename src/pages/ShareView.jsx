@@ -1398,9 +1398,11 @@ function ShareViewContent() {
   // ★★★ CRITICAL: viewContextId（表示）と paintContextId（描画）を分離 ★★★
   const shapesForCanvas = React.useMemo(() => {
     console.log('[ShareView] shapesForCanvas calculation:', {
-      viewContextId: viewContextId?.substring(0, 12) || 'null',
+      renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
       paintContextId: paintContextId?.substring(0, 12) || 'null',
       composerMode,
+      shouldShowDraft,
+      storageDraftReady,
       includeDraftInCanvas,
       showAllPaint,
       draftShapesCount: draftShapes.length,
@@ -1413,10 +1415,10 @@ function ShareViewContent() {
     // ★★★ CRITICAL: draftShapes を正規化（defaultCommentId=tempCommentId）★★★
     const draftShapesNormalized = draftShapes.map(s => normalizeShape(s, tempCommentId)).filter(Boolean);
     
-    // ★★★ CRITICAL: DB側はviewContextIdでフィルタ（表示対象）★★★
+    // ★★★ CRITICAL: DB側はrenderTargetCommentIdでフィルタ（表示対象）★★★
     const dbShapesForView = showAllPaint
       ? allShapesNormalized
-      : (viewContextId ? allShapesNormalized.filter(s => resolveCommentId(s) === viewContextId) : []);
+      : (renderTargetCommentId ? allShapesNormalized.filter(s => resolveCommentId(s) === renderTargetCommentId) : []);
     
     // ★★★ CRITICAL: draft側は shouldShowDraft && storageDraftReady でフィルタ ★★★
     const draftShapesForView = shouldShowDraft && storageDraftReady && paintContextId
@@ -1440,7 +1442,7 @@ function ShareViewContent() {
     });
     
     return merged;
-  }, [allShapes, draftShapes, showAllPaint, renderTargetCommentId, paintContextId, shouldShowDraft, storageDraftReady, composerMode, tempCommentId]);
+  }, [allShapes, draftShapes, showAllPaint, renderTargetCommentId, paintContextId, shouldShowDraft, storageDraftReady, composerMode, tempCommentId, viewContextId]);
 
   // 親コメントと返信を分離（条件付きreturnの前に配置）
   const filteredComments = React.useMemo(() => {
@@ -1765,8 +1767,8 @@ function ShareViewContent() {
                 onBeginPaint={handleBeginPaint}
                 onSaveShape={handleSaveShape}
                 onDeleteShape={handleDeleteShape}
-                paintMode={isReady && paintMode && !!paintContextId}
-                draftReady={draftReady}
+                paintMode={isReady && paintMode}
+                draftReady={storageDraftReady}
                 tool={tool}
                 onToolChange={setTool}
                 onStrokeColorChange={setStrokeColor}
