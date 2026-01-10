@@ -1818,8 +1818,6 @@ const ViewerCanvas = forwardRef(({
     },
     // CRITICAL: 送信完了後の強制クリア（ref経由で確実に実行）
     afterSubmitClear: () => {
-      if (DEBUG_MODE) console.log('[ViewerCanvas] afterSubmitClear called');
-      
       // ★★★ CRITICAL: dirtyなshapeのみ削除（DBに保存済みのshapeは残す）（★★★ 不変更新 ★★★）
       const draftId = draftCommentIdRef.current;
       const newMap = new Map(shapesMapRef.current);
@@ -1832,9 +1830,10 @@ const ViewerCanvas = forwardRef(({
       shapesMapRef.current = newMap;
       bump();
       
-      setHidePaintUntilSelect(true);
-      lastStableCommentIdRef.current = null;
+      // ★★★ CRITICAL: draftCommentIdRefをクリア ★★★
       draftCommentIdRef.current = null;
+      
+      // 選択状態・描画状態をリセット
       setSelectedId(null);
       setCurrentShape(null);
       setIsDrawing(false);
@@ -1847,8 +1846,6 @@ const ViewerCanvas = forwardRef(({
         transformerRef.current.nodes([]);
         transformerRef.current.getLayer()?.batchDraw();
       }
-      
-      if (DEBUG_MODE) console.log('[ViewerCanvas] afterSubmitClear: draft shapes cleared, existing shapes preserved');
     },
     delete: handleDelete,
     canUndo: undoStack.length > 0,
