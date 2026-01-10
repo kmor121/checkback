@@ -351,9 +351,10 @@ function ShareViewContent() {
 
   // ★★★ CRITICAL FIX: hydratedKeyRef を string ref に変更（targetKey追跡用）★★★
   const hydratedKeyRef = useRef(null);
+  const [hydratedKeyState, setHydratedKeyState] = useState(null);
 
-  // ★★★ CRITICAL: draftReady フラグ（hydrate完了判定）★★★
-  const draftReady = !!targetKey && hydratedKeyRef.current === targetKey;
+  // ★★★ CRITICAL: draftReady フラグ（hydrate完了判定、state化で再レンダー保証）★★★
+  const draftReady = !!targetKey && hydratedKeyState === targetKey;
   
   useEffect(() => {
     // ★★★ CRITICAL: targetKey未確定時はスキップ（完了扱いにしない）★★★
@@ -384,8 +385,9 @@ function ShareViewContent() {
     draftShapesRef.current = normalizedShapes;
     setDraftShapes(normalizedShapes);
     
-    // ★★★ CRITICAL: hydrate完了後にキーを記録 ★★★
+    // ★★★ CRITICAL: hydrate完了後にキーを記録（空でもready扱い、描画開始可能に）★★★
     hydratedKeyRef.current = targetKey;
+    setHydratedKeyState(targetKey);
     
     console.log('[draft] hydrate end:', {
       targetKey: targetKey.substring(0, 30),

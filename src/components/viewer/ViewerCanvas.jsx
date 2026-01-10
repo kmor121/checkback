@@ -228,10 +228,11 @@ const ViewerCanvas = forwardRef(({
   // ★★★ A: draftCommentIdRef.currentではなく、propsのdraftCommentIdを優先 ★★★
   const effectiveActiveId = activeCommentId ?? draftCommentId ?? draftCommentIdRef.current ?? null;
 
-  // ★★★ CRITICAL: canEdit = paintMode && draftReady（hydrate完了必須）★★★
-  const canEdit = paintMode && draftReady && isEditMode;
-  const canSelect = canEdit;    // 選択もcanEditに統一
-  const canMutate = canEdit;    // 移動/変形もcanEditに統一
+  // ★★★ CRITICAL: 新規描画と既存編集を分離（最小差分）★★★
+  const canDrawNew = !!paintMode;                      // 新規描画開始は paintMode だけでOK
+  const canMutate = !!paintMode && !!draftReady;       // 既存shapeの編集/削除は draftReady 必須
+  const canEdit = canMutate && isEditMode;             // 後方互換用エイリアス
+  const canSelect = canEdit;                           // 選択もcanEditに統一
   
   // ★★★ NEW: 削除専用フラグ（paintMode不問、targetIdがあれば削除可能）★★★
   const targetIdForDelete = effectiveActiveId != null ? String(effectiveActiveId) : '';
@@ -1043,10 +1044,10 @@ const ViewerCanvas = forwardRef(({
       });
     }
 
-    // ★★★ CRITICAL: 描画開始は canEdit 必須（paintMode && draftReady）★★★
-    if (!canEdit && tool !== 'text') {
+    // ★★★ CRITICAL: 描画開始は canDrawNew でOK（draftReady不要）★★★
+    if (!canDrawNew && tool !== 'text') {
       if (DEBUG_MODE) {
-        console.log('[ViewerCanvas] PointerDown blocked: canEdit=false');
+        console.log('[ViewerCanvas] PointerDown blocked: canDrawNew=false');
       }
       return;
     }
@@ -2832,6 +2833,8 @@ const ViewerCanvas = forwardRef(({
             <div>paintMode: {paintMode ? 'ON' : 'OFF'}</div>
             <div>draftReady: {draftReady ? 'YES' : 'NO'}</div>
             <div>tool: {tool}</div>
+            <div>canDrawNew: {canDrawNew ? 'YES' : 'NO'}</div>
+            <div>canMutate: {canMutate ? 'YES' : 'NO'}</div>
             <div>canEdit: {canEdit ? 'YES' : 'NO'}</div>
             <div>isDrawing: {isDrawing ? 'YES' : 'NO'}</div>
             <div>lastEvent: {lastEvent}</div>
