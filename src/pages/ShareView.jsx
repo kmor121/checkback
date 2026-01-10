@@ -250,15 +250,27 @@ function ShareViewContent() {
   }, []);
 
   // ★★★ P1: 下書き復元トリガー（初回ロード & targetKey変更時）★★★
-  // ★★★ tempCommentIdの復元（ページリロード対応）★★★
+  // ★★★ CRITICAL FIX: tempCommentIdを同期的に確定（レース根絶）★★★
   useEffect(() => {
     if (!shareLink?.file_id) return;
     
-    // 保存されているtempCommentIdを復元
+    // ★★★ CRITICAL: 復元 or 即座に生成（どちらかを必ず実行）★★★
     const savedTempId = localStorage.getItem(`tempCommentId:${shareLink.file_id}`);
-    if (savedTempId && !tempCommentId) {
+    if (savedTempId) {
       setTempCommentId(savedTempId);
-      console.log('[ShareView] Restored tempCommentId from localStorage:', savedTempId);
+      console.log('[ShareView] ✓ Restored tempCommentId:', {
+        scopeId: shareLink.file_id.substring(0, 12),
+        tempCommentId: savedTempId.substring(0, 12),
+      });
+    } else {
+      // ★★★ CRITICAL: 無ければ即座に生成（描画開始前に必ず確定）★★★
+      const newTempId = generateTempCommentId();
+      setTempCommentId(newTempId);
+      localStorage.setItem(`tempCommentId:${shareLink.file_id}`, newTempId);
+      console.log('[ShareView] ✓ Generated new tempCommentId:', {
+        scopeId: shareLink.file_id.substring(0, 12),
+        tempCommentId: newTempId.substring(0, 12),
+      });
     }
   }, [shareLink?.file_id]);
 
@@ -449,11 +461,11 @@ function ShareViewContent() {
       setActiveCommentId(null);
       setPaintSessionCommentId(null);
       
-      // ★★★ 新規コメント用の仮IDを生成（下書き復元はtargetKey変更時に自動実行）★★★
+      // ★★★ CRITICAL: tempCommentIdは既にuseEffectで確定済み（ここでは生成しない）★★★
+      // もし未確定なら描画を許可しない（レース防止）
       if (!tempCommentId) {
-        const newTempId = generateTempCommentId();
-        setTempCommentId(newTempId);
-        console.log('[ShareView] Generated new tempCommentId:', newTempId);
+        console.warn('[ShareView] tempCommentId not ready yet, cannot start paint');
+        return;
       }
       
       setComposerMode('new');
