@@ -446,15 +446,9 @@ const ViewerCanvas = forwardRef(({
 
   // ★★★ CRITICAL FIX: existingShapesで完全同期（upsertではなく置換）★★★
   // DB削除後にexistingShapesから消えたshapeはMapからも自動で消える
+  // ★★★ P2 FIX: incoming空でもdirtyがあればMap空置換しない（draft消失防止）★★★
   useEffect(() => {
     if (!existingShapes) return;
-
-    console.log('[ViewerCanvas] existingShapes useEffect (FULL SYNC):', {
-      length: existingShapes.length,
-      activeCommentId,
-      prevMapSize: shapesMapRef.current.size,
-      shapeIds: existingShapes.map(s => ({ id: s.id?.substring?.(0, 8), cid: s.comment_id })),
-    });
 
     // ★★★ CRITICAL: dirtyなローカルshapeを保持するために一時保存 ★★★
     const dirtyShapes = new Map();
@@ -464,9 +458,27 @@ const ViewerCanvas = forwardRef(({
       }
     }
 
+    const hasDirty = dirtyShapes.size > 0;
+    const incomingEmpty = existingShapes.length === 0;
+
+    console.log('[ViewerCanvas] existingShapes useEffect (FULL SYNC):', {
+      incomingLength: existingShapes.length,
+      activeCommentId,
+      prevMapSize: shapesMapRef.current.size,
+      dirtyCount: dirtyShapes.size,
+      hasDirty,
+      incomingEmpty,
+    });
+
+    // ★★★ P2 FIX: incoming空 && dirtyあり → Map空置換スキップ（draft消失防止）★★★
+    if (incomingEmpty && hasDirty) {
+      console.log('[ViewerCanvas] FULL SYNC SKIPPED: incoming empty but dirty shapes exist, preserving draft');
+      return;
+    }
+
     // ★★★ CRITICAL: existingShapesのみでMapを作り直す（完全同期）★★★
     const newMap = new Map();
-    
+
     for (const s of existingShapes) {
       // comment_idが空のshapeは取り込まない
       const cid = shapeCommentId(s);
@@ -474,7 +486,7 @@ const ViewerCanvas = forwardRef(({
         console.log('[ViewerCanvas] Skipping shape with empty comment_id:', s.id?.substring?.(0, 8));
         continue;
       }
-      
+
       // dirtyなローカルshapeがあればそちらを優先（描画中の巻き戻り防止）
       if (dirtyShapes.has(s.id)) {
         newMap.set(s.id, dirtyShapes.get(s.id));
@@ -482,7 +494,7 @@ const ViewerCanvas = forwardRef(({
         newMap.set(s.id, s);
       }
     }
-    
+
     // ★★★ CRITICAL: dirtyだがexistingShapesに無いshapeも追加（新規描画中のshape）★★★
     for (const [id, shape] of dirtyShapes.entries()) {
       if (!newMap.has(id)) {
