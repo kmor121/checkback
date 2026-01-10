@@ -2287,6 +2287,11 @@ const ViewerCanvas = forwardRef(({
         const bboxW = Math.max(20, (Math.max(...xs) - Math.min(...xs)) + pad * 2);
         const bboxH = Math.max(20, (Math.max(...ys) - Math.min(...ys)) + pad * 2);
 
+        // ★★★ DEBUG: 件数付きログ（原因特定用） ★★★
+        if (DEBUG_MODE && isSelected) {
+          console.log('[arrow rendered] id=' + shape.id.substring(0, 8) + ' cid=' + String(shape.comment_id || '').substring(0, 8) + ' points=' + (points.length / 2));
+        }
+
         return (
           <Group
             key={shape.id}
