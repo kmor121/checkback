@@ -386,9 +386,12 @@ const ViewerCanvas = forwardRef(({
   }, [clearAfterSubmitNonce]);
 
   // CRITICAL: activeCommentId変化時にhidePaintUntilSelectを解除（コメント選択で描画を表示）
+  // ★★★ FIX: effectiveActiveIdがある場合のみ解除（draftCommentIdも含む）★★★
   useEffect(() => {
-    if (activeCommentId != null) {
-      console.log('[ViewerCanvas] activeCommentId set, clearing hidePaintUntilSelect:', activeCommentId);
+    // effectiveActiveIdは activeCommentId ?? draftCommentIdRef.current
+    const currentEffective = activeCommentId ?? draftCommentIdRef.current;
+    if (currentEffective != null) {
+      console.log('[ViewerCanvas] effectiveActiveId set, clearing hidePaintUntilSelect:', currentEffective);
       setHidePaintUntilSelect(false);
     }
   }, [activeCommentId]);
