@@ -773,43 +773,55 @@ const ViewerCanvas = forwardRef(({
 
   // CRITICAL: 単体削除（★★★ canEditPaintで判定、paintMode不問 ★★★）
   const handleDelete = async () => {
-    console.log('[ViewerCanvas] handleDelete called:', { 
+    // ★★★ DEBUG: 単体削除の詳細ログ ★★★
+    console.log('[ViewerCanvas] ========== HANDLE DELETE START ==========');
+    console.log('[ViewerCanvas] handleDelete state:', { 
       selectedId, 
       targetIdForDelete, 
       canEditPaint, 
       paintMode, 
-      tool 
+      tool,
+      shapesMapSize: shapesMapRef.current.size,
     });
     
     // ★★★ CRITICAL: selectedIdが必須 ★★★
     if (!selectedId) {
       console.log('[ViewerCanvas] Delete blocked: no selectedId');
+      console.log('[ViewerCanvas] ========== HANDLE DELETE END (no selectedId) ==========');
       return;
     }
     
     // ★★★ CRITICAL: canEditPaintで削除可否を判定（paintMode不問）★★★
     if (!canEditPaint) {
       console.log('[ViewerCanvas] Delete blocked: canEditPaint=false (no targetId)');
+      console.log('[ViewerCanvas] ========== HANDLE DELETE END (canEditPaint=false) ==========');
       return;
     }
     
     const selectedShape = shapesMapRef.current.get(selectedId);
     if (!selectedShape) {
       console.log('[ViewerCanvas] Delete blocked: shape not found in Map');
+      console.log('[ViewerCanvas] Available shape ids:', [...shapesMapRef.current.keys()].slice(0, 5));
+      console.log('[ViewerCanvas] ========== HANDLE DELETE END (shape not found) ==========');
       return;
     }
     
     // ★★★ CRITICAL: comment_id一致チェック（targetIdForDeleteと比較）★★★
     const shapeCommentIdValue = shapeCommentId(selectedShape);
+    console.log('[ViewerCanvas] comment_id check:', { 
+      shapeCommentIdValue, 
+      targetIdForDelete,
+      match: sameId(shapeCommentIdValue, targetIdForDelete),
+    });
+    
     if (!sameId(shapeCommentIdValue, targetIdForDelete)) {
-      console.log('[ViewerCanvas] Delete blocked: comment_id mismatch', { 
-        shapeCommentIdValue, 
-        targetIdForDelete 
-      });
+      console.log('[ViewerCanvas] Delete blocked: comment_id mismatch');
+      console.log('[ViewerCanvas] ========== HANDLE DELETE END (comment_id mismatch) ==========');
       return;
     }
     
     const shape = selectedShape;
+    console.log('[ViewerCanvas] Proceeding with delete for shape:', shape.id);
     addToUndoStack({ type: 'delete', shape, index: 0 });
     
     // Transformer解除（先に）
