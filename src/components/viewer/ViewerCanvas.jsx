@@ -243,17 +243,14 @@ const ViewerCanvas = forwardRef(({
     }
 
     // ★★★ CRITICAL: existingShapesを直接使う（親から渡されたフィルタ済みデータ）★★★
-    // Map経由だと同期の問題が起きるので、propsを信頼する
     let sourceShapes = existingShapes || [];
-    
+
     // ★★★ CRITICAL: 描画中のcurrentShapeとIDが重複するshapeは除外（二重描画防止）★★★
     if (currentShape?.id) {
       sourceShapes = sourceShapes.filter(s => s.id !== currentShape.id);
-      console.log('[ViewerCanvas] Excluded currentShape from renderedShapes:', currentShape.id);
     }
-    
+
     if (showAllPaint) {
-      console.log('[ViewerCanvas] renderedShapes: showAllPaint mode, returning all', sourceShapes.length);
       return sourceShapes;
     }
 
@@ -262,18 +259,13 @@ const ViewerCanvas = forwardRef(({
       activeCommentId ?? draftCommentIdRef.current ?? lastStableCommentIdRef.current ?? null;
 
     if (renderTargetId == null) {
-      console.log('[ViewerCanvas] renderedShapes: empty (no renderTargetId)');
       return [];
     }
 
-    // ★★★ CRITICAL: 親側でフィルタ済みなら全て返す ★★★
-    // FileView/ShareViewで既にフィルタリングされている場合
-    console.log('[ViewerCanvas] renderedShapes: returning existingShapes directly', {
-      renderTargetId,
-      count: sourceShapes.length,
-      shapeIds: sourceShapes.map(s => ({ id: s.id?.substring?.(0, 8), cid: s.comment_id })),
-    });
-    
+    // ★★★ CRITICAL: currentShapeがある場合、そのcomment_idもチェック ★★★
+    // currentShapeのcomment_idがrenderTargetIdと異なる場合は表示しない（切替時のチラつき防止）
+    // → currentShapeはrenderShape内で別途描画されるので、ここでは除外済み
+
     return sourceShapes;
   }, [existingShapes, showAllPaint, activeCommentId, hidePaintUntilSelect, currentShape]);
   
@@ -2364,8 +2356,14 @@ const ViewerCanvas = forwardRef(({
             {/* ★★★ CRITICAL: 確定済みshapeのみ描画（currentShapeとの重複は既に除外済み）★★★ */}
             {renderedShapes.map(s => renderShape(s, true))}
             
-            {/* ★★★ CRITICAL: 描画中のcurrentShapeは最後に独立して描画（二重描画防止）★★★ */}
-            {currentShape && renderShape(currentShape, false)}
+            {/* ★★★ CRITICAL: 描画中のcurrentShapeは最後に独立して描画 ★★★ */}
+            {/* ★★★ FIX: currentShapeのcomment_idがactiveCommentIdと一致する場合のみ描画 ★★★ */}
+            {currentShape && (
+              // comment_id未設定（新規描画中）またはactiveCommentIdと一致する場合のみ描画
+              (currentShape.comment_id == null || 
+               String(currentShape.comment_id) === String(activeCommentId) ||
+               String(currentShape.comment_id) === String(draftCommentIdRef.current))
+            ) && renderShape(currentShape, false)}
             
             <Transformer ref={transformerRef} />
           </Group>
