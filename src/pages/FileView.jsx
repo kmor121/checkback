@@ -819,42 +819,54 @@ function FileViewContent() {
             showAllPaint={false}
             clearAfterSubmitNonce={clearAfterSubmitNonce}
             onShapesChange={(updated) => {
-              // ★★★ CRITICAL: ref経由で最新IDを取得（stale closure回避）★★★
-              const currentEffectiveId = effectiveActiveIdRef.current;
+              // ★★★ CRITICAL BUG FIX: 編集モードでは activeCommentId を使用（paintSessionCommentIdを更新しない）★★★
+              // ref経由ではなく、現在のactiveCommentIdを直接参照
+              const isEdit = !!activeCommentId;
+              const targetId = isEdit ? String(activeCommentId) : null;
+              
               console.log('[FileView] onShapesChange called:', {
                 updatedCount: updated.length,
-                currentEffectiveId,
-                mode: currentEffectiveId ? 'EDIT' : 'NEW',
+                isEdit,
+                targetId,
+                activeCommentId,
+                paintSessionCommentId,
               });
               
-              if (!currentEffectiveId) {
-                // 新規モード: draftShapesに保存
+              if (!isEdit) {
+                // 新規モード: draftShapesに保存（paintSessionCommentIdは変更しない）
                 setDraftShapes(updated);
               } else {
                 // ★★★ 編集モード: shapesForCanvasを即座に更新（invalidate待たない）★★★
-                const updatedExisting = allShapes.map(s => {
+                // ★★★ CRITICAL: activeCommentId のshapeのみをマージ対象にする ★★★
+                const targetShapes = allShapes.filter(s => String(s.comment_id) === targetId);
+                const updatedExisting = targetShapes.map(s => {
                   const localUpdate = updated.find(u => u.id === s.id);
                   return localUpdate ? { ...s, ...localUpdate } : s;
                 });
                 
-                // CRITICAL: 新規追加分もマージ
-                const newShapes = updated.filter(u => !allShapes.find(s => s.id === u.id));
+                // CRITICAL: 新規追加分もマージ（同じcomment_idのもののみ）
+                const newShapes = updated.filter(u => !targetShapes.find(s => s.id === u.id));
                 const merged = [...updatedExisting, ...newShapes];
                 
                 // ★ queryClientのキャッシュを直接更新（invalidate不要）
+                // ★★★ CRITICAL: 他のcomment_idのshapeは保持する ★★★
                 queryClient.setQueryData(['paintShapes', fileId, 1], (old) => {
                   if (!old) return old;
-                  return merged.map(shape => ({
+                  // 他のcomment_idのshapeは維持
+                  const otherShapes = old.filter(ps => String(ps.comment_id) !== targetId);
+                  // このcomment_idのshapeは新しいデータで置換
+                  const updatedShapes = merged.map(shape => ({
                     id: shape.dbId || shape.id,
                     client_shape_id: shape.id,
                     file_id: fileId,
-                    comment_id: currentEffectiveId,  // ★ ref経由の最新IDを使用
+                    comment_id: targetId,  // ★ activeCommentIdを使用
                     page_no: 1,
                     shape_type: shape.tool,
                     data_json: JSON.stringify(shape),
                     author_key: user?.id,
                     author_name: user?.full_name,
                   }));
+                  return [...otherShapes, ...updatedShapes];
                 });
               }
             }}
