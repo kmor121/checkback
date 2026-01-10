@@ -1571,7 +1571,7 @@ function ShareViewContent() {
     }));
     
     return merged;
-  }, [allShapes, draftShapes, showAllPaint, paintContextId, shouldShowDraft, storageDraftReady, composerMode, tempCommentId, canvasReady]);
+  }, [allShapes, draftShapes, showAllPaint, paintContextId, shouldShowDraft, storageDraftReady, composerMode, tempCommentId, canvasReady, isEditMode, isNewMode, composerTargetCommentId, hasCacheForKey]);
 
   // 親コメントと返信を分離（条件付きreturnの前に配置）
   const filteredComments = React.useMemo(() => {
