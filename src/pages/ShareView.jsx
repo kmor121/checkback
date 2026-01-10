@@ -1606,6 +1606,7 @@ function ShareViewContent() {
                 zoom={zoom}
                 showBoundingBoxes={showBoundingBoxes}
                 showAllPaint={showAllPaint}
+                forceClearToken={forceClearToken}
                 debugInfo={{
                   isReady: isReady,
                   readyDetails: readyDetails,
