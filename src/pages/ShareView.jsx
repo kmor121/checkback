@@ -124,6 +124,7 @@ function ShareViewContent() {
   const [paintSessionCommentId, setPaintSessionCommentId] = useState(null);
   const [draftShapes, setDraftShapes] = useState([]);
   const draftShapesRef = useRef([]);
+  const draftCacheRef = useRef(new Map()); // ★★★ P1: targetKey -> shapes[] のキャッシュ ★★★
   const [canvasSessionNonce, setCanvasSessionNonce] = useState(0);
   
   // ★★★ P2: 明示クリア用トークン（全削除/送信成功後のみインクリメント）★★★
@@ -405,10 +406,15 @@ function ShareViewContent() {
       tempCommentId: tempCommentId?.substring(0, 12) || 'null',
     });
     
+    // ★★★ P1 FIX: キャッシュから即座に復元（置換防止）★★★
+    const cached = draftCacheRef.current.get(targetKey) || [];
+    draftShapesRef.current = cached;
+    setDraftShapes(cached);
+    console.log('[draft] cache restored:', { targetKey: targetKey.substring(0, 30), cachedCount: cached.length });
+    
+    // ★★★ P1: localStorage読み込み → 正規化 → キャッシュ更新 ★★★
     const draft = loadDraft(targetKey);
     const shapes = draft?.shapes || [];
-    
-    // ★★★ CRITICAL: 復元直後に normalizeShape で完全正規化（defaultにtempCommentId使用）★★★
     const normalizedShapes = shapes.map(s => normalizeShape(s, tempCommentId)).filter(Boolean);
     
     // ★★★ CRITICAL: hydrateは置換ではなくマージ（draftReady前の描画を消さない）★★★
@@ -421,6 +427,8 @@ function ShareViewContent() {
     // loadedにある → 採用（hydrate内容で上書き）
     const merged = [...normalizedShapes, ...prevOnlyShapes];
     
+    // ★★★ P1: キャッシュに保存 ★★★
+    draftCacheRef.current.set(targetKey, merged);
     draftShapesRef.current = merged;
     setDraftShapes(merged);
     
@@ -715,20 +723,24 @@ function ShareViewContent() {
     });
     
     setDraftShapes(prev => {
+      let next;
       if (mode === 'create') {
         // 同じIDが既に存在する場合は追記しない（重複防止）
         if (prev.some(s => s.id === shapeWithDirty.id)) {
           return prev;
         }
-        const next = [...prev, shapeWithDirty];
-        draftShapesRef.current = next;
-        return next;
+        next = [...prev, shapeWithDirty];
       } else {
         // update mode: 既存shapeを置き換え
-        const next = prev.map(s => (s.id === shapeWithDirty.id ? shapeWithDirty : s));
-        draftShapesRef.current = next;
-        return next;
+        next = prev.map(s => (s.id === shapeWithDirty.id ? shapeWithDirty : s));
       }
+      
+      // ★★★ P1: キャッシュ更新 ★★★
+      if (targetKey) {
+        draftCacheRef.current.set(targetKey, next);
+      }
+      draftShapesRef.current = next;
+      return next;
     });
     
     console.log('[ShareView] handleSaveShape end:', {
@@ -752,6 +764,11 @@ function ShareViewContent() {
     // P2 FIX: functional update でメモリから削除
     setDraftShapes(prev => {
       const next = prev.filter(s => s.id !== shape.id);
+      
+      // ★★★ P1: キャッシュ更新 ★★★
+      if (targetKey) {
+        draftCacheRef.current.set(targetKey, next);
+      }
       draftShapesRef.current = next;
       return next;
     });
@@ -775,6 +792,11 @@ function ShareViewContent() {
     // ★★★ 1. メモリから全削除 ★★★
     draftShapesRef.current = [];
     setDraftShapes([]);
+    
+    // ★★★ P1: キャッシュクリア ★★★
+    if (targetKey) {
+      draftCacheRef.current.delete(targetKey);
+    }
     
     // ★★★ 2. localStorageから明示的に削除（FIX: autosaveでは消えないので手動削除）★★★
     if (targetKey) {
@@ -1050,6 +1072,12 @@ function ShareViewContent() {
       setComposerText('');
       setDraftShapes([]);
       draftShapesRef.current = [];
+      
+      // ★★★ P1: 送信成功後はキャッシュもクリア（targetKeyのエントリ削除）★★★
+      if (targetKey) {
+        draftCacheRef.current.delete(targetKey);
+      }
+      
       setPendingFiles([]);
       setComposerMode('new');
       setComposerTargetCommentId(null);
@@ -1190,6 +1218,9 @@ function ShareViewContent() {
     // draft/描画一時stateクリア（メモリのみ、localStorageは残す）
     setDraftShapes([]);
     draftShapesRef.current = [];
+    
+    // ★★★ P1: キャッシュもクリア（全targetKey削除）★★★
+    draftCacheRef.current.clear();
     
     // UI状態
     setComposerText('');
@@ -1756,6 +1787,11 @@ function ShareViewContent() {
                     targetKey,
                     paintContextId: paintContextId?.substring(0, 12) || 'null',
                   });
+                  
+                  // ★★★ P1: キャッシュ更新 ★★★
+                  if (targetKey) {
+                    draftCacheRef.current.set(targetKey, updated);
+                  }
                   
                   // メモリに保存（useEffectでlocalStorage自動保存される）
                   draftShapesRef.current = updated;
