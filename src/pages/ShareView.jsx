@@ -440,7 +440,10 @@ function ShareViewContent() {
     // ★★★ P1: localStorage読み込み → 正規化 → キャッシュ更新 ★★★
     const draft = loadDraft(targetKey);
     const shapes = draft?.shapes || [];
-    const normalizedShapes = shapes.map(s => normalizeShape(s, tempCommentId)).filter(Boolean);
+    
+    // ★★★ CRITICAL: edit時はtempCommentIdを使わず、paintContextIdで正規化 ★★★
+    const normalizeCtxId = (draftScope === 'edit') ? paintContextId : tempCommentId;
+    const normalizedShapes = shapes.map(s => normalizeShape(s, normalizeCtxId)).filter(Boolean);
     
     // ★★★ CRITICAL: hydrateは置換ではなくマージ（draftReady前の描画を消さない）★★★
     const prevShapes = draftShapesRef.current || [];
@@ -1519,8 +1522,13 @@ function ShareViewContent() {
       ? allShapesNormalized
       : (paintContextId ? allShapesNormalized.filter(s => resolveCommentId(s) === paintContextId) : []);
     
-    // ★★★ C: チラつき防止 - canvasReady前はドラフト非表示 ★★★
-    const draftShapesForView = canvasReady && shouldShowDraft && storageDraftReady && paintContextId
+    // ★★★ CRITICAL: edit/new 下書きを明示的に分離（view時は非表示）★★★
+    const isEditMode = composerMode === 'edit';
+    const isNewMode = composerMode === 'new';
+    const shouldShowEditDraft = canvasReady && isEditMode && storageDraftReady && paintContextId;
+    const shouldShowNewDraft = canvasReady && isNewMode && storageDraftReady && paintContextId;
+    
+    const draftShapesForView = (shouldShowEditDraft || shouldShowNewDraft)
       ? draftShapesNormalized.filter(s => resolveCommentId(s) === paintContextId)
       : [];
     
@@ -1529,17 +1537,22 @@ function ShareViewContent() {
     const dbShapesWithoutDuplicates = dbShapesForView.filter(s => !draftIds.has(s.id));
     const merged = [...dbShapesWithoutDuplicates, ...draftShapesForView];
     
-    console.log('[ShareView] shapesForCanvas result:', {
+    console.log('[ShareView] shapesForCanvas result:', JSON.stringify({
       paintContextId: paintContextId?.substring(0, 12) || 'null',
       composerMode,
+      draftScope,
       shouldShowDraft,
+      isEditMode,
+      isNewMode,
+      shouldShowEditDraft,
+      shouldShowNewDraft,
       storageDraftReady,
       canvasReady,
       shapesLoaded,
       dbCount: dbShapesForView.length,
       draftCount: draftShapesForView.length,
       mergedTotal: merged.length,
-    });
+    }));
     
     return merged;
   }, [allShapes, draftShapes, showAllPaint, paintContextId, shouldShowDraft, storageDraftReady, composerMode, tempCommentId, canvasReady]);
