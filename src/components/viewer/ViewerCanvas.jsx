@@ -2177,44 +2177,43 @@ const ViewerCanvas = forwardRef(({
         const bboxH = Math.max(20, (Math.max(...ys) - Math.min(...ys)) + pad * 2);
 
         return (
-          <React.Fragment key={shape.id}>
-            <Group
-              ref={(node) => { if (node) shapeRefs.current[shape.id] = node; }}
-              x={groupX}
-              y={groupY}
-              listening={isSelectable && !isDrawingShape}
-              draggable={isEditable && !isDrawingShape}
-              onPointerDown={(isSelectable && !isDrawingShape) ? (e) => {
-                e.cancelBubble = true;
-                setSelectedId(shape.id);
-                if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
-                if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
-              } : undefined}
-              onDragStart={(isEditable && !isDrawingShape) ? (e) => handleDragStart(shape, e) : undefined}
-              onDragMove={(isEditable && !isDrawingShape) ? (e) => handleDragMove(shape, e) : undefined}
-              onDragEnd={(isEditable && !isDrawingShape) ? (e) => handleDragEnd(shape, e) : undefined}
-            >
-              <Arrow 
-                stroke={shape.stroke}
-                strokeWidth={shape.strokeWidth}
-                points={points} 
-                pointerLength={10} 
-                pointerWidth={10} 
-                listening={false}
+          <Group
+            key={shape.id}
+            ref={(node) => { if (node) shapeRefs.current[shape.id] = node; }}
+            x={groupX}
+            y={groupY}
+            listening={isSelectable && !isDrawingShape}
+            draggable={isEditable && !isDrawingShape}
+            onPointerDown={(isSelectable && !isDrawingShape) ? (e) => {
+              e.cancelBubble = true;
+              setSelectedId(shape.id);
+              if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
+              if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
+            } : undefined}
+            onDragStart={(isEditable && !isDrawingShape) ? (e) => handleDragStart(shape, e) : undefined}
+            onDragMove={(isEditable && !isDrawingShape) ? (e) => handleDragMove(shape, e) : undefined}
+            onDragEnd={(isEditable && !isDrawingShape) ? (e) => handleDragEnd(shape, e) : undefined}
+          >
+            <Arrow 
+              stroke={shape.stroke}
+              strokeWidth={shape.strokeWidth}
+              points={points} 
+              pointerLength={10} 
+              pointerWidth={10} 
+              listening={false}
+            />
+            {!isDrawingShape && (
+              <Rect 
+                x={bboxX} 
+                y={bboxY} 
+                width={bboxW} 
+                height={bboxH} 
+                fill="rgba(0,0,0,0.01)"
+                listening={isSelectable}
               />
-              {!isDrawingShape && (
-                <Rect 
-                  x={bboxX} 
-                  y={bboxY} 
-                  width={bboxW} 
-                  height={bboxH} 
-                  fill="rgba(0,0,0,0.01)"
-                  listening={isSelectable}
-                />
-              )}
-            </Group>
-            {boundingBox && <Rect x={boundingBox.x} y={boundingBox.y} width={boundingBox.width} height={boundingBox.height} stroke="rgba(255,0,0,0.3)" strokeWidth={1} dash={[5,5]} fill={undefined} listening={false} />}
-          </React.Fragment>
+            )}
+            {boundingBox && <Rect key={`bbox-${shape.id}`} x={boundingBox.x} y={boundingBox.y} width={boundingBox.width} height={boundingBox.height} stroke="rgba(255,0,0,0.3)" strokeWidth={1} dash={[5,5]} fill={undefined} listening={false} />}
+          </Group>
         );
       } else if (shape.tool === 'text') {
         // Text描画
