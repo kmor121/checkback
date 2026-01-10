@@ -2313,18 +2313,6 @@ const ViewerCanvas = forwardRef(({
       </div>
     );
   }
-  
-  // ★★★ DEBUG HUD: 画面左上に常時表示 ★★★
-  const debugHudData = useMemo(() => {
-    const uniqueCids = [...new Set(renderedShapes.map(s => shapeCommentId(s)).filter(Boolean))].slice(0, 5);
-    return {
-      activeCommentId: String(activeCommentId ?? 'null'),
-      effectiveActiveId: String(effectiveActiveId ?? 'null'),
-      draftCommentId: String(draftCommentIdRef.current ?? 'null'),
-      renderedShapesLength: renderedShapes.length,
-      uniqueCommentIds: uniqueCids.map(id => String(id).substring(0, 12)),
-    };
-  }, [activeCommentId, effectiveActiveId, renderedShapes]);
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative', overflow: 'auto', background: '#e0e0e0' }}>
