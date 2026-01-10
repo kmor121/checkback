@@ -889,6 +889,7 @@ function ShareViewContent() {
   };
 
   // ★★★ CRITICAL: 編集モード解除の統一関数 ★★★
+  // ★★★ NOTE: 下書きはlocalStorageに残す（B案：復元可能にする）★★★
   const exitEditMode = () => {
     // ViewerCanvasの描画をクリア
     viewerCanvasRef.current?.afterSubmitClear();
@@ -907,7 +908,7 @@ function ShareViewContent() {
     setTool('select');
     setPaintSessionCommentId(null);
     
-    // draft/描画一時stateクリア
+    // draft/描画一時stateクリア（メモリのみ、localStorageは残す）
     setDraftShapes([]);
     draftShapesRef.current = [];
     
@@ -916,6 +917,9 @@ function ShareViewContent() {
     setPendingFiles([]);
     setReplyingThreadId(null);
     setIsDockOpen(false);
+    
+    // ★★★ tempCommentIdは保持（新規コメントの下書きを復元可能にする）★★★
+    // setTempCommentId(null); // 意図的にリセットしない
   };
 
   // 後方互換用エイリアス
