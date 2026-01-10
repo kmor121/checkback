@@ -293,61 +293,62 @@ function ShareViewContent() {
     return getDraftKey(shareLink.file_id, targetCommentId, effectiveTempId);
   }, [shareLink?.file_id, composerMode, composerTargetCommentId, tempCommentId]);
 
-  // ★★★ P2: targetKey 変更時に下書きを自動復元（paintMode依存なし）★★★
-  const prevTargetKeyRef = useRef(null);
-  const didHydrateDraftRef = useRef(false); // ★★★ 復元完了フラグ（autosave/autodeleteガード用）★★★
+  // ★★★ CRITICAL FIX: hydratedKeyRef を string ref に変更（targetKey追跡用）★★★
+  const hydratedKeyRef = useRef(null);
   
   useEffect(() => {
-    // targetKeyが変わった時のみ復元（初回含む）
-    if (targetKey === prevTargetKeyRef.current) return;
-    prevTargetKeyRef.current = targetKey;
-    
-    // ★★★ 復元開始前にフラグをfalseにリセット ★★★
-    didHydrateDraftRef.current = false;
-    console.log('[draft] hydrate start:', { targetKey, didHydrate: false });
-    
+    // ★★★ CRITICAL: targetKey未確定時はスキップ（完了扱いにしない）★★★
     if (!targetKey) {
-      // キーがない場合は空にリセット（削除はしない）
-      draftShapesRef.current = [];
-      setDraftShapes([]);
-      didHydrateDraftRef.current = true;
-      console.log('[draft] hydrate end (no targetKey):', { targetKey, didHydrate: true, loadedCount: 0 });
+      console.log('[draft] hydrate skipped: no targetKey yet', { 
+        targetKey, 
+        scopeId: shareLink?.file_id?.substring(0, 12) || 'null',
+        tempCommentId: tempCommentId?.substring(0, 12) || 'null',
+      });
       return;
     }
+    
+    // ★★★ CRITICAL: 同一キーの二重hydrate防止 ★★★
+    if (hydratedKeyRef.current === targetKey) return;
+    
+    console.log('[draft] hydrate start:', { 
+      targetKey: targetKey.substring(0, 30),
+      scopeId: shareLink?.file_id?.substring(0, 12),
+      tempCommentId: tempCommentId?.substring(0, 12) || 'null',
+    });
     
     const draft = loadDraft(targetKey);
     const shapes = draft?.shapes || [];
     
-    console.log('[draft] hydrate end:', {
-      targetKey,
-      loadedCount: shapes.length,
-      savedAt: draft?.updatedAt,
-      didHydrate: true,
-      // ★★★ DEBUG: hydrate完了時の状態詳細 ★★★
-      scopeId: shareLink?.file_id?.substring(0, 12),
-      tempCommentId: tempCommentId?.substring(0, 12),
-      targetKeyFull: targetKey?.substring(0, 30),
-    });
-    
     draftShapesRef.current = shapes;
     setDraftShapes(shapes);
     
-    // ★★★ 復元完了後にフラグをtrueにする ★★★
-    didHydrateDraftRef.current = true;
+    // ★★★ CRITICAL: hydrate完了後にキーを記録 ★★★
+    hydratedKeyRef.current = targetKey;
+    
+    console.log('[draft] hydrate end:', {
+      targetKey: targetKey.substring(0, 30),
+      loadedCount: shapes.length,
+      savedAt: draft?.updatedAt,
+      scopeId: shareLink?.file_id?.substring(0, 12),
+      tempCommentId: tempCommentId?.substring(0, 12) || 'null',
+    });
     
     if (shapes.length > 0) {
       showToast(`${shapes.length}個の下書きを復元しました`, 'info');
     }
-  }, [targetKey]);
+  }, [targetKey, shareLink?.file_id, tempCommentId]);
 
   // ★★★ P3: draftShapes 変更時に自動保存（debounce付き）★★★
   // ★★★ FIX: 空になっただけでdeleteDraftしない、didHydrateDraftRefでガード ★★★
   useEffect(() => {
     if (!targetKey) return;
     
-    // ★★★ 復元完了前はautosaveしない ★★★
-    if (!didHydrateDraftRef.current) {
-      console.log('[draft] autosave SKIPPED (not hydrated yet):', { targetKey, draftShapesLength: draftShapes.length });
+    // ★★★ CRITICAL FIX: この targetKey を hydrate 済みの時だけ autosave ★★★
+    if (hydratedKeyRef.current !== targetKey) {
+      console.log('[draft] autosave SKIPPED (not hydrated for this key yet):', { 
+        targetKey: targetKey.substring(0, 30),
+        hydratedKey: hydratedKeyRef.current?.substring(0, 30) || 'null',
+      });
       return;
     }
     
@@ -1608,11 +1609,12 @@ function ShareViewContent() {
                 }}
                 onShapesChange={(updated) => {
                   // ★★★ CRITICAL: ViewerCanvasからの同期コールバック ★★★
-                  // ★★★ FIX: 復元完了前は無視（FULL SYNCで空配列が来ても上書きしない）★★★
-                  if (!didHydrateDraftRef.current) {
-                    console.log('[ShareView] onShapesChange IGNORED (not hydrated yet):', {
+                  // ★★★ CRITICAL FIX: この targetKey を hydrate 済みの時だけ同期 ★★★
+                  if (!targetKey || hydratedKeyRef.current !== targetKey) {
+                    console.log('[ShareView] onShapesChange IGNORED (not hydrated for this key yet):', {
                       updatedCount: updated.length,
-                      targetKey,
+                      targetKey: targetKey?.substring(0, 30) || 'null',
+                      hydratedKey: hydratedKeyRef.current?.substring(0, 30) || 'null',
                     });
                     return;
                   }
