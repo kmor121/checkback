@@ -1338,43 +1338,53 @@ function ShareViewContent() {
                   selectComment(comment);
                 }}
                 onShapesChange={(updated) => {
-                  // ★★★ CRITICAL: 編集モード時も即座に反映（描画中の座標はローカルstate優先）★★★
+                  // ★★★ CRITICAL BUG FIX: 編集モードでは activeCommentId を使用 ★★★
+                  const isEdit = !!activeCommentId;
+                  const targetId = isEdit ? String(activeCommentId) : null;
+                  
                   console.log('[ShareView] onShapesChange called:', {
                     updatedCount: updated.length,
+                    isEdit,
+                    targetId,
+                    activeCommentId,
                     paintSessionCommentId,
-                    mode: paintSessionCommentId ? 'EDIT' : 'NEW',
                   });
                   
-                  if (!paintSessionCommentId) {
+                  if (!isEdit) {
                     // 新規モード: draftShapesに保存
                     draftShapesRef.current = updated;
                     setDraftShapes(updated);
                   } else {
-                    // ★★★ 編集モード: allShapesを直接更新（invalidate不要）★★★
-                    const updatedExisting = allShapes.map(s => {
+                    // ★★★ 編集モード: activeCommentId のshapeのみをマージ対象にする ★★★
+                    const targetShapes = allShapes.filter(s => String(s.comment_id) === targetId);
+                    const updatedExisting = targetShapes.map(s => {
                       const localUpdate = updated.find(u => u.id === s.id);
                       return localUpdate ? { ...s, ...localUpdate } : s;
                     });
                     
-                    // CRITICAL: 新規追加分もマージ
-                    const newShapes = updated.filter(u => !allShapes.find(s => s.id === u.id));
+                    // CRITICAL: 新規追加分もマージ（同じcomment_idのもののみ）
+                    const newShapes = updated.filter(u => !targetShapes.find(s => s.id === u.id));
                     const merged = [...updatedExisting, ...newShapes];
                     
-                    // ★ queryClientのキャッシュを直接更新（invalidate不要）
+                    // ★ queryClientのキャッシュを直接更新（他のcomment_idのshapeは維持）
                     queryClient.setQueryData(['paintShapes', token, shareLink?.file_id, currentPage], (old) => {
                       if (!old) return old;
-                      return merged.map(shape => ({
+                      // 他のcomment_idのshapeは維持
+                      const otherShapes = old.filter(ps => String(ps.comment_id) !== targetId);
+                      // このcomment_idのshapeは新しいデータで置換
+                      const updatedShapes = merged.map(shape => ({
                         id: shape.dbId || shape.id,
                         client_shape_id: shape.id,
                         file_id: shareLink.file_id,
                         share_token: token,
-                        comment_id: paintSessionCommentId,
+                        comment_id: targetId,  // ★ activeCommentIdを使用
                         page_no: currentPage,
                         shape_type: shape.tool,
                         data_json: JSON.stringify(shape),
                         author_key: guestId,
                         author_name: guestName,
                       }));
+                      return [...otherShapes, ...updatedShapes];
                     });
                   }
                 }}
