@@ -456,24 +456,46 @@ function ShareViewContent() {
     }
   };
 
+  // ★★★ CRITICAL: 全削除処理を統一（編集モード・新規モード両対応）★★★
   const handleClearAll = async () => {
     try {
-      const targetCommentId = paintSessionCommentId || activeCommentId;
+      // ★★★ CRITICAL: targetIdは編集中コメント > 選択中コメント > セッションの優先順 ★★★
+      const targetId = String(composerTargetCommentId ?? activeCommentId ?? '');
       
-      // Draft中の場合（ref即時更新）
-      if (!targetCommentId) {
-        draftShapesRef.current = [];
-        setDraftShapes([]);
+      console.log('[handleClearAll] called:', {
+        composerTargetCommentId,
+        activeCommentId,
+        paintSessionCommentId,
+        targetId,
+        draftShapesCount: draftShapesRef.current.length,
+        paintShapesCount: paintShapes.length,
+      });
+      
+      // ★★★ 1. draftShapesをクリア（新規・編集両方で実行）★★★
+      const draftCount = draftShapesRef.current.length;
+      draftShapesRef.current = [];
+      setDraftShapes([]);
+      
+      // ★★★ 2. targetIdが空なら新規モード（draftのみ削除で完了）★★★
+      if (!targetId) {
         viewerCanvasRef.current?.clear();
-        showToast('描画をクリアしました');
+        showToast(`${draftCount}個の描画をクリアしました`);
+        console.log('[handleClearAll] draft only, deletedCount:', draftCount);
         return;
       }
       
-      // 既存コメントの描画を削除
-      const shapesToDelete = paintShapes.filter(s => 
-        s.comment_id === targetCommentId && 
-        s.author_key === guestId
-      );
+      // ★★★ 3. 既存コメントの描画をDBから削除（編集モード）★★★
+      // 型を統一して比較（String同士）
+      const shapesToDelete = paintShapes.filter(s => {
+        const shapeCommentId = String(s.comment_id ?? '');
+        return shapeCommentId === targetId && s.author_key === guestId;
+      });
+      
+      console.log('[handleClearAll] DB shapes to delete:', {
+        targetId,
+        shapesToDeleteCount: shapesToDelete.length,
+        shapeIds: shapesToDelete.map(s => s.id),
+      });
       
       for (const shape of shapesToDelete) {
         await base44.entities.PaintShape.delete(shape.id);
@@ -481,7 +503,10 @@ function ShareViewContent() {
 
       await queryClient.invalidateQueries({ queryKey: ['paintShapes', token, shareLink?.file_id, currentPage] });
       viewerCanvasRef.current?.clear();
-      showToast(`${shapesToDelete.length}個の描画を削除しました`, 'success');
+      
+      const totalDeleted = draftCount + shapesToDelete.length;
+      showToast(`${totalDeleted}個の描画を削除しました`, 'success');
+      console.log('[handleClearAll] completed, deletedCount:', totalDeleted);
     } catch (error) {
       console.error('Clear all error:', error);
       const errorMsg = error.message || String(error);
