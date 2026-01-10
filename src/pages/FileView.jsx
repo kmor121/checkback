@@ -477,76 +477,53 @@ function FileViewContent() {
     updateCommentMutation,
   ]);
 
-  // ダブルクリック検出用ref
-  const clickTimerRef = useRef(null);
-  const lastClickedCommentRef = useRef(null);
-
   const handleCommentClick = (comment) => {
-    console.log('[FileView] handleCommentClick:', {
-      commentId: comment.id,
-      currentActiveCommentId: activeCommentId,
-      paintMode,
-    });
+    console.log('[FileView] handleCommentClick:', { commentId: comment.id, activeCommentId, paintMode });
     
     if (paintMode) {
       showToast('ペイントを終了してからコメントを選択してください', 'error');
       return;
     }
 
-    // ダブルクリック検出（300ms以内の同じコメントへのクリック）
-    if (lastClickedCommentRef.current === comment.id && clickTimerRef.current) {
-      // ダブルクリックとして処理
-      clearTimeout(clickTimerRef.current);
-      clickTimerRef.current = null;
-      lastClickedCommentRef.current = null;
-      handleCommentDoubleClick(comment);
-      return;
-    }
-
-    // シングルクリックを遅延実行（ダブルクリック判定のため）
-    lastClickedCommentRef.current = comment.id;
-    clickTimerRef.current = setTimeout(() => {
-      clickTimerRef.current = null;
-      lastClickedCommentRef.current = null;
-      
-      // 同じコメントを再クリック → 選択解除＆新規モードに戻す
-      if (activeCommentId === comment.id && composerMode !== 'edit') {
-        console.log('[FileView] Deselecting comment');
-        // ★ CRITICAL: ViewerCanvas内のdraftもクリア
-        viewerCanvasRef.current?.afterSubmitClear();
-        setActiveCommentId(null);
-        setPaintSessionCommentId(null);
-        setComposerMode('new');
-        setComposerTargetCommentId(null);
-        setCommentBody('');
-        setDraftShapes([]);
-        setPaintMode(false);
-        setTool('select');
-        return;
-      }
-      
-      // 別のコメントをクリック → 選択のみ
-      console.log('[FileView] Selecting comment:', comment.id);
-      
-      // ★ CRITICAL: 前の描画セッションを完全クリア（draftCommentIdRef含む）
+    // 同じコメントを再クリック → 選択解除
+    if (String(activeCommentId) === String(comment.id) && composerMode !== 'edit') {
+      console.log('[FileView] Deselecting comment');
       viewerCanvasRef.current?.afterSubmitClear();
-      setDraftShapes([]);
-      
-      if (paintMode) {
-        setPaintMode(false);
-        setTool('select');
-      }
-      
-      setActiveCommentId(comment.id);
-      setPaintSessionCommentId(comment.id);
+      setActiveCommentId(null);
+      setPaintSessionCommentId(null);
       setComposerMode('new');
       setComposerTargetCommentId(null);
       setCommentBody('');
-    }, 250);
+      setDraftShapes([]);
+      setPaintMode(false);
+      setTool('select');
+      return;
+    }
+    
+    // 別のコメントをクリック → 選択のみ（編集モードには入らない）
+    console.log('[FileView] Selecting comment:', comment.id);
+    viewerCanvasRef.current?.afterSubmitClear();
+    setDraftShapes([]);
+    
+    if (paintMode) {
+      setPaintMode(false);
+      setTool('select');
+    }
+    
+    setActiveCommentId(comment.id);
+    setPaintSessionCommentId(comment.id);
+    // ★ 編集モードは維持しない（ダブルクリックでのみ編集）
+    if (composerMode === 'edit' && String(composerTargetCommentId) !== String(comment.id)) {
+      setComposerMode('new');
+      setComposerTargetCommentId(null);
+      setCommentBody('');
+    }
   };
 
   // ★★★ ダブルクリックで編集モードに入る ★★★
-  const handleCommentDoubleClick = (comment) => {
+  const handleCommentDoubleClick = (e, comment) => {
+    e.preventDefault();
+    e.stopPropagation();
     console.log('[FileView] handleCommentDoubleClick:', comment.id);
     
     if (paintMode) {
@@ -558,7 +535,7 @@ function FileViewContent() {
     setPaintSessionCommentId(comment.id);
     setComposerMode('edit');
     setComposerTargetCommentId(comment.id);
-    setCommentBody(comment.body);
+    setCommentBody(comment.body || '');
   };
 
   const handleCancelEdit = () => {
@@ -895,14 +872,10 @@ function FileViewContent() {
                 <Card 
                   key={comment.id} 
                   className={`hover:shadow-md transition-shadow cursor-pointer ${
-                    activeCommentId === comment.id ? 'ring-2 ring-blue-500' : ''
-                  } ${composerMode === 'edit' && composerTargetCommentId === comment.id ? 'ring-2 ring-green-500 bg-green-50' : ''}`}
+                    String(activeCommentId) === String(comment.id) ? 'ring-2 ring-blue-500' : ''
+                  } ${composerMode === 'edit' && String(composerTargetCommentId) === String(comment.id) ? 'ring-2 ring-green-500 bg-green-50' : ''}`}
                   onClick={() => handleCommentClick(comment)}
-                  onDoubleClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleCommentDoubleClick(comment);
-                  }}
+                  onDoubleClick={(e) => handleCommentDoubleClick(e, comment)}
                 >
                   <CardContent className="p-3">
                     <div className="flex items-start gap-2 mb-2">
