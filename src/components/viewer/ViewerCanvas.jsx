@@ -2381,6 +2381,17 @@ const ViewerCanvas = forwardRef(({
           <div>renderedShapes.length: <span style={{ color: '#ff0' }}>{debugHudData.renderedShapesLength}</span></div>
           <div>uniqueCommentIds: <span style={{ color: '#f0f' }}>{debugHudData.uniqueCommentIds.join(', ') || '(none)'}</span></div>
           
+          {Object.keys(debugHudData.countsByCommentId).length > 0 && (
+            <div style={{ marginTop: '4px', borderTop: '1px solid #333', paddingTop: '4px' }}>
+              <div style={{ color: '#ff0', fontSize: '10px' }}>Counts by CommentID:</div>
+              {Object.entries(debugHudData.countsByCommentId).map(([cid, count]) => (
+                <div key={cid} style={{ fontSize: '9px', marginTop: '2px' }}>
+                  {cid}: <span style={{ color: '#ff0' }}>{count}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          
           {debugHudLogs.length > 0 && (
             <>
               <div style={{ borderTop: '1px solid #333', marginTop: '6px', paddingTop: '6px', color: '#ff0' }}>
