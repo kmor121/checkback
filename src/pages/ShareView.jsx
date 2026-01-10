@@ -246,6 +246,48 @@ function ShareViewContent() {
     cleanupExpiredDrafts();
   }, []);
 
+  // ★★★ P1: 下書き復元トリガー（初回ロード & targetKey変更時）★★★
+  // ★★★ tempCommentIdの復元（ページリロード対応）★★★
+  useEffect(() => {
+    if (!shareLink?.file_id) return;
+    
+    // 保存されているtempCommentIdを復元
+    const savedTempId = localStorage.getItem(`tempCommentId:${shareLink.file_id}`);
+    if (savedTempId && !tempCommentId) {
+      setTempCommentId(savedTempId);
+      console.log('[ShareView] Restored tempCommentId from localStorage:', savedTempId);
+    }
+  }, [shareLink?.file_id]);
+
+  // ★★★ tempCommentIdの永続化 ★★★
+  useEffect(() => {
+    if (!shareLink?.file_id || !tempCommentId) return;
+    localStorage.setItem(`tempCommentId:${shareLink.file_id}`, tempCommentId);
+    console.log('[ShareView] Saved tempCommentId to localStorage:', tempCommentId);
+  }, [shareLink?.file_id, tempCommentId]);
+
+  // ★★★ 下書き自動復元（paintMode開始時に復元済みなので、ここでは初回ロード時のHUD用にカウントのみ）★★★
+  const [draftDebugInfo, setDraftDebugInfo] = useState({ targetKey: null, loadedCount: 0, renderedCount: 0, savedAt: null });
+  
+  useEffect(() => {
+    if (!shareLink?.file_id) return;
+    
+    // 現在のターゲットキーを計算
+    const targetCommentId = paintSessionCommentId || (composerMode === 'edit' ? composerTargetCommentId : null);
+    const currentTempId = tempCommentId;
+    const key = getDraftKey(shareLink.file_id, targetCommentId, targetCommentId ? null : currentTempId);
+    
+    // 下書きを試しに読み込んでデバッグ情報を更新
+    const draft = key ? loadDraft(key) : null;
+    
+    setDraftDebugInfo({
+      targetKey: key,
+      loadedCount: draft?.shapes?.length || 0,
+      renderedCount: draftShapes.length,
+      savedAt: draft?.updatedAt || null,
+    });
+  }, [shareLink?.file_id, paintSessionCommentId, composerMode, composerTargetCommentId, tempCommentId, draftShapes.length]);
+
   // ★★★ 下書き保存関数（debounce付き）★★★
   const saveDraftDebounced = React.useCallback((shapes, commentId, tempId) => {
     if (!shareLink?.file_id) return;
