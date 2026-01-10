@@ -764,34 +764,41 @@ const ViewerCanvas = forwardRef(({
     onShapesChange?.(getAllShapes());
   };
 
-  // CRITICAL: 削除（★★★ 不変更新で新しいMapを作成 ★★★）
-  // ★★★ FIX: 編集モード時はpaintMode/canEditガード不要で削除可能 ★★★
+  // CRITICAL: 単体削除（★★★ canEditPaintで判定、paintMode不問 ★★★）
   const handleDelete = async () => {
-    console.log('[ViewerCanvas] handleDelete called:', { selectedId, canEdit, isInEditSession, paintMode, tool });
+    console.log('[ViewerCanvas] handleDelete called:', { 
+      selectedId, 
+      targetIdForDelete, 
+      canEditPaint, 
+      paintMode, 
+      tool 
+    });
     
-    // ★★★ CRITICAL FIX: 編集セッション中はpaintModeに関係なく削除を許可 ★★★
-    const canDeleteNow = canEdit || isInEditSession;
-    if (!canDeleteNow || !selectedId) {
-      console.log('[ViewerCanvas] Delete blocked: canDeleteNow=', canDeleteNow, 'selectedId=', selectedId);
+    // ★★★ CRITICAL: selectedIdが必須 ★★★
+    if (!selectedId) {
+      console.log('[ViewerCanvas] Delete blocked: no selectedId');
       return;
     }
     
-    // CRITICAL: 編集可能なIDのみ削除を許可（isEditableShape関数で判定）
+    // ★★★ CRITICAL: canEditPaintで削除可否を判定（paintMode不問）★★★
+    if (!canEditPaint) {
+      console.log('[ViewerCanvas] Delete blocked: canEditPaint=false (no targetId)');
+      return;
+    }
+    
     const selectedShape = shapesMapRef.current.get(selectedId);
     if (!selectedShape) {
-      console.log('[ViewerCanvas] Delete blocked: shape not found');
+      console.log('[ViewerCanvas] Delete blocked: shape not found in Map');
       return;
     }
     
-    // ★★★ FIX: 編集セッション中はcomment_id一致チェックのみで削除許可 ★★★
-    if (isInEditSession) {
-      const shapeCommentIdValue = shapeCommentId(selectedShape);
-      if (!sameId(shapeCommentIdValue, activeCommentId)) {
-        console.log('[ViewerCanvas] Delete blocked: comment_id mismatch', { shapeCommentIdValue, activeCommentId });
-        return;
-      }
-    } else if (!isEditableShape(selectedShape)) {
-      console.log('[ViewerCanvas] Delete blocked: not editable (paintMode check failed)');
+    // ★★★ CRITICAL: comment_id一致チェック（targetIdForDeleteと比較）★★★
+    const shapeCommentIdValue = shapeCommentId(selectedShape);
+    if (!sameId(shapeCommentIdValue, targetIdForDelete)) {
+      console.log('[ViewerCanvas] Delete blocked: comment_id mismatch', { 
+        shapeCommentIdValue, 
+        targetIdForDelete 
+      });
       return;
     }
     
