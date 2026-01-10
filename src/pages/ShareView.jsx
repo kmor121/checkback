@@ -1225,11 +1225,14 @@ function ShareViewContent() {
 
   // ★★★ CRITICAL BUG FIX: 編集モード中は activeCommentId のみを targetId として使用 ★★★
   // paintSessionCommentId は「新規コメント作成中」のみ使用する
-  // ★★★ B: 新規コメントモードでも tempCommentId を targetIdForShapes に設定 ★★★
-  const isEditMode = !!activeCommentId;
-  const targetIdForShapes = isEditMode
-    ? String(activeCommentId)
-    : (paintSessionCommentId ? String(paintSessionCommentId) : (tempCommentId ? String(tempCommentId) : null));
+  // ★★★ REQUIRED: renderTargetCommentId を確定値で渡す（リロード直後でも下書き表示） ★★★
+  // activeCommentId > draftShapes有無 > null の優先順でフィルタ対象を決定
+  const renderTargetCommentId = React.useMemo(() => {
+    if (activeCommentId) return String(activeCommentId);
+    // ★★★ 下書きがあれば draftCommentId でフィルタ（リロード直後の復元対応）★★★
+    if (draftShapes.length > 0 && tempCommentId) return String(tempCommentId);
+    return null;
+  }, [activeCommentId, draftShapes.length, tempCommentId]);
 
   // CRITICAL: 親側でフィルタリング（ViewerCanvasに渡すshapes）
   // ★★★ P2: draftShapesを確実にCanvasに合流させる ★★★
