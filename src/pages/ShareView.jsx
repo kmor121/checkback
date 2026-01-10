@@ -389,16 +389,28 @@ function ShareViewContent() {
     // ★★★ CRITICAL: 復元直後に normalizeShape で完全正規化（defaultにtempCommentId使用）★★★
     const normalizedShapes = shapes.map(s => normalizeShape(s, tempCommentId)).filter(Boolean);
     
-    draftShapesRef.current = normalizedShapes;
-    setDraftShapes(normalizedShapes);
+    // ★★★ CRITICAL: hydrateは置換ではなくマージ（draftReady前の描画を消さない）★★★
+    const prevShapes = draftShapesRef.current || [];
+    const prevIds = new Set(prevShapes.map(s => s.id));
+    const loadedIds = new Set(normalizedShapes.map(s => s.id));
+    
+    // prevにあってloadedに無い → 保持（draftReady前の新規描画）
+    const prevOnlyShapes = prevShapes.filter(s => !loadedIds.has(s.id));
+    // loadedにある → 採用（hydrate内容で上書き）
+    const merged = [...normalizedShapes, ...prevOnlyShapes];
+    
+    draftShapesRef.current = merged;
+    setDraftShapes(merged);
     
     // ★★★ CRITICAL: hydrate完了後にキーを記録（空でもready扱い、描画開始可能に）★★★
     hydratedKeyRef.current = targetKey;
     setHydratedKeyState(targetKey);
     
-    console.log('[draft] hydrate end:', {
+    console.log('[draft] hydrate end merged:', {
       targetKey: targetKey.substring(0, 30),
       loadedCount: normalizedShapes.length,
+      prevCount: prevShapes.length,
+      mergedCount: merged.length,
       savedAt: draft?.updatedAt,
       scopeId: shareLink?.file_id?.substring(0, 12),
       tempCommentId: tempCommentId?.substring(0, 12) || 'null',

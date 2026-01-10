@@ -230,9 +230,11 @@ const ViewerCanvas = forwardRef(({
 
   // ★★★ CRITICAL: 新規描画と既存編集を分離、paintMode OFF時は完全無効化 ★★★
   const canDrawNew = !!paintMode;                      // 新規描画開始は paintMode だけでOK
-  const canMutate = !!paintMode && !!draftReady;       // 既存shapeの編集/削除は draftReady 必須
-  const canEdit = canMutate && isEditMode;             // 後方互換用エイリアス
+  const canCommitNew = !!paintMode;                    // ★ NEW: 新規shape確定もpaintModeだけでOK（draftReady不要）
+  const canMutateExisting = !!paintMode && !!draftReady;  // 既存shapeの編集/削除は draftReady 必須
+  const canEdit = canMutateExisting && isEditMode;     // 後方互換用エイリアス
   const canSelect = !!paintMode && canEdit;            // ★ CRITICAL: paintMode必須化
+  const canDeleteExisting = canMutateExisting && isEditMode;  // ★ NEW: 削除は既存shape編集と同じ条件
   
   // ★★★ NEW: 削除専用フラグ（paintMode不問、targetIdがあれば削除可能）★★★
   const targetIdForDelete = effectiveActiveId != null ? String(effectiveActiveId) : '';
@@ -656,7 +658,8 @@ const ViewerCanvas = forwardRef(({
       if (e.key === 'Delete' || e.key === 'Backspace') {
         // ★★★ CRITICAL: paintMode OFF時は削除不可 ★★★
         if (!paintMode) return;
-        if (!canEdit || !selectedId) return;
+        // ★★★ CRITICAL: 既存shape削除は canDeleteExisting 必須 ★★★
+        if (!canDeleteExisting || !selectedId) return;
 
         const selectedShape = shapes.find(s => s.id === selectedId);
         if (selectedShape) {
@@ -847,23 +850,23 @@ const ViewerCanvas = forwardRef(({
     onShapesChange?.(getAllShapes());
   };
 
-  // CRITICAL: 単体削除（★★★ canEdit で判定、paintMode && draftReady 必須 ★★★）
+  // CRITICAL: 単体削除（★★★ canMutateExisting で判定、paintMode && draftReady 必須 ★★★）
   const handleDelete = async () => {
     // ★★★ DEBUG: 単体削除の詳細ログ ★★★
     console.log('[ViewerCanvas] ========== HANDLE DELETE START ==========');
     console.log('[ViewerCanvas] handleDelete state:', { 
       selectedId, 
-      canEdit, 
+      canMutateExisting, 
       paintMode, 
       draftReady,
       tool,
       shapesMapSize: shapesMapRef.current.size,
     });
 
-    // ★★★ CRITICAL: canEdit 必須（paintMode && draftReady）★★★
-    if (!canEdit) {
-      console.log('[ViewerCanvas] Delete blocked: canEdit=false');
-      console.log('[ViewerCanvas] ========== HANDLE DELETE END (canEdit=false) ==========');
+    // ★★★ CRITICAL: canMutateExisting 必須（既存shapeのみ削除可）★★★
+    if (!canMutateExisting) {
+      console.log('[ViewerCanvas] Delete blocked: canMutateExisting=false');
+      console.log('[ViewerCanvas] ========== HANDLE DELETE END (canMutateExisting=false) ==========');
       return;
     }
 
@@ -1548,6 +1551,21 @@ const ViewerCanvas = forwardRef(({
       delete normalizedShape.height;
       delete normalizedShape.radius;
 
+      // ★★★ CRITICAL: 新規shape確定は canCommitNew でOK（draftReady不要）★★★
+      if (!canCommitNew) {
+        console.warn('[ViewerCanvas] COMMIT blocked: canCommitNew=false', { paintMode, draftReady });
+        setCurrentShape(null);
+        setIsDrawing(false);
+        drawViewRef.current = null;
+        return;
+      }
+
+      console.log('[ViewerCanvas] COMMIT new shape -> addToMap + onSaveShape:', {
+        shapeId: normalizedShape.id.substring(0, 8),
+        canCommitNew,
+        draftReady,
+      });
+
       // Undo履歴に追加
       addToUndoStack({ type: 'add', shapeId: normalizedShape.id });
 
@@ -1630,7 +1648,8 @@ const ViewerCanvas = forwardRef(({
 
   // CRITICAL: ドラッグ中の追従更新（Map方式）
   const handleDragMove = (shape, e) => {
-    if (!canEdit) return;
+    // ★★★ CRITICAL: 既存shape編集は canMutateExisting 必須 ★★★
+    if (!canMutateExisting) return;
     const node = e.target;
 
     // RAF間引き
@@ -1662,6 +1681,13 @@ const ViewerCanvas = forwardRef(({
 
   // ドラッグ終了時の更新（CRITICAL: 増殖防止のため置換処理）
   const handleDragEnd = async (shape, e) => {
+    // ★★★ CRITICAL: 既存shape編集は canMutateExisting 必須 ★★★
+    if (!canMutateExisting) {
+      console.log('[ViewerCanvas] DragEnd blocked: canMutateExisting=false');
+      isDraggingRef.current = false;
+      return;
+    }
+
     // CRITICAL: 編集不可なら即return（isEditableShape関数で判定）
     if (!isEditableShape(shape)) {
       console.log('[ViewerCanvas] DragEnd blocked: not editable');
@@ -1778,6 +1804,12 @@ const ViewerCanvas = forwardRef(({
 
   // Transform終了時の更新（CRITICAL: 増殖防止のため置換処理、Rect/Circle/Arrowに対応）
   const handleTransformEnd = async (shape, e) => {
+    // ★★★ CRITICAL: 既存shape編集は canMutateExisting 必須 ★★★
+    if (!canMutateExisting) {
+      console.log('[ViewerCanvas] TransformEnd blocked: canMutateExisting=false');
+      return;
+    }
+
     // CRITICAL: 編集不可なら即return（isEditableShape関数で判定）
     if (!isEditableShape(shape)) {
       console.log('[ViewerCanvas] TransformEnd blocked: not editable');
@@ -1911,7 +1943,11 @@ const ViewerCanvas = forwardRef(({
         setLastMutation('update-transform');
         setLastPayload(JSON.stringify(updatedShape));
         setLastSaveStatus('saving');
-        console.log('[ViewerCanvas] resize commit -> onSaveShape:', { shapeId: shape.id?.substring(0, 8) });
+        console.log('[ViewerCanvas] COMMIT existing shape -> onSaveShape:', { 
+          shapeId: shape.id?.substring(0, 8), 
+          canMutateExisting, 
+          draftReady 
+        });
 
         try {
           const result = await onSaveShape(updatedShape, 'upsert');
