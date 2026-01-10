@@ -514,18 +514,10 @@ function FileViewContent() {
       return;
     }
 
-    // 同じコメントを再クリック → 選択解除
+    // 同じコメントを再クリック → 選択解除（統一関数を使用）
     if (String(activeCommentId) === String(comment.id) && composerMode !== 'edit') {
       console.log('[FileView] Deselecting comment');
-      viewerCanvasRef.current?.afterSubmitClear();
-      setActiveCommentId(null);
-      setPaintSessionCommentId(null);
-      setComposerMode('new');
-      setComposerTargetCommentId(null);
-      setCommentBody('');
-      setDraftShapes([]);
-      setPaintMode(false);
-      setTool('select');
+      exitEditMode();
       return;
     }
     
