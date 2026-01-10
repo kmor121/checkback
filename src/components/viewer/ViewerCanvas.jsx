@@ -195,12 +195,14 @@ const ViewerCanvas = forwardRef(({
   // ★ CRITICAL: 選択に使うIDは activeCommentId または draftCommentIdRef（仮ID対応）
   const effectiveActiveId = activeCommentId ?? draftCommentIdRef.current ?? null;
   
-  // ★ CRITICAL: 選択と編集を分離
-  // ★★★ FIX: 編集モード（activeCommentId != null）のときはpaintMode不問で操作許可 ★★★
-  const isInEditSession = activeCommentId != null;  // 既存コメント編集中
-  const canSelect = (paintMode && isEditMode) || (isInEditSession && isEditMode);
-  const canMutate = (paintMode && isEditMode) || (isInEditSession && isEditMode);
+  // ★ CRITICAL: 選択と編集を分離（表示フィルタ用 - paintMode必須）
+  const canSelect = paintMode && isEditMode;    // paintMode時のみ選択可能
+  const canMutate = paintMode && isEditMode;    // 移動/変形はpaintMode時だけ
   const canEdit = canMutate;                    // 後方互換用エイリアス
+  
+  // ★★★ NEW: 削除専用フラグ（paintMode不問、targetIdがあれば削除可能）★★★
+  const targetIdForDelete = effectiveActiveId != null ? String(effectiveActiveId) : '';
+  const canEditPaint = targetIdForDelete !== '';  // 削除操作の可否
 
   // ★ このshapeを選択できるか（編集モード時はpaintMode不問で選択可能）
   const isSelectableShape = (shape) =>
