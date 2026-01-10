@@ -1454,12 +1454,14 @@ const ViewerCanvas = forwardRef(({
       updatedShape.ny = ny;
     }
     
-    // CRITICAL: Map方式でupsert + dirty/localTs付与
+    // CRITICAL: Map方式でupsert + dirty/localTs付与（★★★ 不変更新 ★★★）
     const updatedWithDirty = { ...updatedShape, _dirty: true, _localTs: Date.now() };
     addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: updatedWithDirty });
 
-    // CRITICAL: Map更新 + 親に全量同期
-    shapesMapRef.current.set(updatedWithDirty.id, updatedWithDirty);
+    // CRITICAL: Map更新 + 親に全量同期（★★★ 不変更新 ★★★）
+    const newMap = new Map(shapesMapRef.current);
+    newMap.set(updatedWithDirty.id, updatedWithDirty);
+    shapesMapRef.current = newMap;
     bump();
     onShapesChange?.(getAllShapes());
 
