@@ -2099,7 +2099,7 @@ const ViewerCanvas = forwardRef(({
       // ★★★ CRITICAL FIX: 描画中と確定済みで座標系を完全に分離 ★★★
       // 描画中: shape.points（絶対座標）を使用、Group x/y = 0
       // 確定済み: normalizedPointsから復元、Group x/y = dragX/dragY（ドラッグ時のみ）
-      
+
       const isDrawingShape = !shape.normalizedPoints && shape.points;
       let points = [];
       let groupX = 0;
@@ -2135,6 +2135,11 @@ const ViewerCanvas = forwardRef(({
       const bboxY = Math.min(...ys) - pad;
       const bboxW = Math.max(20, (Math.max(...xs) - Math.min(...xs)) + pad * 2);
       const bboxH = Math.max(20, (Math.max(...ys) - Math.min(...ys)) + pad * 2);
+
+      // ★★★ DEBUG: 件数付きログ（原因特定用） ★★★
+      if (DEBUG_MODE && isSelected) {
+        console.log('[pen rendered] id=' + shape.id.substring(0, 8) + ' cid=' + String(shape.comment_id || '').substring(0, 8) + ' points=' + (points.length / 2));
+      }
 
       return (
         <Group
