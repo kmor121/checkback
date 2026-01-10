@@ -1792,6 +1792,18 @@ const ViewerCanvas = forwardRef(({
     applyStyleToSelected({ strokeWidth });
   }, [strokeWidth, canEdit, selectedId]);
 
+  // ★★★ CRITICAL: debugHudData の useMemo は全ての hooks の後、早期return の前に配置 ★★★
+  const debugHudData = useMemo(() => {
+    const uniqueCids = [...new Set(renderedShapes.map(s => shapeCommentId(s)).filter(Boolean))].slice(0, 5);
+    return {
+      activeCommentId: String(activeCommentId ?? 'null'),
+      effectiveActiveId: String(effectiveActiveId ?? 'null'),
+      draftCommentId: String(draftCommentIdRef.current ?? 'null'),
+      renderedShapesLength: renderedShapes.length,
+      uniqueCommentIds: uniqueCids.map(id => String(id).substring(0, 12)),
+    };
+  }, [activeCommentId, effectiveActiveId, renderedShapes]);
+
   // Undo/Redo
   useImperativeHandle(ref, () => ({
     undo: performUndo,
