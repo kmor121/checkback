@@ -280,30 +280,41 @@ function ShareViewContent() {
 
   // ★★★ P2: targetKey 変更時に下書きを自動復元（paintMode依存なし）★★★
   const prevTargetKeyRef = useRef(null);
+  const didHydrateDraftRef = useRef(false); // ★★★ 復元完了フラグ（autosave/autodeleteガード用）★★★
+  
   useEffect(() => {
     // targetKeyが変わった時のみ復元（初回含む）
     if (targetKey === prevTargetKeyRef.current) return;
     prevTargetKeyRef.current = targetKey;
     
+    // ★★★ 復元開始前にフラグをfalseにリセット ★★★
+    didHydrateDraftRef.current = false;
+    console.log('[draft] hydrate start:', { targetKey, didHydrate: false });
+    
     if (!targetKey) {
-      // キーがない場合は空にリセット
+      // キーがない場合は空にリセット（削除はしない）
       draftShapesRef.current = [];
       setDraftShapes([]);
-      console.log('[ShareView] targetKey is null, clearing draftShapes');
+      didHydrateDraftRef.current = true;
+      console.log('[draft] hydrate end (no targetKey):', { targetKey, didHydrate: true, loadedCount: 0 });
       return;
     }
     
     const draft = loadDraft(targetKey);
     const shapes = draft?.shapes || [];
     
-    console.log('[ShareView] Auto-restore draft on targetKey change:', {
+    console.log('[draft] hydrate end:', {
       targetKey,
       loadedCount: shapes.length,
       savedAt: draft?.updatedAt,
+      didHydrate: true,
     });
     
     draftShapesRef.current = shapes;
     setDraftShapes(shapes);
+    
+    // ★★★ 復元完了後にフラグをtrueにする ★★★
+    didHydrateDraftRef.current = true;
     
     if (shapes.length > 0) {
       showToast(`${shapes.length}個の下書きを復元しました`, 'info');
