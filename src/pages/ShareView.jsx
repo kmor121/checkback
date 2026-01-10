@@ -339,10 +339,20 @@ function ShareViewContent() {
   const renderTargetCommentId = paintContextId;
   const viewContextId = paintContextId;
 
-  // ★★★ CRITICAL: 下書き表示判定（edit or new、viewでは非表示）★★★
+  // ★★★ CRITICAL: 下書き表示判定（edit or new、view/reply時は非表示）★★★
   const shouldShowDraft = React.useMemo(() => {
     return composerMode === 'edit' || composerMode === 'new';
   }, [composerMode]);
+  
+  // ★★★ DEBUG: shouldShowDraft変化ログ ★★★
+  useEffect(() => {
+    console.log('[DRAFT_DEBUG] shouldShowDraft changed:', {
+      shouldShowDraft,
+      composerMode,
+      draftScope,
+      targetKey: targetKey?.substring(0, 30) || 'null',
+    });
+  }, [shouldShowDraft, composerMode, draftScope, targetKey]);
 
   // ★★★ CRITICAL FIX: hydratedKeyRef を string ref に変更（targetKey追跡用）★★★
   const hydratedKeyRef = useRef(null);
@@ -367,14 +377,26 @@ function ShareViewContent() {
   // temp かどうかの判定
   const isTempCid = (cid) => typeof cid === 'string' && cid.startsWith('temp_');
 
-  // ★★★ CRITICAL: targetKey（localStorage下書きキー、paintContextIdのみで決定）★★★
+  // ★★★ CRITICAL: draftScope（edit/new分離、view時はnone）★★★
+  const draftScope = React.useMemo(() => {
+    if (composerMode === 'edit') return 'edit';
+    if (composerMode === 'new') return 'new';
+    return null;
+  }, [composerMode]);
+
+  // ★★★ CRITICAL: targetKey（scope分離版、view時はnullで表示しない）★★★
   const targetKey = React.useMemo(() => {
-    if (!shareLink?.file_id || !paintContextId) return null;
-    if (isTempCid(paintContextId)) {
-      return getDraftKey(shareLink.file_id, null, paintContextId);
+    if (!shareLink?.file_id || !paintContextId || !draftScope) return null;
+    
+    if (draftScope === 'edit') {
+      return getDraftKey(shareLink.file_id, paintContextId, null, 'edit');
     }
-    return getDraftKey(shareLink.file_id, paintContextId, null);
-  }, [shareLink?.file_id, paintContextId]);
+    if (draftScope === 'new') {
+      return getDraftKey(shareLink.file_id, null, paintContextId, 'new');
+    }
+    
+    return null;
+  }, [shareLink?.file_id, paintContextId, draftScope]);
   
   // ★★★ CRITICAL: storage由来draft準備完了（ちらつき防止）★★★
   const storageDraftReady = !!targetKey && hydratedKeyState === targetKey;
@@ -401,11 +423,14 @@ function ShareViewContent() {
     // ★★★ CRITICAL: 同一キーの二重hydrate防止 ★★★
     if (hydratedKeyRef.current === targetKey) return;
     
-    console.log('[draft] hydrate start:', { 
+    console.log('[DRAFT_DEBUG] hydrate start:', JSON.stringify({
       targetKey: targetKey.substring(0, 30),
+      draftScope,
+      composerMode,
       scopeId: shareLink?.file_id?.substring(0, 12),
+      paintContextId: paintContextId?.substring(0, 12) || 'null',
       tempCommentId: tempCommentId?.substring(0, 12) || 'null',
-    });
+    }));
     
     // ★★★ P1 FIX: キャッシュから即座に復元（置換防止）★★★
     const cached = draftCacheRef.current.get(targetKey) || [];
@@ -437,21 +462,24 @@ function ShareViewContent() {
     hydratedKeyRef.current = targetKey;
     setHydratedKeyState(targetKey);
     
-    console.log('[draft] hydrate end merged:', {
+    console.log('[DRAFT_DEBUG] hydrate end merged:', JSON.stringify({
       targetKey: targetKey.substring(0, 30),
+      draftScope,
+      composerMode,
       loadedCount: normalizedShapes.length,
       prevCount: prevShapes.length,
       mergedCount: merged.length,
       savedAt: draft?.updatedAt,
       scopeId: shareLink?.file_id?.substring(0, 12),
+      paintContextId: paintContextId?.substring(0, 12) || 'null',
       tempCommentId: tempCommentId?.substring(0, 12) || 'null',
       hydratedKeyState: 'SET',
-    });
+    }));
     
     if (normalizedShapes.length > 0) {
       showToast(`${normalizedShapes.length}個の下書きを復元しました`, 'info');
     }
-  }, [targetKey, shareLink?.file_id, tempCommentId]);
+  }, [targetKey, shareLink?.file_id, tempCommentId, draftScope, composerMode, paintContextId]);
 
   // ★★★ P3: draftShapes 変更時に自動保存（debounce付き）★★★
   // ★★★ FIX: 空になっただけでdeleteDraftしない、didHydrateDraftRefでガード ★★★
@@ -1131,16 +1159,8 @@ function ShareViewContent() {
 
     // 同じコメントを再クリック → 選択解除＆新規モードに戻す
     if (activeCommentId === comment.id) {
-      setActiveCommentId(null);
-      setComposerMode('new');
-      setComposerTargetCommentId(null);
-      setComposerText('');
-      setDraftShapes([]);
-      draftShapesRef.current = [];
-      setPaintSessionCommentId(null);
-      setIsDockOpen(false);
-      setPaintMode(false); // CRITICAL: ペイントも強制OFF
-      setTool('select');
+      console.log('[EXIT_DEBUG] selectComment deselect (same comment clicked)');
+      exitEditMode('deselect_same');
       return;
     }
 
@@ -1157,12 +1177,16 @@ function ShareViewContent() {
     setPaintSessionCommentId(null); // CRITICAL: paintSessionをクリア
     setIsDockOpen(true);
 
-    // ★★★ CRITICAL: 既存コメント選択時は new 状態を解除（"新規作成中"バッジ防止）★★★
-    setComposerMode('view'); // または 'edit' ではなく閲覧状態
+    // ★★★ CRITICAL: 既存コメント選択時は view 状態に（"新規作成中"バッジ防止）★★★
+    setComposerMode('view');
     setComposerTargetCommentId(null);
     setComposerText('');
     setDraftShapes([]);
     draftShapesRef.current = [];
+    
+    // ★★★ P1: 前のedit/new draftkeyをクリア ★★★
+    hydratedKeyRef.current = null;
+    setHydratedKeyState(null);
   };
 
   const enterEdit = (comment) => {
@@ -1195,21 +1219,43 @@ function ShareViewContent() {
     setPaintSessionCommentId(null);
     setDraftShapes([]);
     draftShapesRef.current = [];
+    
+    // ★★★ P1: 前のdraftkeyをクリア（edit開始時に新しいキーでhydrate）★★★
+    hydratedKeyRef.current = null;
+    setHydratedKeyState(null);
   };
 
   const handleStartEditComment = (comment) => {
     enterEdit(comment);
   };
 
-  // ★★★ CRITICAL: 編集モード解除の統一関数 ★★★
-  // ★★★ NOTE: 下書きはlocalStorageに残す（B案：復元可能にする）★★★
-  const exitEditMode = () => {
+  // ★★★ CRITICAL: 編集モード解除の統一関数（×終了＝キャンセル扱い）★★★
+  const exitEditMode = (reason = 'unknown') => {
+    console.log('[EXIT_DEBUG] exitEditMode START:', {
+      reason,
+      composerMode,
+      composerTargetCommentId: composerTargetCommentId?.substring(0, 12) || 'null',
+      activeCommentId: activeCommentId?.substring(0, 12) || 'null',
+      draftShapesCount: draftShapesRef.current.length,
+      cacheSize: draftCacheRef.current.size,
+    });
+    
+    // ★★★ P1: editKeyを退避してlocalStorage削除（×終了＝キャンセル扱い）★★★
+    if (composerMode === 'edit' && composerTargetCommentId && shareLink?.file_id) {
+      const editKey = getDraftKey(shareLink.file_id, composerTargetCommentId, null, 'edit');
+      if (editKey) {
+        deleteDraft(editKey);
+        draftCacheRef.current.delete(editKey);
+        console.log('[EXIT_DEBUG] Deleted edit draft (cancel):', editKey);
+      }
+    }
+    
     // ViewerCanvasの描画をクリア
     viewerCanvasRef.current?.afterSubmitClear();
     viewerCanvasRef.current?.clear();
     
-    // 編集/返信モード解除
-    setComposerMode('new');
+    // ★★★ P3: composerModeを'view'に（new維持だとshouldShowDraft=trueのまま）★★★
+    setComposerMode('view');
     setComposerTargetCommentId(null);
     setComposerParentCommentId(null);
     
@@ -1221,11 +1267,15 @@ function ShareViewContent() {
     setTool('select');
     setPaintSessionCommentId(null);
     
-    // draft/描画一時stateクリア（メモリのみ、localStorageは残す）
+    // draft/描画一時stateクリア
     setDraftShapes([]);
     draftShapesRef.current = [];
     
-    // ★★★ P1: キャッシュもクリア（全targetKey削除）★★★
+    // ★★★ P1: hydrateStateもクリア（前のキーが残らないように）★★★
+    hydratedKeyRef.current = null;
+    setHydratedKeyState(null);
+    
+    // ★★★ P1: キャッシュは全クリア（edit/new両方のドラフトをリセット）★★★
     draftCacheRef.current.clear();
     
     // UI状態
@@ -1236,22 +1286,31 @@ function ShareViewContent() {
     
     // ★★★ tempCommentIdは保持（新規コメントの下書きを復元可能にする）★★★
     // setTempCommentId(null); // 意図的にリセットしない
+    
+    console.log('[EXIT_DEBUG] exitEditMode END:', {
+      reason,
+      composerMode: 'view',
+      cacheSize: draftCacheRef.current.size,
+    });
   };
 
   // 後方互換用エイリアス
   const resetEditorSession = exitEditMode;
 
   const handleCancelEdit = () => {
+    console.log('[EXIT_DEBUG] handleCancelEdit called (× button)');
+    
     // 編集中のコメントを取得して本文が変更されているか確認
     const editingComment = comments.find(c => c.id === composerTargetCommentId);
     const hasUnsavedChanges = editingComment && composerText.trim() !== (editingComment.body || '').trim();
 
     if (hasUnsavedChanges && typeof window !== 'undefined' && !window.confirm('編集内容を破棄しますか？')) {
+      console.log('[EXIT_DEBUG] handleCancelEdit canceled by user');
       return;
     }
 
-    // ★★★ CRITICAL: 統一関数を呼ぶ ★★★
-    exitEditMode();
+    // ★★★ CRITICAL: 統一関数を呼ぶ（×終了＝キャンセル）★★★
+    exitEditMode('cancel_button');
   };
 
   const handleStartReply = (parentComment) => {

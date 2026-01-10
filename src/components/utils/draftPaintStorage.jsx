@@ -1,9 +1,9 @@
 /**
  * 下書き描画のlocalStorage管理ユーティリティ
  * 
- * キー設計:
- * - 既存コメント編集: draftPaint:{fileId}:{commentId}
- * - 新規コメント: draftPaint:{fileId}:temp:{tempCommentId}
+ * キー設計（scope分離版）:
+ * - 既存コメント編集: draftPaint:{fileId}:edit:{commentId}
+ * - 新規コメント: draftPaint:{fileId}:new:{tempCommentId}
  */
 
 const DRAFT_PREFIX = 'draftPaint:';
@@ -11,13 +11,24 @@ const DRAFT_VERSION = 1;
 const DRAFT_EXPIRY_DAYS = 7;
 
 /**
- * 下書きキーを生成
+ * 下書きキーを生成（scope分離版）
  * @param {string} fileId - ファイルID
- * @param {string|null} commentId - コメントID（既存）またはnull
- * @param {string|null} tempId - 仮コメントID（新規）
+ * @param {string|null} commentId - コメントID（既存編集用）
+ * @param {string|null} tempId - 仮コメントID（新規用）
+ * @param {string} scope - 'edit' | 'new' | null（後方互換用）
  */
-export function getDraftKey(fileId, commentId, tempId = null) {
+export function getDraftKey(fileId, commentId, tempId = null, scope = null) {
   if (!fileId) return null;
+  
+  // ★★★ P2: scope指定時は必ずscopeプレフィックスを入れる ★★★
+  if (scope === 'edit' && commentId) {
+    return `${DRAFT_PREFIX}${fileId}:edit:${commentId}`;
+  }
+  if (scope === 'new' && tempId) {
+    return `${DRAFT_PREFIX}${fileId}:new:${tempId}`;
+  }
+  
+  // ★★★ 後方互換: scope未指定時は従来通り ★★★
   if (commentId) {
     return `${DRAFT_PREFIX}${fileId}:${commentId}`;
   }
