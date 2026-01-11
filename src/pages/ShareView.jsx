@@ -346,6 +346,13 @@ function ShareViewContent() {
     console.log('[ShareView] Saved tempCommentId to localStorage:', tempCommentId);
   }, [shareLink?.file_id, tempCommentId]);
 
+  // ★★★ CRITICAL: mode判定（TDZ回避のため、computedPaintContextIdより先に定義）★★★
+  const isEditMode = composerMode === 'edit' && !!composerTargetCommentId;
+  const isNewMode = composerMode === 'new' && !!tempCommentId;
+  
+  // ★★★ P3: 下書き表示判定（paintMode不問、edit/new時は常に表示）★★★
+  const shouldShowDraft = isEditMode || isNewMode;
+
   // ★★★ FIX-2: computed版（通常計算）★★★
   const computedPaintContextId = React.useMemo(() => {
     if (showAllPaint) return null;
@@ -363,7 +370,7 @@ function ShareViewContent() {
     if (activeCommentId) return String(activeCommentId);
     
     return null;
-  }, [showAllPaint, composerMode, composerTargetCommentId, tempCommentId, draftShapes.length, composerText, paintMode, activeCommentId]);
+  }, [showAllPaint, composerMode, composerTargetCommentId, tempCommentId, draftShapes.length, composerText, paintMode, activeCommentId, shouldShowDraft]);
   
   // ★★★ FIX-2: stable版（一瞬もnullにしない、fileId変更時のみクリア）★★★
   const stablePaintContextId = React.useMemo(() => {
@@ -413,13 +420,6 @@ function ShareViewContent() {
 
   // temp かどうかの判定
   const isTempCid = (cid) => typeof cid === 'string' && cid.startsWith('temp_');
-  
-  // ★★★ CRITICAL: mode判定（boolean統一、TDZ回避）★★★
-  const isEditMode = composerMode === 'edit' && !!composerTargetCommentId;
-  const isNewMode = composerMode === 'new' && !!tempCommentId;
-  
-  // ★★★ P3: 下書き表示判定（paintMode不問、edit/new時は常に表示）★★★
-  const shouldShowDraft = isEditMode || isNewMode;
   
   // ★★★ CRITICAL: draft filter用のID（型統一）★★★
   const draftFilterId = isEditMode ? String(composerTargetCommentId) : (isNewMode ? String(tempCommentId) : null);
