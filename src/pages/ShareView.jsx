@@ -54,7 +54,7 @@ import {
 // Base44の仕様上、アプリ全体をPublicにするか、このページを完全に独立させる必要がある
 // このコンポーネントは認証API(base44.auth.me等)を一切呼ばない
 
-const DEBUG_MODE = import.meta.env.VITE_DEBUG === 'true';
+const DEBUG_MODE = import.meta.env.VITE_DEBUG === 'true' || false;
 
 // ★★★ CRITICAL: SSR安全なUUID生成（crypto.randomUUID代替）★★★
 const safeUUID = () => {
@@ -2002,7 +2002,9 @@ function ShareViewContent() {
             )}
 
             {/* ★★★ FIX-5: Debugコピーボタン（?debug=1 or 常時表示）★★★ */}
-            {(DEBUG_MODE || params.get('debug') === '1') && (
+            {(() => {
+              const debugParam = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('debug') : null;
+              return (DEBUG_MODE || debugParam === '1') && (
               <div className="absolute top-4 right-12 z-[9999]" style={{ position: 'fixed', top: '12px', right: '12px' }}>
                 <Button
                   variant="outline"
@@ -2056,7 +2058,8 @@ function ShareViewContent() {
                   📋 Debug
                 </Button>
               </div>
-            )}
+            );
+            })()}
             
             {/* ズーム制御 */}
             <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-2 flex items-center gap-2">
