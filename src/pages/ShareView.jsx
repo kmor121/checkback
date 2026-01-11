@@ -699,31 +699,45 @@ function ShareViewContent() {
       setPaintSessionCommentId(composerTargetCommentId);
       setActiveCommentId(composerTargetCommentId);
       
+      const shapesToSeed = allShapes.filter(s => resolveCommentId(s) === String(comment.id));
+
+      // draftShapes にコピーし、既存ドラフトとして扱う
+      setDraftShapes(shapesToSeed);
+      draftShapesRef.current = shapesToSeed;
+
+      // キャッシュにも即座に反映 (targetKey は composerTargetCommentId に確定済み)
+      const editDraftKey = getDraftKey(shareLink.file_id, comment.id, null, 'edit');
+      draftCacheRef.current.set(editDraftKey, shapesToSeed);
+
+      console.log(`[C-FIX] Seeded ${shapesToSeed.length} shapes to draft for comment ${comment.id.substring(0, 12)}`);
+
+      setPaintSessionCommentId(null);
+
       // ★★★ 下書き復元はtargetKey変更時のuseEffectで自動実行される ★★★
       // （composerMode='edit' & composerTargetCommentId設定 → targetKey変更 → 自動復元）
-    } else {
-      // ★★★ CRITICAL: 新規時にtempCommentIdが無ければ即座に生成（送信後対策）★★★
-      let effectiveTempId = tempCommentId;
-      if (!effectiveTempId) {
-        effectiveTempId = generateTempCommentId();
-        setTempCommentId(effectiveTempId);
-        if (shareLink?.file_id) {
-          localStorage.setItem(`tempCommentId:${shareLink.file_id}`, effectiveTempId);
-        }
-        console.log('[ShareView] generated tempCommentId for paint:', effectiveTempId.substring(0, 12));
-      }
+            } else {
+              // ★★★ CRITICAL: 新規時にtempCommentIdが無ければ即座に生成（送信後対策）★★★
+              let effectiveTempId = tempCommentId;
+              if (!effectiveTempId) {
+                effectiveTempId = generateTempCommentId();
+                setTempCommentId(effectiveTempId);
+                if (shareLink?.file_id) {
+                  localStorage.setItem(`tempCommentId:${shareLink.file_id}`, effectiveTempId);
+                }
+                console.log('[ShareView] generated tempCommentId for paint:', effectiveTempId.substring(0, 12));
+              }
 
-      // 新規作成: 既存コメント描画は非表示・編集不可
-      setActiveCommentId(null);
-      setPaintSessionCommentId(null);
-      setComposerMode('new');
-      setComposerTargetCommentId(null);
-      setShowAllPaint(false);
-      viewerCanvasRef.current?.clear();
-    }
+              // 新規作成: 既存コメント描画は非表示・編集不可
+              setActiveCommentId(null);
+              setPaintSessionCommentId(null);
+              setComposerMode('new');
+              setComposerTargetCommentId(null);
+              setShowAllPaint(false);
+              viewerCanvasRef.current?.clear();
+            }
 
-    setPaintMode(true);
-    setIsDockOpen(true);
+            setPaintMode(true);
+            setIsDockOpen(true);
   };
   
   // ★★★ FIX-2: 描画ツール記録 + paintMode変化時のtool制御（1箇所集約）★★★
