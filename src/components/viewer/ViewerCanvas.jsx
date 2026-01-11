@@ -426,30 +426,25 @@ const ViewerCanvas = forwardRef(({
     draftCommentIdRef.current = null;
   }, [activeCommentId]);
 
-  // ★★★ FIX-PENDING: canvasContextKey 変化時は Map 即クリアせず pending 化 ★★★
+  // ★★★ B) コンテキスト変更時は即座にMapをクリア（描画混在防止）★★★
   useLayoutEffect(() => {
     if (!canvasContextKey) return;
     
     const prev = prevCanvasContextKeyRef.current;
     if (prev !== canvasContextKey) {
-      console.log('[FIX-PENDING] CTX CHANGED -> set pending (no Map clear)', {
-        prev,
-        next: canvasContextKey,
-        prevMapSize: shapesMapRef.current.size,
-      });
+      console.log('[B-FIX] CTX CHANGED -> Map/pending cleared', { prev, next: canvasContextKey });
       
-      // ★ CRITICAL: Mapは即クリアせず、pendingCtxをセット
-      pendingCtxRef.current = canvasContextKey;
-      prevCanvasContextKeyRef.current = canvasContextKey;
-      
-      // shapesMapRef.current = new Map(); 削除
-      // bump(); 削除
-      
+      // B) 描画混在対策: コンテキスト変更時は即座にMapをクリアし、古い描画の残留を根絶
+      shapesMapRef.current = new Map();
+      pendingCtxRef.current = null;
+      bump(); // 画面を確実に更新
+
       setSelectedId(null);
       setCurrentShape(null);
       setIsDrawing(false);
+      prevCanvasContextKeyRef.current = canvasContextKey;
     }
-  }, [canvasContextKey]);
+  }, [canvasContextKey, bump]);
 
   // CRITICAL: fileIdentity/pageNumber変更時のみリセット（Mapをクリア）
   useEffect(() => {
