@@ -117,6 +117,7 @@ const ViewerCanvas = forwardRef(({
   const [bgSize, setBgSize] = useState({ width: 800, height: 600 });
   const [error, setError] = useState(null);
   const [bgReady, setBgReady] = useState(false); // P2 FIX: 背景ロード完了フラグ
+  const [bgReady, setBgReady] = useState(false); // P2 FIX: 背景ロード完了フラグ
 
   
   // 描画状態（CRITICAL: Map方式で置換禁止）
@@ -458,6 +459,7 @@ const ViewerCanvas = forwardRef(({
     setUndoStack([]);
     setRedoStack([]);
     setPan({ x: 0, y: 0 });
+    setBgReady(false); // P2 FIX: ファイル変更時に背景ロード状態をリセット
     setBgReady(false); // P2 FIX: Reset background ready state
   }, [fileIdentity, pageNumber]);
 
@@ -818,6 +820,12 @@ const ViewerCanvas = forwardRef(({
   // 実際の表示位置（パンを考慮）
   const viewX = offsetX + pan.x;
   const viewY = offsetY + pan.y;
+
+  // P2 FIX: 背景画像のロードが完了したときに呼ばれ、bgReadyフラグを立てる
+  const handleBgLoad = (size) => {
+    setBgSize(size);
+    setBgReady(true);
+  };
 
   // P2 FIX: Handle background image load
   const handleBgLoad = (size) => {
