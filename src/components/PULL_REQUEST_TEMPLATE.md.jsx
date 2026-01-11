@@ -1,5 +1,20 @@
 # Pull Request
 
+---
+
+## ⚠️ PR作成時の必須フロー
+
+**以下を必ず実施してください**：
+
+1. **このテンプレートをPR本文にコピー**
+2. **[components/TEST_CHECKLIST.md](./TEST_CHECKLIST.md) を開いて、該当項目をすべて実施**
+3. **テスト結果を下記「スモークテスト実施」セクションに記載**
+4. **レビュー依頼**
+
+📋 詳細フロー: [components/CONTRIBUTING.md](./CONTRIBUTING.md#-pr作成フロー標準手順) を参照。
+
+---
+
 ## 概要
 <!-- このPRで何を変更したか、簡潔に説明してください -->
 
@@ -36,11 +51,13 @@
 - 備考: ViewerCanvas.js の L1234 で merge ロジックが原因と思われる
 -->
 
+全ての項目が✅です。
+
 ---
 
 ## 詳細テストチェック（該当項目のみ）
 
-**⚠️ 以下は詳細版です。詳しい手順は [components/TEST_CHECKLIST.md](./TEST_CHECKLIST.md) を参照してください。**
+**⚠️ 詳しい手順は [components/TEST_CHECKLIST.md](./TEST_CHECKLIST.md) を参照してください。**
 
 ### A. Canvas ちらつき対策
 - [ ] A-1. 初回表示でのちらつき確認
@@ -81,4 +98,7 @@
 
 ---
 
-📋 **運用フロー全体**: [components/CONTRIBUTING.md](./CONTRIBUTING.md) を参照してください。
+📚 **関連ドキュメント**:
+- [components/TEST_CHECKLIST.md](./TEST_CHECKLIST.md): スモークテスト詳細手順
+- [components/CONTRIBUTING.md](./CONTRIBUTING.md): 開発・PR作成フロー、P0領域定義
+- [components/UX_BACKLOG.md](./UX_BACKLOG.md): UI/UX改善・追加機能管理
