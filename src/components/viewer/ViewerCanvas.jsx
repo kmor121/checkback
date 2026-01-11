@@ -2648,8 +2648,8 @@ const ViewerCanvas = forwardRef(({
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative', overflow: 'auto', background: '#e0e0e0' }}>
-      {/* ★★★ FIX-T3: 遷移中は空フレーム隠し、プレースホルダー表示 ★★★ */}
-      {isCanvasTransitioning && (
+      {/* ★★★ FIX-C: 遷移中かつ空の時だけ隠す（existingShapes.length判定追加）★★★ */}
+      {isCanvasTransitioning && existingShapes.length === 0 && (
         <div style={{ position: 'absolute', inset: 0, background: '#e0e0e0', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ color: '#999', fontSize: '14px' }}>読み込み中...</div>
         </div>
@@ -2824,7 +2824,7 @@ const ViewerCanvas = forwardRef(({
         </div>
       )}
 
-      <div style={{ opacity: isCanvasTransitioning ? 0 : 1, transition: 'opacity 80ms linear' }}>
+      <div style={{ opacity: (isCanvasTransitioning && existingShapes.length === 0) ? 0 : 1, transition: 'opacity 80ms linear' }}>
         <Stage
           ref={stageRef}
           width={containerSize.width}

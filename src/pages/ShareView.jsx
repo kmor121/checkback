@@ -181,6 +181,14 @@ function ShareViewContent() {
   const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
   const token = params.get('token');
   const debugParam = params.get('debug');
+  
+  // ★★★ FIX-A: forceDebugフラグ永続化（iframe対策）★★★
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (debugParam === '1') {
+      localStorage.setItem('forceDebug', '1');
+    }
+  }, [debugParam]);
 
   useEffect(() => {
     if (!token) return;
@@ -942,6 +950,10 @@ function ShareViewContent() {
       showToast('コメント本文を入力してください（描画だけでは送信できません）', 'error');
       return;
     }
+    
+    // ★★★ FIX-B: 送信時のscope/key固定（async中のレース対策）★★★
+    const sendDraftScope = draftScope;
+    const sendTargetKey = targetKey;
 
     // 対応済みコメントの編集/返信チェック
     if (composerMode === 'edit' && composerTargetCommentId) {
@@ -1168,14 +1180,26 @@ function ShareViewContent() {
       viewerCanvasRef.current?.afterSubmitClear();
       viewerCanvasRef.current?.clear();
       
-      // CRITICAL: 送信成功後は必ず状態を完全リセット（ref含む）
+      // ★★★ FIX-B: スコープ別クリア（edit送信時は新規下書きを壊さない）★★★
       setComposerText('');
-      setDraftShapes([]);
-      draftShapesRef.current = [];
       
-      // ★★★ P1: 送信成功後はキャッシュもクリア（targetKeyのエントリ削除）★★★
-      if (targetKey) {
-        draftCacheRef.current.delete(targetKey);
+      if (sendDraftScope === 'new') {
+        // 新規送信時のみ：tempCommentId/新規draftをクリア
+        setDraftShapes([]);
+        draftShapesRef.current = [];
+        if (sendTargetKey) {
+          draftCacheRef.current.delete(sendTargetKey);
+        }
+        setTempCommentId(null);
+        if (shareLink?.file_id) {
+          localStorage.removeItem(`tempCommentId:${shareLink.file_id}`);
+        }
+      } else if (sendDraftScope === 'edit') {
+        // 編集送信時：draftShapes/cache/tempCommentIdを消さない（新規下書き保持）
+        // 編集targetKeyのみクリア
+        if (sendTargetKey) {
+          draftCacheRef.current.delete(sendTargetKey);
+        }
       }
       
       setPendingFiles([]);
@@ -1187,13 +1211,6 @@ function ShareViewContent() {
       setPaintMode(false);
       setReplyingThreadId(null);
       setIsDockOpen(false);
-      
-      // ★★★ 仮IDもリセット（次の新規コメント用に新しいIDを発行させる）★★★
-      setTempCommentId(null);
-      // localStorageからも削除
-      if (shareLink?.file_id) {
-        localStorage.removeItem(`tempCommentId:${shareLink.file_id}`);
-      }
       
       // invalidateは少し遅らせて描画クリアを確実に先に完了させる
       setTimeout(async () => {
@@ -1644,12 +1661,10 @@ function ShareViewContent() {
     console.log('[shapesForCanvas]', resultLog);
     addDebugLog(`[shapesForCanvas] ${resultLog}`);
     
-    // ★★★ FIX-3: 遷移中で空なら前回値保持（同じpaintContextIdの時のみ）★★★
+    // ★★★ FIX-C: 遷移中で空なら前回値保持（ctx不問、opacity=0で隠す）★★★
     if (isCanvasTransitioning && merged.length === 0 && lastMergedShapesRef.current.length > 0) {
-      if (paintContextId === prevPaintContextIdForMergedRef.current) {
-        addDebugLog(`[FIX-3] preserve ${lastMergedShapesRef.current.length} shapes (same ctx)`);
-        return lastMergedShapesRef.current;
-      }
+      addDebugLog(`[FIX-C] preserve ${lastMergedShapesRef.current.length} shapes (transitioning)`);
+      return lastMergedShapesRef.current;
     }
     
     prevPaintContextIdForMergedRef.current = paintContextId;
@@ -2018,9 +2033,10 @@ function ShareViewContent() {
               />
             )}
 
-            {/* ★★★ FIX-D: Debugボタン確実表示（SSR安全、?debug=1で必ず出る）★★★ */}
+            {/* ★★★ FIX-A: Debugボタン確実表示（localStorage永続化、iframe対策）★★★ */}
             {(() => {
-              const showDebug = (typeof window !== 'undefined' && params.get('debug') === '1') || DEBUG_MODE;
+              const forceDebug = typeof window !== 'undefined' && localStorage.getItem('forceDebug') === '1';
+              const showDebug = debugParam === '1' || forceDebug || DEBUG_MODE;
               if (!showDebug) return null;
               
               return (
