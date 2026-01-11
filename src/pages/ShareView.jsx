@@ -368,8 +368,8 @@ function ShareViewContent() {
   const isEditMode = composerMode === 'edit' && !!composerTargetCommentId;
   const isNewMode = composerMode === 'new' && !!tempCommentId;
   
-  // ★★★ P3: 下書き表示判定（paintMode不問、edit/new時は常に表示）★★★
-  const shouldShowDraft = isEditMode || isNewMode;
+  // ★★★ P3: 下書き表示判定（paintMode不問、edit/new時かつ hydrate済み時のみ表示）★★★
+  const shouldShowDraft = (isEditMode || isNewMode) && storageDraftReady;
 
   // ★★★ FIX-2: computed版（通常計算）★★★
   const computedPaintContextId = React.useMemo(() => {
