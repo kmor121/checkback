@@ -368,13 +368,6 @@ function ShareViewContent() {
   const isEditMode = composerMode === 'edit' && !!composerTargetCommentId;
   const isNewMode = composerMode === 'new' && !!tempCommentId;
   
-  // ★★★ CRITICAL: cache即座復元でready（hydrate待ちの空白時間を無くす）★★★
-  const hasCacheForKey = !!(targetKey && draftCacheRef.current.has(targetKey));
-  const storageDraftReady = !!(targetKey && (hasCacheForKey || hydratedKeyState === targetKey));
-
-  // ★★★ P3: 下書き表示判定（paintMode不問、edit/new時かつ hydrate済み時のみ表示）★★★
-  const shouldShowDraft = (isEditMode || isNewMode) && storageDraftReady;
-
   // ★★★ FIX-2: computed版（通常計算）★★★
   const computedPaintContextId = React.useMemo(() => {
     if (showAllPaint) return null;
