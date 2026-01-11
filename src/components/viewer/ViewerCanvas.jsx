@@ -272,82 +272,38 @@ const ViewerCanvas = forwardRef(({
   // CRITICAL: 実際に描画するshape配列
   // ★★★ ROOT FIX: fallback完全禁止、effectiveActiveIdのみ使用 ★★★
   const renderedShapes = useMemo(() => {
-    // ★★★ CRITICAL: Map由来のshapes（shapesVersionで再計算トリガー）★★★
     const mapShapes = getAllShapes();
-
-    // Fallback logic removed. The parent component is now the single source of truth for shapes.
-
-
-    // ★★★ DEBUG: 計算開始時の状態を詳細ログ ★★★
-    console.log('[renderedShapes] CALC START:', {
-      renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
-      draftCommentId: draftCommentId?.substring(0, 12) || 'null',
-      activeCommentId: activeCommentId?.substring(0, 12) || 'null',
-      mapShapesCount: mapShapes.length,
-      showAllPaint,
-    });
-
-    // ★★★ REQUIRED: renderTargetCommentId を最優先で使用（リロード後の下書き復元対応）★★★
-    // renderTargetCommentId がなければ effectiveActiveId / showAllPaint で判定
-    let targetId = renderTargetCommentId ? String(renderTargetCommentId) : '';
-
-    // ★★★ CRITICAL: showAllPaint時は全shape表示 ★★★
-    if (showAllPaint) {
-      let sourceShapes = mapShapes;
-      if (currentShape?.id) {
-        sourceShapes = sourceShapes.filter(s => s.id !== currentShape.id);
-      }
-      return sourceShapes;
-    }
-
-    // ★★★ CRITICAL: targetIdが空の場合は空配列（renderTargetCommentIdなし=表示対象がない）★★★
-    if (targetId === '') {
-      return [];
-    }
-
-    // ★★★ CRITICAL: Map由来のshapesのみを使用 ★★★
     let sourceShapes = mapShapes;
 
-    // ★★★ CRITICAL: 描画中のcurrentShapeとIDが重複するshapeは除外（二重描画防止）★★★
+    // 描画中のshapeは常に除外
     if (currentShape?.id) {
       sourceShapes = sourceShapes.filter(s => s.id !== currentShape.id);
     }
 
-    // ★★★ CRITICAL FIX: resolveCommentId でフィルタ（キー揺れ吸収）★★★
-    const filtered = sourceShapes.filter(s => {
-      const cid = resolveCommentId(s);
-      if (cid == null || cid === '') return false;
-      return cid === targetId;
-    });
+    const targetId = renderTargetCommentId ? String(renderTargetCommentId) : '';
 
-    // ★★★ DEBUG: 件数付きログ（原因特定用） ★★★
-    const beforeCount = sourceShapes.length;
-    const afterCount = filtered.length;
-    const sourceSampleCids = [...new Set(sourceShapes.map(s => resolveCommentId(s)).filter(Boolean))].slice(0, 5).map(id => id.substring(0, 12));
-    const afterSampleCids = [...new Set(filtered.map(s => resolveCommentId(s)).filter(Boolean))].slice(0, 3).map(id => id.substring(0, 12));
-    console.log('[renderedShapes]', {
-      targetId: targetId.substring(0, 12) || '(none)',
-      source: beforeCount,
-      after: afterCount,
-      sourceSamples: sourceSampleCids.join(','),
-      afterSamples: afterSampleCids.join(','),
-    });
+    // P1.2 FIX: targetIdが指定されている場合は、showAllPaintに関わらず常にフィルタリングを優先する
+    if (targetId) {
+      const filtered = sourceShapes.filter(s => resolveCommentId(s) === targetId);
 
-    // ★★★ FIX-4: 描画前にidでdedupe（重複key警告の根本対策） ★★★
-    const dedupedMap = new Map();
-    filtered.forEach(shape => {
-      if (!shape.id) {
-        console.warn('[renderedShapes] Shape without id found:', shape);
-        return; // idが無いshapeは除外
-      }
-      if (dedupedMap.has(shape.id)) {
-        console.warn('[renderedShapes] Duplicate shape id found, overwriting:', shape.id);
-      }
-      dedupedMap.set(shape.id, shape);
-    });
+      // Dedupe
+      const dedupedMap = new Map();
+      filtered.forEach(shape => {
+        if (shape.id) {
+          dedupedMap.set(shape.id, shape);
+        }
+      });
+      return Array.from(dedupedMap.values());
+    }
 
-    return Array.from(dedupedMap.values());
-  }, [shapesVersion, showAllPaint, renderTargetCommentId, currentShape, existingShapes]);
+    // P1.2 FIX: targetIdがない場合にのみ、showAllPaintを考慮する
+    if (showAllPaint) {
+      return sourceShapes;
+    }
+
+    // デフォルトは空配列
+    return [];
+  }, [shapesVersion, showAllPaint, renderTargetCommentId, currentShape]);
   
   // ★ CRITICAL: activeShapes を existingShapes から抽出（comment_id統一判定）
   const activeShapes = useMemo(() => {
