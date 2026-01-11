@@ -3064,7 +3064,7 @@ const ViewerCanvas = forwardRef(({
             <div>draftReady: {draftReady ? 'YES' : 'NO'}</div>
             <div>tool: {tool}</div>
             <div>canDrawNew: {canDrawNew ? 'YES' : 'NO'}</div>
-            <div>canMutate: {canMutate ? 'YES' : 'NO'}</div>
+            <div>canMutateExisting: {canMutateExisting ? 'YES' : 'NO'}</div>
             <div>canEdit: {canEdit ? 'YES' : 'NO'}</div>
             <div>isDrawing: {isDrawing ? 'YES' : 'NO'}</div>
             <div>lastEvent: {lastEvent}</div>
