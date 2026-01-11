@@ -368,24 +368,28 @@ function ShareViewContent() {
   const isEditMode = composerMode === 'edit' && !!composerTargetCommentId;
   const isNewMode = composerMode === 'new' && !!tempCommentId;
 
-  // ★★★ FIX-2: computed版（通常計算）★★★
+  // ★★★ CRITICAL: Draft state logic moved here to resolve TDZ
+  const hydratedKeyRef = useRef(null);
+  const [hydratedKeyState, setHydratedKeyState] = useState(null);
+  const storageDraftReady = !!(hydratedKeyState); // Ready when hydrate completes
+  const shouldShowDraft = (isEditMode || isNewMode) && storageDraftReady;
+
+  // ★★★ FIX-2: computed版（通常計算）- Original logic restored
   const computedPaintContextId = React.useMemo(() => {
     if (showAllPaint) return null;
     
-    if (composerMode === 'edit' && composerTargetCommentId) {
-      return String(composerTargetCommentId);
-    }
+    if (composerMode === 'edit' && composerTargetCommentId) return String(composerTargetCommentId);
     
     if (composerMode === 'new' && tempCommentId) {
-      return String(tempCommentId);
+      const hasDraftContent = draftShapes.length > 0 || composerText.trim().length > 0;
+      const shouldUseTemp = shouldShowDraft && (hasDraftContent || paintMode);
+      if (shouldUseTemp) return String(tempCommentId);
     }
     
-    if (activeCommentId) {
-      return String(activeCommentId);
-    }
+    if (activeCommentId) return String(activeCommentId);
     
     return null;
-  }, [showAllPaint, composerMode, composerTargetCommentId, tempCommentId, activeCommentId]);
+  }, [showAllPaint, composerMode, composerTargetCommentId, tempCommentId, draftShapes.length, composerText, paintMode, activeCommentId, shouldShowDraft]);
   
   // ★★★ FIX-2: stable版（一瞬もnullにしない、fileId変更時のみクリア）★★★
   const stablePaintContextId = React.useMemo(() => {
@@ -433,16 +437,7 @@ function ShareViewContent() {
     composerMode === 'new' ? 'new' :
     null;
 
-  // ★★★ CRITICAL FIX: hydratedKeyRef を string ref に変更（targetKey追跡用）★★★
-  const hydratedKeyRef = useRef(null);
-  const [hydratedKeyState, setHydratedKeyState] = useState(null);
 
-  // ★★★ CRITICAL: cache即座復元でready（hydrate待ちの空白時間を無くす）★★★
-  const hasCacheForKey = !!(draftScope && draftCacheRef.current.size > 0); // Simplified: check if cache exists
-  const storageDraftReady = !!(hydratedKeyState); // Ready when hydrate completes
-
-  // ★★★ P3: 下書き表示判定（paintMode不問、edit/new時かつ hydrate済み時のみ表示）★★★
-  const shouldShowDraft = (isEditMode || isNewMode) && storageDraftReady;
 
   // temp かどうかの判定
   const isTempCid = (cid) => typeof cid === 'string' && cid.startsWith('temp_');
