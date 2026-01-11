@@ -802,18 +802,9 @@ function ShareViewContent() {
   const { data: paintShapes = [], isFetching: shapesFetching, isSuccess: shapesLoaded } = useQuery({
     queryKey: ['paintShapes', token, shareLink?.file_id, currentPage],
     queryFn: async () => {
-      console.log('[ShareView] Fetching all shapes for page:', { 
-        token: token?.substring(0, 10), 
-        fileId: shareLink.file_id, 
-        pageNo: currentPage 
-      });
-      const allShapesOnPage = await base44.entities.PaintShape.filter({
-        share_token: token,
-        file_id: shareLink.file_id
-      });
-      const shapes = allShapesOnPage.filter(s => s.page_no === currentPage);
-      console.log('[ShareView] Fetched shapes count:', shapes.length);
-      return shapes;
+      // TEMP: Disable fetching to isolate 503 error
+      console.log('[ShareView] Shape fetching is temporarily disabled to diagnose 503 error.');
+      return [];
     },
     enabled: isReady && !!shareLink?.file_id && !!token,
     refetchOnWindowFocus: false,
