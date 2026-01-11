@@ -137,6 +137,8 @@ const ViewerCanvas = forwardRef(({
   // ★★★ CRITICAL: 描画開始時のview/scale情報を固定（ジャンプ防止の核心）★★★
   const drawViewRef = useRef(null); // { viewX, viewY, contentScale } を描画開始時に保存
   const isDraggingRef = useRef(false); // CRITICAL: ドラッグ中フラグ（残像防止）
+  const isInteractingRef = useRef(false); // ★ ドラッグ/変形中フラグ
+  const pendingIncomingShapesRef = useRef(null); // ★ 操作中に保留された外部Shapes
   const dragRafRef = useRef(null); // RAF間引き用
   const pendingDragRef = useRef(null); // ドラッグ座標バッファ
   
@@ -495,7 +497,20 @@ const ViewerCanvas = forwardRef(({
 
   // ★★★ FIX-PENDING: existingShapes FULL SYNC（pendingCtx対応版）★★★
   useLayoutEffect(() => {
-    if (!existingShapes) return;
+    // ★ 操作中は更新を保留し、pending に保存
+    if (isInteractingRef.current) {
+      console.log('[SYNC] Interaction in progress, deferring SYNC');
+      pendingIncomingShapesRef.current = existingShapes;
+      return;
+    }
+    
+    // ★ 保留されていた shapes を優先的に使用
+    const shapesToSync = pendingIncomingShapesRef.current || existingShapes;
+    pendingIncomingShapesRef.current = null; // 処理後にクリア
+
+    if (!shapesToSync) return;
+
+    const incomingEmpty = shapesToSync.length === 0;
 
     
 
@@ -503,7 +518,7 @@ const ViewerCanvas = forwardRef(({
 
     
 
-    const incomingEmpty = existingShapes.length === 0;
+    // const incomingEmpty = existingShapes.length === 0;
     const prevMapSize = shapesMapRef.current.size;
     const ctx = canvasContextKey || 'no-ctx';
     const isPending = !!pendingCtxRef.current;
@@ -548,7 +563,7 @@ const ViewerCanvas = forwardRef(({
 
       // newMap構築（既存ロジック）
       const newMap = new Map();
-      for (const s of existingShapes) {
+      for (const s of shapesToSync) {
         const normalized = normalizeShape(s, null);
         const cid = resolveCommentId(normalized);
         if (!normalized || !cid) {
@@ -629,7 +644,7 @@ const ViewerCanvas = forwardRef(({
     // ★★★ CRITICAL: existingShapesのみでMapを作り直す（完全同期）★★★
     const newMap = new Map();
 
-    for (const s of existingShapes) {
+    for (const s of shapesToSync) {
       // ★★★ CRITICAL: normalizeShape で正規化（defaultCommentId=null でDB値保持）★★★
       const normalized = normalizeShape(s, null);
 
@@ -662,7 +677,7 @@ const ViewerCanvas = forwardRef(({
     });
     shapesMapRef.current = newMap;
     bump();
-  }, [existingShapes, canvasContextKey, isCanvasTransitioning]);
+  }, [existingShapes, canvasContextKey, isCanvasTransitioning, shapesVersion]);
 
   // ✅ 選択維持（Mapに存在するか確認）
   useEffect(() => {
@@ -1778,8 +1793,13 @@ const ViewerCanvas = forwardRef(({
   
   // CRITICAL: ドラッグ開始（残像防止）
   const handleDragStart = (shape, e) => {
+    isInteractingRef.current = true;
     isDraggingRef.current = true;
     e.cancelBubble = true;
+  };
+
+  const handleTransformStart = (shape, e) => {
+    isInteractingRef.current = true;
   };
 
   // CRITICAL: ドラッグ中の追従更新（Map方式）
@@ -1899,6 +1919,12 @@ const ViewerCanvas = forwardRef(({
 
     // ドラッグ終了
     isDraggingRef.current = false;
+    isInteractingRef.current = false;
+
+    // 保留中のshapesがあれば同期をトリガー
+    if (pendingIncomingShapesRef.current) {
+      bump();
+    }
     
     // DB更新（upsertモード）
     if (onSaveShape) {
@@ -2283,7 +2309,6 @@ const ViewerCanvas = forwardRef(({
     const isEditable = isEditableShape2(shape);
 
     const commonProps = {
-      key: shape.id,
       stroke: shape.stroke,
       strokeWidth: shape.strokeWidth,
       // ★★★ CRITICAL: 描画中のshapeは完全非インタラクティブ ★★★
@@ -2300,6 +2325,7 @@ const ViewerCanvas = forwardRef(({
       onDragStart: (isEditable && !isDrawingThisShape) ? (e) => handleDragStart(shape, e) : undefined,
       onDragMove: (isEditable && !isDrawingThisShape) ? (e) => handleDragMove(shape, e) : undefined,
       onDragEnd: (isEditable && !isDrawingThisShape) ? (e) => handleDragEnd(shape, e) : undefined,
+      onTransformStart: (isEditable && canTransform && !isDrawingThisShape) ? (e) => handleTransformStart(shape, e) : undefined,
       onTransformEnd: (isEditable && canTransform && !isDrawingThisShape) ? (e) => handleTransformEnd(shape, e) : undefined,
     };
 
@@ -2489,7 +2515,7 @@ const ViewerCanvas = forwardRef(({
 
         // 描画中の一時データ（nxがない場合のみ - 保存後は存在しないはず）
         if (shape.x !== undefined && shape.width !== undefined) {
-        return <Rect {...commonProps} x={shape.x} y={shape.y} width={shape.width} height={shape.height} fill={undefined} hitStrokeWidth={Math.max(10, (shape.strokeWidth || 2) * 3)} />;
+        return <Rect key={shape.id} {...commonProps} x={shape.x} y={shape.y} width={shape.width} height={shape.height} fill={undefined} hitStrokeWidth={Math.max(10, (shape.strokeWidth || 2) * 3)} />;
         }
 
         return null;
@@ -2508,7 +2534,7 @@ const ViewerCanvas = forwardRef(({
 
         // 描画中の一時データ（nxがない場合のみ - 保存後は存在しないはず）
         if (shape.x !== undefined && shape.radius !== undefined) {
-        return <Circle {...commonProps} key={shape.id} x={shape.x} y={shape.y} radius={shape.radius} fill={undefined} hitStrokeWidth={Math.max(10, (shape.strokeWidth || 2) * 3)} />;
+        return <Circle key={shape.id} {...commonProps} x={shape.x} y={shape.y} radius={shape.radius} fill={undefined} hitStrokeWidth={Math.max(10, (shape.strokeWidth || 2) * 3)} />;
         }
 
         return null;
