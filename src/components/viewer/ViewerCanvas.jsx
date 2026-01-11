@@ -475,11 +475,13 @@ const ViewerCanvas = forwardRef(({
     if (forceClearToken === prevForceClearTokenRef.current) return;
     prevForceClearTokenRef.current = forceClearToken;
 
-    console.log('[ViewerCanvas] forceClearToken changed, clearing UI state only (Map preserved):', forceClearToken);
-    // ★★★ CRITICAL: Mapはクリアしない（FULL SYNCに任せる）★★★
-    // shapesMapRef.current = new Map(); // 削除
-    // bump(); // 削除
-    
+    console.log('[ViewerCanvas] P2 FIX: forceClearToken changed, clearing Map and UI state:', forceClearToken);
+
+    // ★★★ P2 FIX: Mapもクリアして「全削除」を確実に反映 ★★★
+    shapesMapRef.current = new Map();
+    pendingCtxRef.current = null;
+    bump();
+
     // UI状態のみクリア
     setSelectedId(null);
     setCurrentShape(null);

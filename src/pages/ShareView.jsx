@@ -1043,9 +1043,14 @@ function ShareViewContent() {
           has_paint: shapesToCommit.length > 0,
         });
 
-        // ★★★ 編集モードでも下書きshapesをDBに保存 ★★★
+        // ★★★ P0 FIX: 編集送信は「置換」(既存削除→再作成)とし、削除を永続化 ★★★
+        const existingPaintShapes = await base44.entities.PaintShape.filter({ comment_id: composerTargetCommentId, share_token: token, file_id: shareLink.file_id });
+        for (const existingShape of existingPaintShapes) {
+          await base44.entities.PaintShape.delete(existingShape.id);
+        }
+
         if (shapesToCommit.length > 0) {
-          console.log('[ShareView] Saving draft shapes to DB (edit mode):', shapesToCommit.length);
+          console.log(`[P0] Re-creating ${shapesToCommit.length} shapes for comment ${composerTargetCommentId.substring(0,12)}`);
           for (const shape of shapesToCommit) {
             await base44.entities.PaintShape.create({
               file_id: shareLink.file_id,
