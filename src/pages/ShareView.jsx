@@ -154,6 +154,7 @@ function ShareViewContent() {
   const prevPaintContextIdForMergedRef = useRef(null); // FIX-3: lastMerged保持条件用
   const lastNonNullPaintContextIdRef = useRef(null); // FIX-NO-BLANK: null落ち防止用
   const deletedShapeIdsRef = useRef(new Set()); // FIX-DELETE: 削除復活防止用
+  const lastDeletedKeyRef = useRef(null); // P0-FIX: 空ドラフトの無限削除防止
   
   // ★★★ FIX-4: addDebugLog を最優先定義（TDZ根絶）★★★
   const addDebugLog = (msg) => {
@@ -592,11 +593,21 @@ function ShareViewContent() {
       return;
     }
     
-    // ★★★ FIX: 空になっただけでは削除しない（明示操作時のみ削除）★★★
+    // ★★★ P0-FIX: 空の下書きは即座に削除して復活を防止 ★★★
     if (draftShapes.length === 0) {
-      console.log('[draft] autosave SKIPPED (empty, but not deleting):', { targetKey });
+      // 既にこのキーで削除済みなら何もしない（ループ防止）
+      if (lastDeletedKeyRef.current === targetKey) {
+        return;
+      }
+      console.log('[P0-FIX] Deleting empty draft to prevent ghost shapes:', { targetKey });
+      deleteDraft(targetKey);
+      draftCacheRef.current.delete(targetKey);
+      lastDeletedKeyRef.current = targetKey; // 削除したキーを記録
       return;
     }
+
+    // 空でなければ削除記録をリセット
+    lastDeletedKeyRef.current = null;
     
     // debounce保存
     if (saveDraftTimeoutRef.current) {
