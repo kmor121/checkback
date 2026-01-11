@@ -2705,10 +2705,13 @@ const ViewerCanvas = forwardRef(({
     );
   }
 
+  // ★★★ FIX-3: pending中判定（ctx切替でMap空にしない間）★★★
+  const isPending = !!pendingCtxRef.current;
+
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative', overflow: 'auto', background: '#e0e0e0' }}>
-      {/* ★★★ FIX-C: 遷移中かつ空の時だけ隠す（existingShapes.length判定追加）★★★ */}
-      {isCanvasTransitioning && existingShapes.length === 0 && (
+      {/* ★★★ FIX-3: pending中のみStage非表示（旧描画が素材より先に出るのを禁止）★★★ */}
+      {isPending && (
         <div style={{ position: 'absolute', inset: 0, background: '#e0e0e0', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ color: '#999', fontSize: '14px' }}>読み込み中...</div>
         </div>
@@ -2883,7 +2886,8 @@ const ViewerCanvas = forwardRef(({
         </div>
       )}
 
-      <div style={{ opacity: (isCanvasTransitioning && existingShapes.length === 0) ? 0 : 1, transition: 'opacity 80ms linear' }}>
+      {/* ★★★ FIX-3: pending中はStage全体を非表示（opacity:0）★★★ */}
+      <div style={{ opacity: isPending ? 0 : 1, transition: 'opacity 80ms linear' }}>
         <Stage
           ref={stageRef}
           width={containerSize.width}
