@@ -1037,28 +1037,9 @@ function ShareViewContent() {
           has_paint: shapesToCommit.length > 0,
         });
 
-        // ★★★ P0 FIX: 既存のPaintShapeを全て削除してから再作成（置換型） ★★★
-        console.log('[ShareView] Deleting existing PaintShapes for comment:', composerTargetCommentId);
-        try {
-          const existingPaintShapes = await base44.entities.PaintShape.filter({
-            comment_id: composerTargetCommentId,
-            // 安全のため絞り込み
-            share_token: token,
-            file_id: shareLink.file_id,
-          });
+        // NOTE: Shape deletion logic was here, but caused a build error. Reverted to fix.
+        // The original bug (Phenomenon C) will reappear. We will fix it next.
 
-          if (existingPaintShapes && existingPaintShapes.length > 0) {
-            console.log(`[ShareView] Found ${existingPaintShapes.length} shapes to delete. Deleting...`);
-            for (const shape of existingPaintShapes) {
-              await base44.entities.PaintShape.delete(shape.id);
-            }
-            console.log(`[ShareView] Finished deleting old shapes.`);
-          }
-        } catch (err) {
-          console.error('[ShareView] Error deleting shapes:', err.message);
-          showToast(`描画削除エラー: ${err.message}`, 'error');
-          throw err;
-        }
         
         // ★★★ 編集モードでも下書きshapesをDBに保存 ★★★
         if (shapesToCommit.length > 0) {
