@@ -600,7 +600,7 @@ function ShareViewContent() {
       if (lastDeletedKeyRef.current === targetKey) {
         return;
       }
-      console.log('[P0-FIX] Deleting empty draft to prevent ghost shapes:', { targetKey });
+      console.log('[P0-FIX] Deleting empty draft to prevent ghost shapes:', { targetKey, hydratedKey: hydratedKeyRef.current?.substring(0, 30) || 'null' });
       deleteDraft(targetKey);
       draftCacheRef.current.delete(targetKey);
       lastDeletedKeyRef.current = targetKey; // 削除したキーを記録
