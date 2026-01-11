@@ -272,6 +272,25 @@ const ViewerCanvas = forwardRef(({
     // ★★★ CRITICAL: Map由来のshapes（shapesVersionで再計算トリガー）★★★
     const mapShapes = getAllShapes();
 
+    // ★★★ FIX-3: 空フレーム根絶（Map空でexistingShapes有りならfallback）★★★
+    if (mapShapes.length === 0 && existingShapes && existingShapes.length > 0) {
+      console.log('[renderedShapes] FALLBACK to existingShapes:', {
+        mapSize: 0,
+        existingShapesLength: existingShapes.length,
+        renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
+      });
+      const fallbackShapes = existingShapes.map(s => normalizeShape(s, null)).filter(Boolean);
+      
+      // targetId でフィルタ（showAllPaint考慮）
+      if (showAllPaint) return fallbackShapes;
+      const targetId = renderTargetCommentId ? String(renderTargetCommentId) : '';
+      if (targetId === '') return [];
+      return fallbackShapes.filter(s => {
+        const cid = resolveCommentId(s);
+        return cid != null && cid !== '' && cid === targetId;
+      });
+    }
+
     // ★★★ DEBUG: 計算開始時の状態を詳細ログ ★★★
     console.log('[renderedShapes] CALC START:', {
       renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
@@ -328,7 +347,7 @@ const ViewerCanvas = forwardRef(({
     });
 
     return filtered;
-  }, [shapesVersion, showAllPaint, renderTargetCommentId, currentShape]);
+  }, [shapesVersion, showAllPaint, renderTargetCommentId, currentShape, existingShapes]);
   
   // ★ CRITICAL: activeShapes を existingShapes から抽出（comment_id統一判定）
   const activeShapes = useMemo(() => {
@@ -2455,12 +2474,13 @@ const ViewerCanvas = forwardRef(({
       if (shape.nx !== undefined) {
         const p1 = denormalizeCoords(shape.nx, shape.ny);
         const p2 = denormalizeCoords(shape.nx + shape.nw, shape.ny + shape.nh);
-        return (
-          <React.Fragment key={shape.id}>
-            <Rect {...commonProps} x={p1.x} y={p1.y} width={p2.x - p1.x} height={p2.y - p1.y} fill={undefined} hitStrokeWidth={Math.max(10, (shape.strokeWidth || 2) * 3)} />
-            {boundingBox && <Rect key={`bbox-${shape.id}`} x={boundingBox.x} y={boundingBox.y} width={boundingBox.width} height={boundingBox.height} stroke="rgba(255,0,0,0.3)" strokeWidth={1} dash={[5,5]} fill={undefined} listening={false} />}
-          </React.Fragment>
-        );
+        const elements = [
+          <Rect key={shape.id} {...commonProps} x={p1.x} y={p1.y} width={p2.x - p1.x} height={p2.y - p1.y} fill={undefined} hitStrokeWidth={Math.max(10, (shape.strokeWidth || 2) * 3)} />
+        ];
+        if (boundingBox) {
+          elements.push(<Rect key={`bbox-${shape.id}`} x={boundingBox.x} y={boundingBox.y} width={boundingBox.width} height={boundingBox.height} stroke="rgba(255,0,0,0.3)" strokeWidth={1} dash={[5,5]} fill={undefined} listening={false} />);
+        }
+        return elements;
         }
 
         // 描画中の一時データ（nxがない場合のみ - 保存後は存在しないはず）
@@ -2473,12 +2493,13 @@ const ViewerCanvas = forwardRef(({
         // CRITICAL: 正規化座標を優先（必ずこれから復元）
         if (shape.nx !== undefined) {
         const center = denormalizeCoords(shape.nx, shape.ny);
-        return (
-          <React.Fragment key={shape.id}>
-            <Circle {...commonProps} x={center.x} y={center.y} radius={shape.nr * bgSize.width} fill={undefined} hitStrokeWidth={Math.max(10, (shape.strokeWidth || 2) * 3)} />
-            {boundingBox && <Rect key={`bbox-${shape.id}`} x={boundingBox.x} y={boundingBox.y} width={boundingBox.width} height={boundingBox.height} stroke="rgba(255,0,0,0.3)" strokeWidth={1} dash={[5,5]} fill={undefined} listening={false} />}
-          </React.Fragment>
-        );
+        const elements = [
+          <Circle key={shape.id} {...commonProps} x={center.x} y={center.y} radius={shape.nr * bgSize.width} fill={undefined} hitStrokeWidth={Math.max(10, (shape.strokeWidth || 2) * 3)} />
+        ];
+        if (boundingBox) {
+          elements.push(<Rect key={`bbox-${shape.id}`} x={boundingBox.x} y={boundingBox.y} width={boundingBox.width} height={boundingBox.height} stroke="rgba(255,0,0,0.3)" strokeWidth={1} dash={[5,5]} fill={undefined} listening={false} />);
+        }
+        return elements;
         }
 
         // 描画中の一時データ（nxがない場合のみ - 保存後は存在しないはず）
