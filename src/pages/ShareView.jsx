@@ -350,10 +350,15 @@ function ShareViewContent() {
     
     if (composerMode === 'edit' && composerTargetCommentId) return String(composerTargetCommentId);
     if (activeCommentId) return String(activeCommentId);
-    if (composerMode === 'new' && tempCommentId) return String(tempCommentId);
+    
+    // ★★★ FIX-INIT: 初期状態で temp_* を使わない（下書き/入力が無い間はnull）★★★
+    if (composerMode === 'new' && tempCommentId) {
+      const hasDraftContent = draftShapes.length > 0 || composerText.trim().length > 0;
+      if (hasDraftContent) return String(tempCommentId);
+    }
     
     return null;
-  }, [showAllPaint, composerMode, composerTargetCommentId, activeCommentId, tempCommentId]);
+  }, [showAllPaint, composerMode, composerTargetCommentId, activeCommentId, tempCommentId, draftShapes.length, composerText]);
   
   // ★★★ FIX-2: stable版（一瞬もnullにしない、fileId変更時のみクリア）★★★
   const stablePaintContextId = React.useMemo(() => {
@@ -727,9 +732,24 @@ function ShareViewContent() {
     const params = new URLSearchParams(window.location.search);
     const commentIdFromUrl = params.get('comment');
 
-    // comment指定がない共有リンクは「何も選択しない」で確定（後から勝手に選ばれないよう初期化完了にする）
+    // comment指定がない共有リンクは「先頭コメントを自動選択」で初期表示を安定させる
     if (!commentIdFromUrl) {
-      setActiveCommentId(null);
+      // comments が揃うのを待つ
+      if (!comments || comments.length === 0) {
+        setActiveCommentId(null);
+        didInitActiveRef.current = true;
+        return;
+      }
+      
+      // ★★★ FIX-INIT: 先頭コメントを自動選択（初回のみ）★★★
+      const firstComment = comments[0];
+      if (firstComment) {
+        setCurrentPage(firstComment.page_no);
+        setActiveCommentId(firstComment.id);
+        console.log('[ShareView] Auto-selected first comment:', firstComment.id.substring(0, 12));
+      } else {
+        setActiveCommentId(null);
+      }
       didInitActiveRef.current = true;
       return;
     }

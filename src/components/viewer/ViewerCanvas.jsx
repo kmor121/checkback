@@ -533,6 +533,13 @@ const ViewerCanvas = forwardRef(({
 
     // ★★★ FIX-PENDING: pending中のincomingEmpty は何もしない（旧Map保持）★★★
     if (isPending && incomingEmpty) {
+      // ★★★ FIX-INIT: prevMapSize=0 の場合は pending解除（空×空で固着防止）★★★
+      if (prevMapSize === 0) {
+        console.log('[FIX-INIT] pending解除 (empty×empty, no point preserving)', { ctx, prevMapSize });
+        pendingCtxRef.current = null;
+        return;
+      }
+      
       console.log('[FIX-PENDING] SYNC SKIP: pending ctx, empty incoming, Map preserved', { ctx, prevMapSize });
       return;
     }
