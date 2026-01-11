@@ -1039,19 +1039,22 @@ function ShareViewContent() {
 
         // ★★★ P0 FIX: 既存のPaintShapeを全て削除してから再作成（置換型） ★★★
         console.log('[ShareView] Deleting existing PaintShapes for comment:', composerTargetCommentId);
-        const existingPaintShapes = await base44.entities.PaintShape.filter({
-          comment_id: composerTargetCommentId,
-          // 安全のため絞り込み
-          share_token: token,
-          file_id: shareLink.file_id,
-        });
+        try {
+          const existingPaintShapes = await base44.entities.PaintShape.filter({
+            comment_id: composerTargetCommentId,
+          });
 
-        if (existingPaintShapes.length > 0) {
-          console.log(`[ShareView] Found ${existingPaintShapes.length} shapes to delete. Deleting...`);
-          for (const shape of existingPaintShapes) {
-            await base44.entities.PaintShape.delete(shape.id);
+          if (existingPaintShapes && existingPaintShapes.length > 0) {
+            console.log(`[ShareView] Found ${existingPaintShapes.length} shapes to delete. Deleting...`);
+            for (const shape of existingPaintShapes) {
+              await base44.entities.PaintShape.delete(shape.id);
+            }
+            console.log(`[ShareView] Finished deleting old shapes.`);
           }
-          console.log(`[ShareView] Finished deleting old shapes.`);
+        } catch (err) {
+          console.error('[ShareView] Error deleting shapes:', err.message);
+          showToast(`描画削除エラー: ${err.message}`, 'error');
+          throw err;
         }
         
         // ★★★ 編集モードでも下書きshapesをDBに保存 ★★★
