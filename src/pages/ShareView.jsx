@@ -180,6 +180,7 @@ function ShareViewContent() {
   // ★★★ CRITICAL: SSRガード（window未定義時は空params）★★★
   const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
   const token = params.get('token');
+  const debugParam = params.get('debug');
 
   useEffect(() => {
     if (!token) return;
@@ -621,12 +622,12 @@ function ShareViewContent() {
       return;
     }
     
-    // ★★★ FIX-1: paint ON時に同期的にtool強制切替（レース防止）★★★
+    // ★★★ FIX-2: paint ON時にtool=selectなら描画ツールに切替（1箇所集約）★★★
     const currentTool = tool;
-    const drawTool = (currentTool === 'select' || !currentTool) ? (lastDrawToolRef.current || 'pen') : currentTool;
-    if (drawTool !== currentTool) {
+    if (currentTool === 'select') {
+      const drawTool = lastDrawToolRef.current || 'pen';
       setTool(drawTool);
-      addDebugLog(`[FIX-1] tool forced: ${currentTool} → ${drawTool}`);
+      addDebugLog(`[FIX-2] tool switch: select → ${drawTool}`);
     }
 
     // 編集セッションか新規セッションかを判定
@@ -1211,9 +1212,9 @@ function ShareViewContent() {
       return;
     }
 
-    // ★★★ FIX-1/C: paintMode中は自動OFF（同時にtool='select'、下書き保持）★★★
+    // ★★★ FIX-5: paintMode中は自動OFF（警告なし、下書き保持）★★★
     if (paintMode) {
-      addDebugLog(`[C] selectComment: auto-OFF paint (draft preserved)`);
+      addDebugLog(`[FIX-5] selectComment: auto-OFF paint (draft preserved)`);
       setPaintMode(false);
       setTool('select');
     }
@@ -1256,9 +1257,9 @@ function ShareViewContent() {
       return;
     }
 
-    // ★★★ FIX-1/C: paintMode中は自動OFF（同時にtool='select'、下書き保持）★★★
+    // ★★★ FIX-5: paintMode中は自動OFF（警告なし、下書き保持）★★★
     if (paintMode) {
-      addDebugLog(`[C] enterEdit: auto-OFF paint (draft preserved)`);
+      addDebugLog(`[FIX-5] enterEdit: auto-OFF paint (draft preserved)`);
       setPaintMode(false);
       setTool('select');
     }
@@ -1284,11 +1285,11 @@ function ShareViewContent() {
     enterEdit(comment);
   };
 
-  // ★★★ C: 編集モード解除（明示キャンセル時のみ下書き削除）★★★
+  // ★★★ FIX-4: 編集モード解除（明示キャンセル時のみ下書き削除）★★★
   const exitEditMode = (reason = 'unknown') => {
     addDebugLog(`[exitEditMode] reason=${reason} mode=${composerMode}`);
 
-    // ★★★ C: 明示キャンセルのみ削除★★★
+    // ★★★ FIX-4: 明示キャンセルのみ削除（自動遷移では保持）★★★
     const shouldDeleteDraft = ['cancel_button', 'cancel_x', 'clear_all'].includes(reason);
 
     if (shouldDeleteDraft && composerMode === 'edit' && composerTargetCommentId && shareLink?.file_id) {
@@ -1372,9 +1373,9 @@ function ShareViewContent() {
       return;
     }
 
-    // ★★★ FIX-1/C: paintMode中は自動OFF（同時にtool='select'、下書き保持）★★★
+    // ★★★ FIX-5: paintMode中は自動OFF（警告なし、下書き保持）★★★
     if (paintMode) {
-      addDebugLog(`[C] handleStartReply: auto-OFF paint (draft preserved)`);
+      addDebugLog(`[FIX-5] handleStartReply: auto-OFF paint (draft preserved)`);
       setPaintMode(false);
       setTool('select');
     }
@@ -2001,11 +2002,9 @@ function ShareViewContent() {
               />
             )}
 
-            {/* ★★★ FIX-5: Debugコピーボタン（?debug=1 or 常時表示）★★★ */}
-            {(() => {
-              const debugParam = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('debug') : null;
-              return (DEBUG_MODE || debugParam === '1') && (
-              <div className="absolute top-4 right-12 z-[9999]" style={{ position: 'fixed', top: '12px', right: '12px' }}>
+            {/* ★★★ FIX-0/5: Debugコピーボタン（?debug=1 で確実表示）★★★ */}
+            {(DEBUG_MODE || debugParam === '1') && (
+              <div style={{ position: 'fixed', top: '80px', right: '20px', zIndex: 9999 }}>
                 <Button
                   variant="outline"
                   size="sm"
@@ -2014,18 +2013,23 @@ function ShareViewContent() {
                       const debugData = {
                         timestamp: new Date().toISOString(),
                         composerMode,
+                        isEditMode,
+                        isNewMode,
                         activeCommentId: activeCommentId?.substring(0, 12) || 'null',
                         composerTargetCommentId: composerTargetCommentId?.substring(0, 12) || 'null',
                         tempCommentId: tempCommentId?.substring(0, 12) || 'null',
                         computedPaintContextId: computedPaintContextId?.substring(0, 12) || 'null',
                         stablePaintContextId: stablePaintContextId?.substring(0, 12) || 'null',
-                        targetKey: targetKey?.substring(0, 40) || 'null',
+                        paintContextId: paintContextId?.substring(0, 12) || 'null',
+                        targetKey: targetKey?.substring(0, 50) || 'null',
+                        draftScope,
                         paintMode,
                         tool,
                         shapesFetching,
                         shapesLoaded,
                         isCanvasTransitioning,
                         storageDraftReady,
+                        draftReady,
                         dbShapesCount: paintShapes.length,
                         draftShapesCount: draftShapes.length,
                         mergedCount: shapesForCanvas.length,
@@ -2034,32 +2038,37 @@ function ShareViewContent() {
                       };
                       const text = JSON.stringify(debugData, null, 2);
                       
-                      if (navigator.clipboard) {
+                      if (typeof navigator !== 'undefined' && navigator.clipboard) {
                         navigator.clipboard.writeText(text).then(() => {
                           showToast('📋 Debug情報をコピーしました', 'success');
-                        }).catch((err) => {
-                          // clipboard失敗時はtextareaモーダル表示
+                        }).catch(() => {
                           const textarea = document.createElement('textarea');
                           textarea.value = text;
-                          textarea.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:80%;height:60%;z-index:99999;padding:20px;font-family:monospace;font-size:12px;';
+                          textarea.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:80%;height:60%;z-index:99999;padding:20px;font-family:monospace;font-size:12px;border:2px solid #000;';
                           document.body.appendChild(textarea);
+                          textarea.focus();
                           textarea.select();
-                          setTimeout(() => textarea.remove(), 30000);
+                          setTimeout(() => textarea.remove(), 60000);
                         });
                       } else {
-                        alert('Debug情報:\n\n' + text.substring(0, 1000) + '\n\n...(省略)');
+                        const modal = document.createElement('div');
+                        modal.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:80%;max-width:800px;height:60%;z-index:99999;background:white;border:2px solid #000;padding:20px;';
+                        modal.innerHTML = '<textarea style="width:100%;height:100%;font-family:monospace;font-size:11px;">' + text + '</textarea><button style="position:absolute;top:10px;right:10px;padding:5px 10px;background:#333;color:#fff;border:none;cursor:pointer;">閉じる</button>';
+                        modal.querySelector('button').onclick = () => modal.remove();
+                        document.body.appendChild(modal);
+                        modal.querySelector('textarea').focus();
+                        modal.querySelector('textarea').select();
                       }
                     } catch (e) {
                       showToast('コピー失敗: ' + e.message, 'error');
                     }
                   }}
-                  className="text-xs bg-yellow-100 hover:bg-yellow-200 border-yellow-400 shadow-lg"
+                  className="text-xs bg-yellow-100 hover:bg-yellow-200 border-yellow-400 shadow-lg font-bold"
                 >
                   📋 Debug
                 </Button>
               </div>
-            );
-            })()}
+            )}
             
             {/* ズーム制御 */}
             <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-2 flex items-center gap-2">
