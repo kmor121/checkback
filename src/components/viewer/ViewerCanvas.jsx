@@ -117,6 +117,7 @@ const ViewerCanvas = forwardRef(({
   const [bgSize, setBgSize] = useState({ width: 800, height: 600 });
   const [error, setError] = useState(null);
   const [shapesResolved, setShapesResolved] = useState(false);
+  const [shapesResolved, setShapesResolved] = useState(false);
   
   // 描画状態（CRITICAL: Map方式で置換禁止）
   const [isDrawing, setIsDrawing] = useState(false);
@@ -501,6 +502,7 @@ const ViewerCanvas = forwardRef(({
       setShapesResolved(false); // ★★★ P3: データ未解決フラグ
       // shapesMapRef.current = new Map(); 削除
       // bump(); 削除
+      setShapesResolved(false); // ★★★ P3: データ未解決フラグ
       setSelectedId(null);
       setCurrentShape(null);
       setIsDrawing(false);
@@ -552,6 +554,9 @@ const ViewerCanvas = forwardRef(({
   // ★★★ FIX-PENDING: existingShapes FULL SYNC（pendingCtx対応版）★★★
   useLayoutEffect(() => {
     if (!existingShapes) return;
+
+    // ★★★ P3: データ到着（0件でも）した時点で解決済とする ★★★
+    setShapesResolved(true);
 
     // ★★★ P3: データ到着（0件でも）した時点で解決済とする ★★★
     setShapesResolved(true);

@@ -123,6 +123,9 @@ function ShareViewContent() {
 
   // ★★★ P1 FIX: activeCommentId がある場合は showAllPaint を強制的に false にする不変条件 ★★★
   const effectiveShowAllPaint = showAllPaint && !activeCommentId;
+
+  // ★★★ P1 FIX: activeCommentId がある場合は showAllPaint を強制的に false にする不変条件 ★★★
+  const effectiveShowAllPaint = showAllPaint && !activeCommentId;
   
   // Draft paint session state
   const [paintSessionCommentId, setPaintSessionCommentId] = useState(null);
