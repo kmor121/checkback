@@ -1288,9 +1288,11 @@ function ShareViewContent() {
       setTool('select');
     }
 
-    // ★★★ C: 同じコメント再クリック → composerModeだけview（activeCommentId維持）★★★
+    // ★★★ FIX: 同じコメント再クリック → 選択解除（トグル）★★★
     if (activeCommentId === comment.id) {
-      addDebugLog(`[C] deselect same (activeCommentId preserved)`);
+      addDebugLog(`[C] deselect same (toggle off)`);
+      setActiveCommentId(null);
+      setShowAllPaint(true);
       setComposerMode('view');
       setComposerTargetCommentId(null);
       setComposerText('');
