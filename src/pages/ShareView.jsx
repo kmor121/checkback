@@ -182,10 +182,16 @@ function ShareViewContent() {
     setTimeout(() => setToast({ show: false, message: '', type: 'success' }), type === 'info' ? 5000 : 3000);
   };
   
-  // ★★★ CRITICAL: SSRガード（window未定義時は空params）★★★
-  const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
-  const token = params.get('token');
-  const debugParam = params.get('debug');
+  const [token, setToken] = useState(null);
+  const [debugParam, setDebugParam] = useState(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      setToken(params.get('token'));
+      setDebugParam(params.get('debug'));
+    }
+  }, []);
   
   // ★★★ FIX-A: forceDebugフラグ永続化（iframe対策）★★★
   useEffect(() => {
@@ -802,9 +808,18 @@ function ShareViewContent() {
   const { data: paintShapes = [], isFetching: shapesFetching, isSuccess: shapesLoaded } = useQuery({
     queryKey: ['paintShapes', token, shareLink?.file_id, currentPage],
     queryFn: async () => {
-      // TEMP: Disable fetching to isolate 503 error
-      console.log('[ShareView] Shape fetching is temporarily disabled to diagnose 503 error.');
-      return [];
+      console.log('[ShareView] Fetching all shapes for page:', { 
+        token: token?.substring(0, 10), 
+        fileId: shareLink.file_id, 
+        pageNo: currentPage 
+      });
+      const allShapesOnPage = await base44.entities.PaintShape.filter({
+        share_token: token,
+        file_id: shareLink.file_id
+      });
+      const shapes = allShapesOnPage.filter(s => s.page_no === currentPage);
+      console.log('[ShareView] Fetched shapes count:', shapes.length);
+      return shapes;
     },
     enabled: isReady && !!shareLink?.file_id && !!token,
     refetchOnWindowFocus: false,
