@@ -1614,25 +1614,15 @@ function ShareViewContent() {
       ? draftShapesNormalized.filter(s => String(resolveCommentId(s) || '') === filterIdForDraft)
       : [];
     
-    // ★★★ FIX-2: DB優先マージ（DBを消さない、draftで上書きのみ）★★★
-    const draftIds = new Set(draftShapesForView.map(s => s.id));
-    const dbShapesWithoutDuplicates = dbShapesForView.filter(s => !draftIds.has(s.id));
-    const merged = [...dbShapesWithoutDuplicates, ...draftShapesForView];
+    // ★★★ FIX-A: shapeIdベースMapマージ（count比較禁止、DB+draft上書き）★★★
+    const shapeMap = new Map();
+    dbShapesForView.forEach(s => shapeMap.set(s.id, s));
+    draftShapesForView.forEach(s => shapeMap.set(s.id, s));
+    const merged = Array.from(shapeMap.values());
     
     const resultLog = `paintCtx=${paintContextId?.substring(0, 12) || 'null'} mode=${composerMode} db=${dbShapesForView.length} draft=${draftShapesForView.length} merged=${merged.length} trans=${isCanvasTransitioning}`;
     console.log('[shapesForCanvas]', resultLog);
     addDebugLog(`[shapesForCanvas] ${resultLog}`);
-    
-    // ★★★ FIX-2: mergedがdbより少ないのは異常（DBを消さない保証）★★★
-    if (merged.length < dbShapesForView.length) {
-      console.error('[FIX-2] merged < db detected, returning db only:', {
-        merged: merged.length,
-        db: dbShapesForView.length,
-        draft: draftShapesForView.length,
-      });
-      addDebugLog(`[FIX-2] ERROR: merged < db, using db only`);
-      return dbShapesForView;
-    }
     
     // ★★★ FIX-3: 遷移中で空なら前回値保持（同じpaintContextIdの時のみ）★★★
     if (isCanvasTransitioning && merged.length === 0 && lastMergedShapesRef.current.length > 0) {
@@ -2008,73 +1998,72 @@ function ShareViewContent() {
               />
             )}
 
-            {/* ★★★ FIX-0/5: Debugコピーボタン（?debug=1 で確実表示）★★★ */}
-            {(DEBUG_MODE || debugParam === '1') && (
-              <div style={{ position: 'fixed', top: '80px', right: '20px', zIndex: 9999 }}>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    try {
-                      const debugData = {
-                        timestamp: new Date().toISOString(),
-                        composerMode,
-                        isEditMode,
-                        isNewMode,
-                        activeCommentId: activeCommentId?.substring(0, 12) || 'null',
-                        composerTargetCommentId: composerTargetCommentId?.substring(0, 12) || 'null',
-                        tempCommentId: tempCommentId?.substring(0, 12) || 'null',
-                        computedPaintContextId: computedPaintContextId?.substring(0, 12) || 'null',
-                        stablePaintContextId: stablePaintContextId?.substring(0, 12) || 'null',
-                        paintContextId: paintContextId?.substring(0, 12) || 'null',
-                        targetKey: targetKey?.substring(0, 50) || 'null',
-                        draftScope,
-                        paintMode,
-                        tool,
-                        shapesFetching,
-                        shapesLoaded,
-                        isCanvasTransitioning,
-                        storageDraftReady,
-                        draftReady,
-                        dbShapesCount: paintShapes.length,
-                        draftShapesCount: draftShapes.length,
-                        mergedCount: shapesForCanvas.length,
-                        lastMergedCount: lastMergedShapesRef.current.length,
-                        recentLogs: debugLogBufferRef.current.slice(-100),
-                      };
-                      const text = JSON.stringify(debugData, null, 2);
-                      
-                      if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                        navigator.clipboard.writeText(text).then(() => {
-                          showToast('📋 Debug情報をコピーしました', 'success');
-                        }).catch(() => {
+            {/* ★★★ FIX-D: Debugボタン確実表示（SSR安全、?debug=1で必ず出る）★★★ */}
+            {(() => {
+              const showDebug = (typeof window !== 'undefined' && params.get('debug') === '1') || DEBUG_MODE;
+              if (!showDebug) return null;
+              
+              return (
+                <div style={{ position: 'fixed', top: '12px', right: '12px', zIndex: 99999, pointerEvents: 'auto' }}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      try {
+                        const debugData = {
+                          timestamp: new Date().toISOString(),
+                          paintMode,
+                          tool,
+                          composerMode,
+                          isEditMode,
+                          isNewMode,
+                          paintContextId: paintContextId?.substring(0, 12) || 'null',
+                          targetKey: targetKey?.substring(0, 50) || 'null',
+                          draftScope,
+                          draftReady,
+                          shapesLoaded,
+                          shapesFetching,
+                          dbCount: paintShapes.length,
+                          draftCount: draftShapes.length,
+                          mergedCount: shapesForCanvas.length,
+                          isCanvasTransitioning,
+                          ctx: canvasInternalResetKey?.substring(0, 50) || 'null',
+                          recentLogs: debugLogBufferRef.current.slice(-100),
+                        };
+                        const text = JSON.stringify(debugData, null, 2);
+                        
+                        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                          navigator.clipboard.writeText(text).then(() => {
+                            showToast('📋 Debug情報をコピーしました', 'success');
+                          }).catch(() => {
+                            const textarea = document.createElement('textarea');
+                            textarea.value = text;
+                            textarea.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:80%;height:60%;z-index:99999;padding:20px;font-family:monospace;font-size:12px;border:2px solid #000;background:white;';
+                            document.body.appendChild(textarea);
+                            textarea.focus();
+                            textarea.select();
+                            setTimeout(() => textarea.remove(), 60000);
+                          });
+                        } else {
                           const textarea = document.createElement('textarea');
                           textarea.value = text;
-                          textarea.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:80%;height:60%;z-index:99999;padding:20px;font-family:monospace;font-size:12px;border:2px solid #000;';
+                          textarea.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:80%;height:60%;z-index:99999;padding:20px;font-family:monospace;font-size:12px;border:2px solid #000;background:white;';
                           document.body.appendChild(textarea);
                           textarea.focus();
                           textarea.select();
                           setTimeout(() => textarea.remove(), 60000);
-                        });
-                      } else {
-                        const modal = document.createElement('div');
-                        modal.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:80%;max-width:800px;height:60%;z-index:99999;background:white;border:2px solid #000;padding:20px;';
-                        modal.innerHTML = '<textarea style="width:100%;height:100%;font-family:monospace;font-size:11px;">' + text + '</textarea><button style="position:absolute;top:10px;right:10px;padding:5px 10px;background:#333;color:#fff;border:none;cursor:pointer;">閉じる</button>';
-                        modal.querySelector('button').onclick = () => modal.remove();
-                        document.body.appendChild(modal);
-                        modal.querySelector('textarea').focus();
-                        modal.querySelector('textarea').select();
+                        }
+                      } catch (e) {
+                        showToast('コピー失敗: ' + e.message, 'error');
                       }
-                    } catch (e) {
-                      showToast('コピー失敗: ' + e.message, 'error');
-                    }
-                  }}
-                  className="text-xs bg-yellow-100 hover:bg-yellow-200 border-yellow-400 shadow-lg font-bold"
-                >
-                  📋 Debug
-                </Button>
-              </div>
-            )}
+                    }}
+                    className="text-xs bg-yellow-100 hover:bg-yellow-200 border-yellow-400 shadow-lg font-bold"
+                  >
+                    📋 Debug
+                  </Button>
+                </div>
+              );
+            })()}
             
             {/* ズーム制御 */}
             <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-2 flex items-center gap-2">
