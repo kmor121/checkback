@@ -229,12 +229,12 @@ const ViewerCanvas = forwardRef(({
   // ★★★ A: draftCommentIdRef.currentではなく、propsのdraftCommentIdを優先 ★★★
   const effectiveActiveId = activeCommentId ?? draftCommentId ?? draftCommentIdRef.current ?? null;
 
-  // ★★★ FIX-1: tool分離（selectツール許可、権限フラグ再定義）★★★
+  // ★★★ FIX-1: 権限分離（新規描画と既存編集を完全分離）★★★
   const isSelectTool = tool === 'select';
-  const canDrawNew = paintMode && !isSelectTool;           // 新規描画：paintMode && 描画ツール
-  const canCommitNew = paintMode && !isSelectTool;         // 新規確定：paintMode && 描画ツール
-  const canSelectExisting = paintMode && isSelectTool;     // 既存選択：paintMode && selectツール
-  const canMutateExisting = paintMode && draftReady && isSelectTool;  // 既存編集：paintMode && draftReady && selectツール
+  const canDrawNew = !!paintMode;                          // 新規描画：paintMode だけでOK（T1/T2）
+  const canCommitNew = !!paintMode;                        // 新規確定：paintMode だけでOK
+  const canSelectExisting = !!paintMode && isSelectTool;   // 既存選択：paintMode && selectツール
+  const canMutateExisting = !!paintMode && !!draftReady && isSelectTool;  // 既存編集：paintMode && draftReady && selectツール（T2編集）
   const canEdit = canMutateExisting;                       // 後方互換
   const canDeleteExisting = canMutateExisting;             // 削除：既存編集と同条件
   
@@ -1061,13 +1061,14 @@ const ViewerCanvas = forwardRef(({
       });
     }
 
-    // ★★★ FIX-1: selectツール時は描画開始しない（選択判定は別処理）★★★
+    // ★★★ FIX-1: selectツール時は描画開始しない（選択は別処理）★★★
     if (isSelectTool) {
       return;
     }
     
-    if (!canDrawNew && tool !== 'text') {
-      console.warn('[ViewerCanvas] PointerDown blocked: canDrawNew=false', { paintMode, tool });
+    // ★★★ FIX-1: 新規描画はpaintModeだけでOK（T1/T2即描画）★★★
+    if (!paintMode && tool !== 'text') {
+      console.warn('[ViewerCanvas] PointerDown blocked: paintMode=false', { paintMode, tool });
       return;
     }
 

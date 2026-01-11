@@ -622,13 +622,7 @@ function ShareViewContent() {
       return;
     }
     
-    // ★★★ FIX-2: paint ON時にtool=selectなら描画ツールに切替（1箇所集約）★★★
-    const currentTool = tool;
-    if (currentTool === 'select') {
-      const drawTool = lastDrawToolRef.current || 'pen';
-      setTool(drawTool);
-      addDebugLog(`[FIX-2] tool switch: select → ${drawTool}`);
-    }
+    // ★★★ FIX-2削除: tool制御はuseEffectに集約（重複排除）★★★
 
     // 編集セッションか新規セッションかを判定
     const isEditSession = composerMode === 'edit' && !!composerTargetCommentId;
@@ -689,13 +683,25 @@ function ShareViewContent() {
     setIsDockOpen(true);
   };
   
-  // ★★★ FIX-1: 描画ツール記録のみ（select禁止は削除）★★★
+  // ★★★ FIX-2: 描画ツール記録 + paintMode変化時のtool制御（1箇所集約）★★★
+  const prevPaintModeRef = useRef(paintMode);
   useEffect(() => {
+    // 描画ツール記録
     if (['pen', 'rect', 'circle', 'arrow', 'text'].includes(tool)) {
       lastDrawToolRef.current = tool;
       addDebugLog(`[tool] recorded: ${tool}`);
     }
-  }, [tool]);
+    
+    // paintMode false→true の瞬間だけ tool制御
+    const prev = prevPaintModeRef.current;
+    prevPaintModeRef.current = paintMode;
+    
+    if (!prev && paintMode && tool === 'select') {
+      const drawTool = lastDrawToolRef.current || 'pen';
+      setTool(drawTool);
+      addDebugLog(`[FIX-2] paint ON: select → ${drawTool}`);
+    }
+  }, [tool, paintMode]);
 
   const handleBeginPaint = () => {
     // ペイント開始時はコメントを作らず、セッション開始のみ
