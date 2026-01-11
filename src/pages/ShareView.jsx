@@ -349,16 +349,18 @@ function ShareViewContent() {
     if (showAllPaint) return null;
     
     if (composerMode === 'edit' && composerTargetCommentId) return String(composerTargetCommentId);
-    if (activeCommentId) return String(activeCommentId);
     
-    // ★★★ FIX-INIT: 初期状態で temp_* を使わない（下書き/入力が無い間はnull）★★★
+    // ★★★ FIX-PAINT: new mode優先（paintMode ON なら即 temp へ）★★★
     if (composerMode === 'new' && tempCommentId) {
       const hasDraftContent = draftShapes.length > 0 || composerText.trim().length > 0;
-      if (hasDraftContent) return String(tempCommentId);
+      const shouldUseTemp = hasDraftContent || paintMode;
+      if (shouldUseTemp) return String(tempCommentId);
     }
     
+    if (activeCommentId) return String(activeCommentId);
+    
     return null;
-  }, [showAllPaint, composerMode, composerTargetCommentId, activeCommentId, tempCommentId, draftShapes.length, composerText]);
+  }, [showAllPaint, composerMode, composerTargetCommentId, tempCommentId, draftShapes.length, composerText, paintMode, activeCommentId]);
   
   // ★★★ FIX-2: stable版（一瞬もnullにしない、fileId変更時のみクリア）★★★
   const stablePaintContextId = React.useMemo(() => {
