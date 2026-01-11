@@ -1354,51 +1354,60 @@ function ShareViewContent() {
     enterEdit(comment);
   };
 
-  // ★★★ FIX-4: 編集モード解除（明示キャンセル時のみ下書き削除）★★★
+  // ★★★ FIX-4: 編集モード解除（明示破棄時のみ下書き削除）★★★
   const exitEditMode = (reason = 'unknown') => {
     addDebugLog(`[exitEditMode] reason=${reason} mode=${composerMode}`);
 
-    // ★★★ FIX-4: 明示キャンセルのみ削除（自動遷移では保持）★★★
-    const shouldDeleteDraft = ['cancel_button', 'cancel_x', 'clear_all'].includes(reason);
-
-    if (shouldDeleteDraft && composerMode === 'edit' && composerTargetCommentId && shareLink?.file_id) {
-      const editKey = getDraftKey(shareLink.file_id, composerTargetCommentId, null, 'edit');
-      if (editKey) {
-        deleteDraft(editKey);
-        draftCacheRef.current.delete(editKey);
-        addDebugLog(`[C] draft deleted: ${editKey.substring(0, 30)} reason=${reason}`);
+    // ★★★ FIX: 明示的な破棄のみ下書き削除 ★★★
+    const shouldDeleteDraft = reason === 'discard_explicitly';
+    
+    // ★★★ 破棄処理（破棄時のみ実行）★★★
+    if (shouldDeleteDraft) {
+      // targetKeyを退避（async処理中の状態変更対策）
+      const currentTargetKey = targetKey;
+      const currentDraftScope = draftScope;
+      
+      // localStorage削除
+      if (currentTargetKey) {
+        deleteDraft(currentTargetKey);
+        draftCacheRef.current.delete(currentTargetKey);
+        addDebugLog(`[exitEditMode] draft deleted: ${currentTargetKey.substring(0, 30)} reason=${reason}`);
+      }
+      
+      // メモリクリア
+      setDraftShapes([]);
+      draftShapesRef.current = [];
+      
+      // キャッシュ全クリア
+      draftCacheRef.current.clear();
+      
+      // 新規の場合のみtempCommentIdクリア
+      if (currentDraftScope === 'new' && shareLink?.file_id) {
+        setTempCommentId(null);
+        localStorage.removeItem(`tempCommentId:${shareLink.file_id}`);
       }
     } else {
-      addDebugLog(`[C] draft preserved: reason=${reason}`);
+      addDebugLog(`[exitEditMode] draft preserved: reason=${reason}`);
     }
     
+    // ★★★ 閉じる処理（常に実行）★★★
     // ViewerCanvasの描画をクリア
     viewerCanvasRef.current?.afterSubmitClear();
     viewerCanvasRef.current?.clear();
     
-    // ★★★ P3: composerModeを'view'に（new維持だとshouldShowDraft=trueのまま）★★★
+    // composerModeを'view'に
     setComposerMode('view');
     setComposerTargetCommentId(null);
     setComposerParentCommentId(null);
-    
-    // ★★★ P2: activeCommentIdは維持（null化でちらつき防止）★★★
-    // setActiveCommentId(null); // 削除：paintContextId null 化を防止
     
     // ペイント関連
     setPaintMode(false);
     setTool('select');
     setPaintSessionCommentId(null);
     
-    // draft/描画一時stateクリア
-    setDraftShapes([]);
-    draftShapesRef.current = [];
-    
-    // ★★★ P1: hydrateStateもクリア（前のキーが残らないように）★★★
+    // hydrateStateクリア
     hydratedKeyRef.current = null;
     setHydratedKeyState(null);
-    
-    // ★★★ P1: キャッシュは全クリア（edit/new両方のドラフトをリセット）★★★
-    draftCacheRef.current.clear();
     
     // UI状態
     setComposerText('');
@@ -1406,13 +1415,10 @@ function ShareViewContent() {
     setReplyingThreadId(null);
     setIsDockOpen(false);
     
-    // ★★★ tempCommentIdは保持（新規コメントの下書きを復元可能にする）★★★
-    // setTempCommentId(null); // 意図的にリセットしない
-    
     console.log('[EXIT_DEBUG] exitEditMode END:', {
       reason,
       composerMode: 'view',
-      cacheSize: draftCacheRef.current.size,
+      draftPreserved: !shouldDeleteDraft,
     });
   };
 
@@ -1422,17 +1428,20 @@ function ShareViewContent() {
   const handleCancelEdit = () => {
     console.log('[EXIT_DEBUG] handleCancelEdit called (× button)');
     
-    // 編集中のコメントを取得して本文が変更されているか確認
-    const editingComment = comments.find(c => c.id === composerTargetCommentId);
-    const hasUnsavedChanges = editingComment && composerText.trim() !== (editingComment.body || '').trim();
+    // ★★★ FIX: ×は閉じるだけ（下書き保持）★★★
+    exitEditMode('close_only');
+  };
 
-    if (hasUnsavedChanges && typeof window !== 'undefined' && !window.confirm('編集内容を破棄しますか？')) {
-      console.log('[EXIT_DEBUG] handleCancelEdit canceled by user');
+  const handleDiscard = () => {
+    console.log('[EXIT_DEBUG] handleDiscard called (破棄 button)');
+    
+    // 確認ダイアログ
+    if (typeof window !== 'undefined' && !window.confirm('下書きを破棄しますか？この操作は元に戻せません。')) {
       return;
     }
-
-    // ★★★ CRITICAL: 統一関数を呼ぶ（×終了＝キャンセル）★★★
-    exitEditMode('cancel_button');
+    
+    // 明示的破棄
+    exitEditMode('discard_explicitly');
   };
 
   const handleStartReply = (parentComment) => {
@@ -2253,16 +2262,29 @@ function ShareViewContent() {
                       <Send className="w-4 h-4" />
                     </Button>
 
-                    {/* キャンセルボタン（編集モード時のみ） */}
+                    {/* 閉じるボタン（編集モード時のみ） */}
                     {composerMode === 'edit' && (
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={handleCancelEdit}
                         className="mt-1"
-                        title="編集キャンセル"
+                        title="閉じる（下書き保持）"
                       >
                         <X className="w-4 h-4" />
+                      </Button>
+                    )}
+                    
+                    {/* 破棄ボタン（編集モード時、下書きがある場合のみ） */}
+                    {composerMode === 'edit' && (draftShapes.length > 0 || composerText.trim().length > 0) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleDiscard}
+                        className="mt-1 text-red-600 hover:text-red-700"
+                        title="下書きを破棄"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </Button>
                     )}
                   </div>
