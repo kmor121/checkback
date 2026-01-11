@@ -116,6 +116,7 @@ const ViewerCanvas = forwardRef(({
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [bgSize, setBgSize] = useState({ width: 800, height: 600 });
   const [error, setError] = useState(null);
+  const [shapesResolved, setShapesResolved] = useState(false);
   
   // 描画状態（CRITICAL: Map方式で置換禁止）
   const [isDrawing, setIsDrawing] = useState(false);
@@ -274,9 +275,9 @@ const ViewerCanvas = forwardRef(({
     // ★★★ CRITICAL: Map由来のshapes（shapesVersionで再計算トリガー）★★★
     const mapShapes = getAllShapes();
 
-    // ★★★ FIX-3: 空フレーム根絶（Map空でexistingShapes有りならfallback）★★★
-    // ★★★ FIX-4: isPending中のみfallbackを許可。確定後は空配列を返す ★★★
-    if (mapShapes.length === 0 && existingShapes && existingShapes.length > 0 && isCanvasTransitioning) {
+    // ★★★ P2/P3: fallbackは「未解決」かつ「遷移中」のみ許可 ★★★
+    const shouldFallback = !shapesResolved && isCanvasTransitioning;
+    if (shouldFallback && mapShapes.length === 0 && existingShapes && existingShapes.length > 0) {
       console.log('[renderedShapes] FALLBACK to existingShapes (PENDING):', {
         mapSize: 0,
         existingShapesLength: existingShapes.length,
@@ -497,6 +498,7 @@ const ViewerCanvas = forwardRef(({
       // ★ CRITICAL: Mapは即クリアせず、pendingCtxをセット
       pendingCtxRef.current = canvasContextKey;
       prevCanvasContextKeyRef.current = canvasContextKey;
+      setShapesResolved(false); // ★★★ P3: データ未解決フラグ
       // shapesMapRef.current = new Map(); 削除
       // bump(); 削除
       setSelectedId(null);
@@ -550,6 +552,9 @@ const ViewerCanvas = forwardRef(({
   // ★★★ FIX-PENDING: existingShapes FULL SYNC（pendingCtx対応版）★★★
   useLayoutEffect(() => {
     if (!existingShapes) return;
+
+    // ★★★ P3: データ到着（0件でも）した時点で解決済とする ★★★
+    setShapesResolved(true);
 
     const incomingEmpty = existingShapes.length === 0;
     const prevMapSize = shapesMapRef.current.size;

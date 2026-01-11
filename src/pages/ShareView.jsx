@@ -120,6 +120,9 @@ function ShareViewContent() {
   const [composerText, setComposerText] = useState('');
   const [showAllPaint, setShowAllPaint] = useState(false);
   const [isDockOpen, setIsDockOpen] = useState(false);
+
+  // ★★★ P1 FIX: activeCommentId がある場合は showAllPaint を強制的に false にする不変条件 ★★★
+  const effectiveShowAllPaint = showAllPaint && !activeCommentId;
   
   // Draft paint session state
   const [paintSessionCommentId, setPaintSessionCommentId] = useState(null);
@@ -2147,7 +2150,7 @@ function ShareViewContent() {
                 strokeWidth={strokeWidth}
                 zoom={zoom}
                 showBoundingBoxes={showBoundingBoxes}
-                showAllPaint={showAllPaint}
+                showAllPaint={effectiveShowAllPaint}
                 forceClearToken={forceClearToken}
                 draftCommentId={paintContextId}
                 renderTargetCommentId={paintContextId}
@@ -2160,7 +2163,7 @@ function ShareViewContent() {
                   queryKey: ['paintShapes', token, shareLink?.file_id, currentPage],
                   fetchedCount: paintShapes?.length || 0,
                   filteredCount: shapesForCanvas?.length || 0,
-                  showAllPaint: showAllPaint,
+                  showAllPaint: effectiveShowAllPaint,
                   token: token,
                   fileId: shareLink?.file_id,
                   pageNo: currentPage,
