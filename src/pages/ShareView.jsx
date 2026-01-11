@@ -1609,7 +1609,8 @@ function ShareViewContent() {
     }
   }, [isTransitioningCtx, shapesLoaded, shapesFetching]);
   
-  const isCanvasTransitioning = isTransitioningCtx || shapesFetching || !shapesLoaded;
+  // ★★★ FIX-FLICKER: shapesFetching除外（送信後refetchでちらつき防止）★★★
+  const isCanvasTransitioning = isTransitioningCtx;
 
   // ★★★ C: チラつき防止 - DB素材が読み込まれるまでドラフトを表示しない ★★★
   const canvasReady = React.useMemo(() => {

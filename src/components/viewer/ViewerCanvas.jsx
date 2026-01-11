@@ -500,9 +500,9 @@ const ViewerCanvas = forwardRef(({
     bump();
   }, [forceClearToken]);
 
-  // ★★★ CRITICAL FIX: existingShapesで完全同期（upsertではなく置換）★★★
+  // ★★★ FIX-FLICKER: existingShapes FULL SYNC を useLayoutEffect 化（1フレーム空防止）★★★
   // ★★★ CRITICAL: 空配列同期の扱い（preserveOnEmpty不使用、常に上書き）★★★
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!existingShapes) return;
 
     const incomingEmpty = existingShapes.length === 0;
