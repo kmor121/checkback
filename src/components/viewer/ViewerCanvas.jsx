@@ -150,6 +150,7 @@ const ViewerCanvas = forwardRef(({
   
   // ★★★ CRITICAL: 描画コンテキスト変化検知用（Map残留根絶）★★★
   const prevCanvasContextKeyRef = useRef(null);
+  const pendingCtxRef = useRef(null); // ★ FIX-PENDING: 新ctx待機用（Map即クリア禁止）
   
   // デバッグHUD用ログ履歴
   const [debugHudLogs, setDebugHudLogs] = useState([]);
@@ -446,24 +447,26 @@ const ViewerCanvas = forwardRef(({
     draftCommentIdRef.current = null;
   }, [activeCommentId]);
 
-  // ★★★ FIX-2: canvasContextKey 変化時に描画前Map確実クリア（useLayoutEffect）★★★
+  // ★★★ FIX-PENDING: canvasContextKey 変化時は Map 即クリアせず pending 化 ★★★
   useLayoutEffect(() => {
     if (!canvasContextKey) return;
     
     const prev = prevCanvasContextKeyRef.current;
     if (prev !== canvasContextKey) {
-      console.log('[FIX-2] CTX CHANGED -> reset Map (layout)', {
+      console.log('[FIX-PENDING] CTX CHANGED -> set pending (no Map clear)', {
         prev,
         next: canvasContextKey,
         prevMapSize: shapesMapRef.current.size,
       });
       
-      shapesMapRef.current = new Map();
-      bump();
+      // ★ CRITICAL: Mapは即クリアせず、pendingCtxをセット
+      pendingCtxRef.current = canvasContextKey;
+      prevCanvasContextKeyRef.current = canvasContextKey;
+      // shapesMapRef.current = new Map(); 削除
+      // bump(); 削除
       setSelectedId(null);
       setCurrentShape(null);
       setIsDrawing(false);
-      prevCanvasContextKeyRef.current = canvasContextKey;
     }
   }, [canvasContextKey]);
 
@@ -500,24 +503,80 @@ const ViewerCanvas = forwardRef(({
     bump();
   }, [forceClearToken]);
 
-  // ★★★ FIX-FLICKER: existingShapes FULL SYNC を useLayoutEffect 化（1フレーム空防止）★★★
-  // ★★★ CRITICAL: 空配列同期の扱い（preserveOnEmpty不使用、常に上書き）★★★
+  // ★★★ FIX-PENDING: existingShapes FULL SYNC（pendingCtx対応版）★★★
   useLayoutEffect(() => {
     if (!existingShapes) return;
 
     const incomingEmpty = existingShapes.length === 0;
     const prevMapSize = shapesMapRef.current.size;
     const ctx = canvasContextKey || 'no-ctx';
+    const isPending = !!pendingCtxRef.current;
 
-    // ★★★ FIX-3: incoming empty時の処理（遷移中はMap保持）★★★
+    // ★★★ FIX-PENDING: pending中のincomingEmpty は何もしない（旧Map保持）★★★
+    if (isPending && incomingEmpty) {
+      console.log('[FIX-PENDING] SYNC SKIP: pending ctx, empty incoming, Map preserved', { ctx, prevMapSize });
+      return;
+    }
+
+    // ★★★ FIX-PENDING: pending中のincomingあり → Map一発置換してpending解除 ★★★
+    if (isPending && !incomingEmpty) {
+      console.log('[FIX-PENDING] SYNC: pending ctx, incoming arrived, replacing Map', {
+        ctx,
+        incomingLength: existingShapes.length,
+        prevMapSize,
+      });
+      
+      // dirtyShapes保持（既存ロジック）
+      const dirtyShapes = new Map();
+      for (const [id, shape] of shapesMapRef.current.entries()) {
+        if (shape._dirty) {
+          dirtyShapes.set(id, shape);
+        }
+      }
+
+      // newMap構築（既存ロジック）
+      const newMap = new Map();
+      for (const s of existingShapes) {
+        const normalized = normalizeShape(s, null);
+        const cid = resolveCommentId(normalized);
+        if (!normalized || !cid) {
+          console.log('[ViewerCanvas] Skipping shape with empty comment_id:', s.id?.substring?.(0, 8));
+          continue;
+        }
+        if (dirtyShapes.has(normalized.id)) {
+          newMap.set(normalized.id, dirtyShapes.get(normalized.id));
+        } else {
+          newMap.set(normalized.id, normalized);
+        }
+      }
+      
+      for (const [id, shape] of dirtyShapes.entries()) {
+        if (!newMap.has(id)) {
+          newMap.set(id, shape);
+        }
+      }
+
+      console.log('[FIX-PENDING] Map replaced, pending cleared:', {
+        newSize: newMap.size,
+        dirtyCount: dirtyShapes.size,
+      });
+      shapesMapRef.current = newMap;
+      pendingCtxRef.current = null;
+      bump();
+      return;
+    }
+
+    // ★★★ 同一ctx（!isPending）での処理 ★★★
     if (incomingEmpty) {
+      // transition中は保持
       if (isCanvasTransitioning) {
-        console.log('[FIX-3] SYNC SKIP: transitioning, Map preserved', { ctx, prevMapSize });
+        console.log('[FIX-3] SYNC SKIP: transitioning (same ctx), Map preserved', { ctx, prevMapSize });
         return;
       }
       
+      // transitionなし、かつMapが空でない → クリア
       if (prevMapSize > 0) {
-        console.log('[FIX-3] SYNC: empty confirmed, Map cleared', { ctx, prevMapSize });
+        console.log('[FIX-3] SYNC: empty confirmed (same ctx), Map cleared', { ctx, prevMapSize });
         shapesMapRef.current = new Map();
         bump();
         return;
