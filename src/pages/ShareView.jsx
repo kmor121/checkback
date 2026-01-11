@@ -149,6 +149,7 @@ function ShareViewContent() {
   const lastMergedShapesRef = useRef([]); // D: チラつき防止用
   const debugLogBufferRef = useRef([]); // Debug: ログ保持用
   const prevPaintContextIdForMergedRef = useRef(null); // FIX-3: lastMerged保持条件用
+  const lastNonNullPaintContextIdRef = useRef(null); // FIX-NO-BLANK: null落ち防止用
   
   // ★★★ FIX-4: addDebugLog を最優先定義（TDZ根絶）★★★
   const addDebugLog = (msg) => {
@@ -372,18 +373,25 @@ function ShareViewContent() {
     // ファイル変更時は強制クリア
     if (fileId && fileId !== prevFileIdRef) {
       stablePaintContextIdRef.current = { fileId, id: null };
+      lastNonNullPaintContextIdRef.current = null; // FIX-NO-BLANK: ファイル変更時にrefもクリア
       return null;
     }
     
     // computed有効値なら即座に更新
     if (computed) {
       stablePaintContextIdRef.current = { fileId, id: computed };
+      lastNonNullPaintContextIdRef.current = computed; // FIX-NO-BLANK: 非nullを記録
       return computed;
     }
     
     // computed=nullでも前回値があれば保持（チラつき防止）
     if (prev && fileId === prevFileIdRef) {
       return prev;
+    }
+    
+    // FIX-NO-BLANK: 最後の非nullを使う（完全null回避）
+    if (lastNonNullPaintContextIdRef.current) {
+      return lastNonNullPaintContextIdRef.current;
     }
     
     return null;

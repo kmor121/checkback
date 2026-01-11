@@ -237,7 +237,8 @@ const ViewerCanvas = forwardRef(({
   const canSelectExisting = !!paintMode && isSelectTool;   // 既存選択：paintMode && selectツール
   const canMutateExisting = !!paintMode && !!draftReady && isSelectTool;  // 既存編集：paintMode && draftReady && selectツール（T2編集）
   const canEdit = canMutateExisting;                       // 後方互換
-  const canDeleteExisting = canMutateExisting;             // 削除：既存編集と同条件
+  // ★★★ FIX-DELETE: 削除は isEditMode && paintMode で許可（draftReady不要）★★★
+  const canDeleteExisting = !!paintMode && isEditMode;     // 削除：paintMode && selectツール のみ
   
   // ★★★ NEW: 削除専用フラグ（paintMode不問、targetIdがあれば削除可能）★★★
   const targetIdForDelete = effectiveActiveId != null ? String(effectiveActiveId) : '';
@@ -540,6 +541,15 @@ const ViewerCanvas = forwardRef(({
         return;
       }
       
+      // ★★★ FIX-NO-BLANK: isCanvasTransitioning=false なら0件確定でpending解除 ★★★
+      if (!isCanvasTransitioning) {
+        console.log('[FIX-NO-BLANK] pending解除 (0件確定, transition完了)', { ctx, prevMapSize });
+        shapesMapRef.current = new Map();
+        pendingCtxRef.current = null;
+        bump();
+        return;
+      }
+      
       console.log('[FIX-PENDING] SYNC SKIP: pending ctx, empty incoming, Map preserved', { ctx, prevMapSize });
       return;
     }
@@ -671,7 +681,7 @@ const ViewerCanvas = forwardRef(({
     });
     shapesMapRef.current = newMap;
     bump();
-  }, [existingShapes, canvasContextKey]);
+  }, [existingShapes, canvasContextKey, isCanvasTransitioning]);
 
   // ✅ 選択維持（Mapに存在するか確認）
   useEffect(() => {
@@ -959,10 +969,10 @@ const ViewerCanvas = forwardRef(({
       shapesMapSize: shapesMapRef.current.size,
     });
 
-    // ★★★ CRITICAL: canMutateExisting 必須（既存shapeのみ削除可）★★★
-    if (!canMutateExisting) {
-      console.log('[ViewerCanvas] Delete blocked: canMutateExisting=false');
-      console.log('[ViewerCanvas] ========== HANDLE DELETE END (canMutateExisting=false) ==========');
+    // ★★★ FIX-DELETE: canDeleteExisting で判定（draftReady不要、isEditMode && paintMode で許可）★★★
+    if (!canDeleteExisting) {
+      console.log('[ViewerCanvas] Delete blocked: canDeleteExisting=false');
+      console.log('[ViewerCanvas] ========== HANDLE DELETE END (canDeleteExisting=false) ==========');
       return;
     }
 
@@ -2738,10 +2748,10 @@ const ViewerCanvas = forwardRef(({
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative', overflow: 'auto', background: '#e0e0e0' }}>
-      {/* ★★★ FIX-3: pending中のみStage非表示（旧描画が素材より先に出るのを禁止）★★★ */}
+      {/* ★★★ FIX-NO-BLANK: pending中は半透明オーバーレイ（背景は透けて見える）★★★ */}
       {isPending && (
-        <div style={{ position: 'absolute', inset: 0, background: '#e0e0e0', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ color: '#999', fontSize: '14px' }}>読み込み中...</div>
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.7)', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ color: '#666', fontSize: '14px' }}>コメント情報を読み込み中...</div>
         </div>
       )}
       
@@ -2914,27 +2924,26 @@ const ViewerCanvas = forwardRef(({
         </div>
       )}
 
-      {/* ★★★ FIX-3: pending中はStage全体を非表示（opacity:0）★★★ */}
-      <div style={{ opacity: isPending ? 0 : 1, transition: 'opacity 80ms linear' }}>
-        <Stage
-          ref={stageRef}
-          width={containerSize.width}
-          height={containerSize.height}
-          onPointerDown={handleStagePointerDown}
-          onPointerMove={handleStagePointerMove}
-          onPointerUp={handleStagePointerUp}
-          onMouseDown={handleStagePointerDown}
-          onMouseMove={handleStagePointerMove}
-          onMouseUp={handleStagePointerUp}
-          onTouchStart={handleStagePointerDown}
-          onTouchMove={handleStagePointerMove}
-          onTouchEnd={handleStagePointerUp}
-          style={{ 
-            cursor: isDrawMode ? 'crosshair' : canPan ? (isPanning ? 'grabbing' : 'grab') : 'default',
-            touchAction: 'none'
-          }}
-        >
-        {/* 背景Layer（非インタラクティブ） */}
+      {/* ★★★ FIX-NO-BLANK: Stage全体は常に表示、shapesGroupのみopacity制御 ★★★ */}
+      <Stage
+        ref={stageRef}
+        width={containerSize.width}
+        height={containerSize.height}
+        onPointerDown={handleStagePointerDown}
+        onPointerMove={handleStagePointerMove}
+        onPointerUp={handleStagePointerUp}
+        onMouseDown={handleStagePointerDown}
+        onMouseMove={handleStagePointerMove}
+        onMouseUp={handleStagePointerUp}
+        onTouchStart={handleStagePointerDown}
+        onTouchMove={handleStagePointerMove}
+        onTouchEnd={handleStagePointerUp}
+        style={{ 
+          cursor: isDrawMode ? 'crosshair' : canPan ? (isPanning ? 'grabbing' : 'grab') : 'default',
+          touchAction: 'none'
+        }}
+      >
+        {/* 背景Layer（非インタラクティブ） - 常に表示 */}
         <Layer listening={false}>
           <Group
             x={viewX}
@@ -2948,15 +2957,16 @@ const ViewerCanvas = forwardRef(({
           </Group>
         </Layer>
 
-
         {/* 注釈Layer（contentGroup内に配置） */}
         <Layer>
+          {/* ★★★ FIX-NO-BLANK: shapesのみopacity制御（背景は常に見える）★★★ */}
           <Group
             ref={contentGroupRef}
             x={viewX}
             y={viewY}
             scaleX={contentScale}
             scaleY={contentScale}
+            opacity={isPending ? 0 : 1}
           >
             {/* ★★★ CRITICAL: 確定済みshapeのみ描画（currentShapeとの重複は既に除外済み）★★★ */}
             {renderedShapes.map(s => renderShape(s, true))}
@@ -2970,7 +2980,6 @@ const ViewerCanvas = forwardRef(({
         
         {/* ★ DEBUGオーバーレイ Layer削除（DOM HUDに統合） */}
       </Stage>
-      </div>
       
       {/* デバッグオーバーレイ（拡張版） */}
       {DEBUG_MODE && (
