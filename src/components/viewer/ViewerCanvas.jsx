@@ -129,13 +129,16 @@ const ViewerCanvas = forwardRef(({
   const shapeRefs = useRef({});
   
   // Map操作ヘルパー
-  const bump = () => setShapesVersion(v => v + 1);
+  // A) 無限ループ対策: bumpの参照を安定化
+  const bump = useCallback(() => setShapesVersion(v => v + 1), []);
   const getAllShapes = () => Array.from(shapesMapRef.current.values());
   
   // 後方互換用（shapesRef.currentを参照している箇所向け）
   const shapesRef = { get current() { return getAllShapes(); } };
   // ★★★ CRITICAL: 描画開始時のview/scale情報を固定（ジャンプ防止の核心）★★★
   const drawViewRef = useRef(null); // { viewX, viewY, contentScale } を描画開始時に保存
+  const isInteractingRef = useRef(false); // ★ B) 操作中はtrue（drag/transform）
+  const pendingIncomingShapesRef = useRef(null); // ★ B) 操作中に保留された外部Shapes
   const isDraggingRef = useRef(false); // CRITICAL: ドラッグ中フラグ（残像防止）
   const isInteractingRef = useRef(false); // ★ ドラッグ/変形中フラグ
   const pendingIncomingShapesRef = useRef(null); // ★ 操作中に保留された外部Shapes
@@ -1919,6 +1922,13 @@ const ViewerCanvas = forwardRef(({
 
     // ドラッグ終了
     isDraggingRef.current = false;
+    isInteractingRef.current = false; // ★ B) 操作終了
+
+    // ★ B) 保留されていたshapesがあれば同期をトリガー
+    if (pendingIncomingShapesRef.current) {
+        console.log('[SYNC] handleDragEnd: applying pending shapes');
+        bump();
+    }
     isInteractingRef.current = false;
 
     // 保留中のshapesがあれば同期をトリガー
@@ -2100,7 +2110,14 @@ const ViewerCanvas = forwardRef(({
       onShapesChange?.(getAllShapes());
 
       // DB更新（upsertモード）
+      isInteractingRef.current = false; // ★ B) 操作終了
       if (onSaveShape) {
+        // ★ B) 保留されていたshapesがあれば同期をトリガー
+        if (pendingIncomingShapesRef.current) {
+            console.log('[SYNC] handleTransformEnd: applying pending shapes');
+            bump();
+        }
+
         setIsSaving(prev => ({ ...prev, [shape.id]: true }));
         setLastMutation('update-transform');
         setLastPayload(JSON.stringify(updatedShape));
