@@ -2275,8 +2275,8 @@ function ShareViewContent() {
                       </Button>
                     )}
                     
-                    {/* 破棄ボタン（編集モード時、下書きがある場合のみ） */}
-                    {composerMode === 'edit' && (draftShapes.length > 0 || composerText.trim().length > 0) && (
+                    {/* 破棄ボタン（編集/新規時、下書きがある場合のみ） */}
+                    {(composerMode === 'edit' || composerMode === 'new') && (draftShapes.length > 0 || composerText.trim().length > 0) && (
                       <Button
                         variant="ghost"
                         size="sm"
