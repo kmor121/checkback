@@ -459,7 +459,6 @@ const ViewerCanvas = forwardRef(({
     setRedoStack([]);
     setPan({ x: 0, y: 0 });
     setBgReady(false); // P2 FIX: ファイル変更時に背景ロード状態をリセット
-    setBgReady(false); // P2 FIX: Reset background ready state
   }, [fileIdentity, pageNumber]);
 
   // zoom変更時はpanのクランプのみ（shapesは触らない）
@@ -821,12 +820,6 @@ const ViewerCanvas = forwardRef(({
   const viewY = offsetY + pan.y;
 
   // P2 FIX: 背景画像のロードが完了したときに呼ばれ、bgReadyフラグを立てる
-  const handleBgLoad = (size) => {
-    setBgSize(size);
-    setBgReady(true);
-  };
-
-  // P2 FIX: Handle background image load
   const handleBgLoad = (size) => {
     setBgSize(size);
     setBgReady(true);
