@@ -244,9 +244,10 @@ const ViewerCanvas = forwardRef(({
   const targetIdForDelete = effectiveActiveId != null ? String(effectiveActiveId) : '';
   const canEditPaint = targetIdForDelete !== '';  // 削除操作の可否
 
-  // ★★★ FIX-1: 選択可能性（paintMode && selectツール && commentId一致）★★★
+  // ★★★ FIX-DELETE: 選択可能性（編集モード時はDB shapeも選択可能に）★★★
   const isSelectableShape = (shape) => {
-    if (!canSelectExisting) return false;  // paintMode && selectツール
+    // ★★★ CRITICAL: paintMode && selectツール の時のみ選択可能 ★★★
+    if (!paintMode || !isSelectTool) return false;
     if (effectiveActiveId == null) return false;
     return sameId(shapeCommentId(shape), effectiveActiveId);
   };
@@ -512,15 +513,26 @@ const ViewerCanvas = forwardRef(({
     setPan(p => clampPan(p.x, p.y));
   }, [zoom]);
 
-  // ★★★ P2: 明示クリア用トークン監視（forceClearToken変化でのみMap空化）★★★
+  // ★★★ FIX-FLICKER: forceClearTokenではMapをクリアしない（UI状態のみクリア）★★★
   const prevForceClearTokenRef = useRef(forceClearToken);
   useEffect(() => {
     if (forceClearToken === prevForceClearTokenRef.current) return;
     prevForceClearTokenRef.current = forceClearToken;
 
-    console.log('[ViewerCanvas] forceClearToken changed, clearing Map explicitly:', forceClearToken);
-    shapesMapRef.current = new Map();
-    bump();
+    console.log('[ViewerCanvas] forceClearToken changed, clearing UI state only (Map preserved):', forceClearToken);
+    // ★★★ CRITICAL: Mapはクリアしない（FULL SYNCに任せる）★★★
+    // shapesMapRef.current = new Map(); // 削除
+    // bump(); // 削除
+    
+    // UI状態のみクリア
+    setSelectedId(null);
+    setCurrentShape(null);
+    setIsDrawing(false);
+    setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
+    if (transformerRef.current) {
+      transformerRef.current.nodes([]);
+      transformerRef.current.getLayer()?.batchDraw();
+    }
   }, [forceClearToken]);
 
   // ★★★ FIX-PENDING: existingShapes FULL SYNC（pendingCtx対応版）★★★

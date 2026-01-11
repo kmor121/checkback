@@ -370,7 +370,7 @@ function ShareViewContent() {
     if (activeCommentId) return String(activeCommentId);
     
     return null;
-  }, [showAllPaint, composerMode, composerTargetCommentId, tempCommentId, draftShapes.length, composerText, paintMode, activeCommentId, shouldShowDraft]);
+  }, [showAllPaint, composerMode, composerTargetCommentId, tempCommentId, draftShapes.length, composerText, paintMode, activeCommentId]);
   
   // ★★★ FIX-2: stable版（一瞬もnullにしない、fileId変更時のみクリア）★★★
   const stablePaintContextId = React.useMemo(() => {
