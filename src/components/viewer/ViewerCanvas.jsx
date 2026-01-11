@@ -117,8 +117,6 @@ const ViewerCanvas = forwardRef(({
   const [bgSize, setBgSize] = useState({ width: 800, height: 600 });
   const [error, setError] = useState(null);
   const [shapesResolved, setShapesResolved] = useState(false);
-  const [shapesResolved, setShapesResolved] = useState(false);
-  const [shapesResolved, setShapesResolved] = useState(false);
   
   // 描画状態（CRITICAL: Map方式で置換禁止）
   const [isDrawing, setIsDrawing] = useState(false);
