@@ -673,7 +673,7 @@ const ViewerCanvas = forwardRef(({
     });
     shapesMapRef.current = newMap;
     bump();
-  }, [existingShapes, canvasContextKey, isCanvasTransitioning, shapesVersion]);
+  }, [existingShapes, canvasContextKey, isCanvasTransitioning]); // A) shapesVersion は依存から外す（bump呼び出しで再実行防止）
 
   // ✅ 選択維持（Mapに存在するか確認）
   useEffect(() => {
