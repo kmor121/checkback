@@ -275,14 +275,15 @@ const ViewerCanvas = forwardRef(({
     const mapShapes = getAllShapes();
 
     // ★★★ FIX-3: 空フレーム根絶（Map空でexistingShapes有りならfallback）★★★
-    if (mapShapes.length === 0 && existingShapes && existingShapes.length > 0) {
-      console.log('[renderedShapes] FALLBACK to existingShapes:', {
+    // ★★★ FIX-4: isPending中のみfallbackを許可。確定後は空配列を返す ★★★
+    if (mapShapes.length === 0 && existingShapes && existingShapes.length > 0 && isCanvasTransitioning) {
+      console.log('[renderedShapes] FALLBACK to existingShapes (PENDING):', {
         mapSize: 0,
         existingShapesLength: existingShapes.length,
         renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
       });
       const fallbackShapes = existingShapes.map(s => normalizeShape(s, null)).filter(Boolean);
-      
+
       // targetId でフィルタ（showAllPaint考慮）
       if (showAllPaint) return fallbackShapes;
       const targetId = renderTargetCommentId ? String(renderTargetCommentId) : '';
@@ -348,7 +349,20 @@ const ViewerCanvas = forwardRef(({
       afterSamples: afterSampleCids.join(','),
     });
 
-    return filtered;
+    // ★★★ FIX-4: 描画前にidでdedupe（重複key警告の根本対策） ★★★
+    const dedupedMap = new Map();
+    filtered.forEach(shape => {
+      if (!shape.id) {
+        console.warn('[renderedShapes] Shape without id found:', shape);
+        return; // idが無いshapeは除外
+      }
+      if (dedupedMap.has(shape.id)) {
+        console.warn('[renderedShapes] Duplicate shape id found, overwriting:', shape.id);
+      }
+      dedupedMap.set(shape.id, shape);
+    });
+
+    return Array.from(dedupedMap.values());
   }, [shapesVersion, showAllPaint, renderTargetCommentId, currentShape, existingShapes]);
   
   // ★ CRITICAL: activeShapes を existingShapes から抽出（comment_id統一判定）
@@ -620,15 +634,10 @@ const ViewerCanvas = forwardRef(({
         return;
       }
       
-      // transitionなし、かつMapが空でない → クリア
-      if (prevMapSize > 0) {
-        console.log('[FIX-3] SYNC: empty confirmed (same ctx), Map cleared', { ctx, prevMapSize });
-        shapesMapRef.current = new Map();
-        bump();
-        return;
-      }
-      
-      console.log('[FIX-3] SYNC SKIP: Map already empty', { ctx });
+      // ★★★ FIX-4: transition完了後の空配列は常にMapをクリア ★★★
+      console.log('[FIX-3] SYNC: empty confirmed (same ctx), Map cleared', { ctx, prevMapSize });
+      shapesMapRef.current = new Map();
+      bump();
       return;
     }
 
@@ -2502,7 +2511,7 @@ const ViewerCanvas = forwardRef(({
         const p1 = denormalizeCoords(shape.nx, shape.ny);
         const p2 = denormalizeCoords(shape.nx + shape.nw, shape.ny + shape.nh);
         const elements = [
-          <Rect key={shape.id} {...commonProps} x={p1.x} y={p1.y} width={p2.x - p1.x} height={p2.y - p1.y} fill={undefined} hitStrokeWidth={Math.max(10, (shape.strokeWidth || 2) * 3)} />
+          <Rect {...commonProps} key={shape.id} x={p1.x} y={p1.y} width={p2.x - p1.x} height={p2.y - p1.y} fill={undefined} hitStrokeWidth={Math.max(10, (shape.strokeWidth || 2) * 3)} />
         ];
         if (boundingBox) {
           elements.push(<Rect key={`bbox-${shape.id}`} x={boundingBox.x} y={boundingBox.y} width={boundingBox.width} height={boundingBox.height} stroke="rgba(255,0,0,0.3)" strokeWidth={1} dash={[5,5]} fill={undefined} listening={false} />);
@@ -2521,7 +2530,7 @@ const ViewerCanvas = forwardRef(({
         if (shape.nx !== undefined) {
         const center = denormalizeCoords(shape.nx, shape.ny);
         const elements = [
-          <Circle key={shape.id} {...commonProps} x={center.x} y={center.y} radius={shape.nr * bgSize.width} fill={undefined} hitStrokeWidth={Math.max(10, (shape.strokeWidth || 2) * 3)} />
+          <Circle {...commonProps} key={shape.id} x={center.x} y={center.y} radius={shape.nr * bgSize.width} fill={undefined} hitStrokeWidth={Math.max(10, (shape.strokeWidth || 2) * 3)} />
         ];
         if (boundingBox) {
           elements.push(<Rect key={`bbox-${shape.id}`} x={boundingBox.x} y={boundingBox.y} width={boundingBox.width} height={boundingBox.height} stroke="rgba(255,0,0,0.3)" strokeWidth={1} dash={[5,5]} fill={undefined} listening={false} />);
@@ -2531,7 +2540,7 @@ const ViewerCanvas = forwardRef(({
 
         // 描画中の一時データ（nxがない場合のみ - 保存後は存在しないはず）
         if (shape.x !== undefined && shape.radius !== undefined) {
-        return <Circle {...commonProps} x={shape.x} y={shape.y} radius={shape.radius} fill={undefined} hitStrokeWidth={Math.max(10, (shape.strokeWidth || 2) * 3)} />;
+        return <Circle {...commonProps} key={shape.id} x={shape.x} y={shape.y} radius={shape.radius} fill={undefined} hitStrokeWidth={Math.max(10, (shape.strokeWidth || 2) * 3)} />;
         }
 
         return null;
