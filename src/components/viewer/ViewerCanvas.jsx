@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useImperativeHandle, forwardRef, useMemo } from 'react';
 import { Stage, Layer, Line, Rect, Circle, Arrow, Image as KonvaImage, Group, Transformer, Text } from 'react-konva';
 import useImage from 'use-image';
 
@@ -447,13 +447,13 @@ const ViewerCanvas = forwardRef(({
     draftCommentIdRef.current = null;
   }, [activeCommentId]);
 
-  // ★★★ CRITICAL: canvasContextKey 変化時に Map を確実にクリア（Map残留根絶）★★★
-  useEffect(() => {
+  // ★★★ FIX-2: canvasContextKey 変化時に描画前Map確実クリア（useLayoutEffect）★★★
+  useLayoutEffect(() => {
     if (!canvasContextKey) return;
     
     const prev = prevCanvasContextKeyRef.current;
     if (prev !== canvasContextKey) {
-      console.log('[ViewerCanvas] CONTEXT CHANGED -> reset Map', {
+      console.log('[FIX-2] CTX CHANGED -> reset Map (layout)', {
         prev,
         next: canvasContextKey,
         prevMapSize: shapesMapRef.current.size,

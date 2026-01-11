@@ -148,6 +148,15 @@ function ShareViewContent() {
   const stablePaintContextIdRef = useRef(null); // A: 一瞬もnullにしない安定ID
   const lastMergedShapesRef = useRef([]); // D: チラつき防止用
   const debugLogBufferRef = useRef([]); // Debug: ログ保持用
+  const prevPaintContextIdForMergedRef = useRef(null); // FIX-3: lastMerged保持条件用
+  
+  // ★★★ FIX-4: addDebugLog を最優先定義（TDZ根絶）★★★
+  const addDebugLog = (msg) => {
+    debugLogBufferRef.current.push(`[${new Date().toISOString().substring(11, 23)}] ${msg}`);
+    if (debugLogBufferRef.current.length > 200) {
+      debugLogBufferRef.current.shift();
+    }
+  };
 
   // DEBUG: Trace ReviewComment.create calls
   useEffect(() => {
@@ -916,14 +925,6 @@ function ShareViewContent() {
   // CRITICAL: 送信ロック用ref（ShareView用）
   const submitLockRef = useRef(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  // ★★★ FIX-4: Debugコピー用 ring buffer（直近200件保持）★★★
-  const addDebugLog = (msg) => {
-    debugLogBufferRef.current.push(`[${new Date().toISOString().substring(11, 23)}] ${msg}`);
-    if (debugLogBufferRef.current.length > 200) {
-      debugLogBufferRef.current.shift();
-    }
-  };
 
   const handleSendComment = async () => {
     // CRITICAL: 同期的なロックチェック（最優先）
@@ -1628,12 +1629,15 @@ function ShareViewContent() {
     console.log('[shapesForCanvas]', resultLog);
     addDebugLog(`[shapesForCanvas] ${resultLog}`);
     
-    // ★★★ FIX-3: 遷移中で空なら前回値保持（チラつき防止）★★★
+    // ★★★ FIX-3: 遷移中で空なら前回値保持（同じpaintContextIdの時のみ）★★★
     if (isCanvasTransitioning && merged.length === 0 && lastMergedShapesRef.current.length > 0) {
-      addDebugLog(`[FIX-3] preserve ${lastMergedShapesRef.current.length} shapes (transitioning)`);
-      return lastMergedShapesRef.current;
+      if (paintContextId === prevPaintContextIdForMergedRef.current) {
+        addDebugLog(`[FIX-3] preserve ${lastMergedShapesRef.current.length} shapes (same ctx)`);
+        return lastMergedShapesRef.current;
+      }
     }
     
+    prevPaintContextIdForMergedRef.current = paintContextId;
     lastMergedShapesRef.current = merged;
     return merged;
   }, [allShapes, draftShapes, showAllPaint, paintContextId, shouldShowDraft, storageDraftReady, composerMode, tempCommentId, canvasReady]);
