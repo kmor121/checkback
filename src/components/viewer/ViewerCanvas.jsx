@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useRef, useImperativeHandle, forwardRef, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useImperativeHandle, forwardRef, useMemo, useCallback } from 'react';
 import { Stage, Layer, Line, Rect, Circle, Arrow, Image as KonvaImage, Group, Transformer, Text } from 'react-konva';
 import useImage from 'use-image';
 
@@ -820,10 +820,10 @@ const ViewerCanvas = forwardRef(({
   const viewY = offsetY + pan.y;
 
   // P2 FIX: 背景画像のロードが完了したときに呼ばれ、bgReadyフラグを立てる
-  const handleBgLoad = (size) => {
+  const handleBgLoad = useCallback((size) => {
     setBgSize(size);
     setBgReady(true);
-  };
+  }, []);
   
   // CRITICAL: パンは select ツール時のみ（描画ツールとの競合回避）
   const canPan = paintMode && tool === 'select' && zoom > 100;
