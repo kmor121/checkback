@@ -681,12 +681,24 @@ function ShareViewContent() {
     setIsDockOpen(true);
   };
   
-  // ★★★ B: 描画ツール使用時に最後のツールを記録（useEffect維持）★★★
+  // ★★★ FIX-1: paintMode/tool 不整合禁止（描画ツール記録のみ）★★★
   useEffect(() => {
     if (['pen', 'rect', 'circle', 'arrow', 'text'].includes(tool)) {
       lastDrawToolRef.current = tool;
+      addDebugLog(`[tool] recorded: ${tool}`);
     }
   }, [tool]);
+  
+  // ★★★ FIX-1: paintMode=true のとき tool='select' は禁止（強制矯正）★★★
+  useEffect(() => {
+    if (paintMode && tool === 'select') {
+      const drawTool = lastDrawToolRef.current || 'pen';
+      const log = `[FIX-1] tool='select' blocked in paintMode, forcing: ${drawTool}`;
+      console.warn(log);
+      addDebugLog(log);
+      setTool(drawTool);
+    }
+  }, [paintMode, tool]);
 
   const handleBeginPaint = () => {
     // ペイント開始時はコメントを作らず、セッション開始のみ
