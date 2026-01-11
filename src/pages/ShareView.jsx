@@ -326,7 +326,7 @@ function ShareViewContent() {
     console.log('[ShareView] Saved tempCommentId to localStorage:', tempCommentId);
   }, [shareLink?.file_id, tempCommentId]);
 
-  // ★★★ A: computed版（通常計算）★★★
+  // ★★★ FIX-2: computed版（通常計算）★★★
   const computedPaintContextId = React.useMemo(() => {
     if (showAllPaint) return null;
     
@@ -337,29 +337,35 @@ function ShareViewContent() {
     return null;
   }, [showAllPaint, composerMode, composerTargetCommentId, activeCommentId, tempCommentId]);
   
-  // ★★★ A: stable版（一瞬もnullにしない、前回値保持）★★★
+  // ★★★ FIX-2: stable版（一瞬もnullにしない、fileId変更時のみクリア）★★★
   const stablePaintContextId = React.useMemo(() => {
-    const prev = stablePaintContextIdRef.current;
+    const fileId = shareLink?.file_id || '';
+    const prevFileIdRef = stablePaintContextIdRef.current?.fileId || '';
+    const prev = stablePaintContextIdRef.current?.id || null;
     const computed = computedPaintContextId;
+    
+    // ファイル変更時は強制クリア
+    if (fileId && fileId !== prevFileIdRef) {
+      stablePaintContextIdRef.current = { fileId, id: null };
+      addDebugLog(`[FIX-2] file changed, stable cleared`);
+      return null;
+    }
     
     // computed有効値なら即座に更新
     if (computed) {
-      stablePaintContextIdRef.current = computed;
+      stablePaintContextIdRef.current = { fileId, id: computed };
       return computed;
     }
     
     // computed=nullでも前回値があれば保持（チラつき防止）
-    if (prev) {
-      const log = `[stablePaintContextId] preserve: ${prev.substring(0, 12)} (computed=null)`;
-      console.log(log);
-      debugLogBufferRef.current.push(log);
+    if (prev && fileId === prevFileIdRef) {
+      addDebugLog(`[FIX-2] stable preserve: ${prev.substring(0, 12)} (computed=null)`);
       return prev;
     }
     
     return null;
-  }, [computedPaintContextId]);
+  }, [computedPaintContextId, shareLink?.file_id]);
   
-  // ★★★ A: 以降は全てstablePaintContextIdを使用（computed不使用）★★★
   const paintContextId = stablePaintContextId;
 
   // ★★★ CRITICAL: renderTargetCommentId は paintContextId と完全同一（Single Source of Truth）★★★
@@ -595,9 +601,7 @@ function ShareViewContent() {
   }, [shareLink?.file_id]);
 
   const handlePaintModeChange = (mode) => {
-    const log = `[ShareView] paint request: mode=${mode} composerMode=${composerMode} activeCommentId=${activeCommentId?.substring(0, 12) || 'null'} tempCommentId=${tempCommentId?.substring(0, 12) || 'null'}`;
-    console.log(log);
-    debugLogBufferRef.current.push(log);
+    addDebugLog(`[paint] request: mode=${mode} composerMode=${composerMode} tool=${tool}`);
 
     if (!mode) {
       setPaintMode(false);
@@ -610,13 +614,12 @@ function ShareViewContent() {
       return;
     }
     
-    // ★★★ B: paint ON時は同一ハンドラ内で tool強制切替（useEffect任せ禁止）★★★
+    // ★★★ FIX-1: paint ON時に同期的にtool強制切替（レース防止）★★★
     const currentTool = tool;
-    if (currentTool === 'select' || !currentTool) {
-      const drawTool = lastDrawToolRef.current || 'pen';
+    const drawTool = (currentTool === 'select' || !currentTool) ? (lastDrawToolRef.current || 'pen') : currentTool;
+    if (drawTool !== currentTool) {
       setTool(drawTool);
-      console.log('[ShareView] B: tool forced to', drawTool);
-      debugLogBufferRef.current.push(`[B] tool forced: ${drawTool}`);
+      addDebugLog(`[FIX-1] tool forced: ${currentTool} → ${drawTool}`);
     }
 
     // 編集セッションか新規セッションかを判定
@@ -901,6 +904,14 @@ function ShareViewContent() {
   // CRITICAL: 送信ロック用ref（ShareView用）
   const submitLockRef = useRef(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // ★★★ FIX-4: Debugコピー用 ring buffer（直近200件保持）★★★
+  const addDebugLog = (msg) => {
+    debugLogBufferRef.current.push(`[${new Date().toISOString().substring(11, 23)}] ${msg}`);
+    if (debugLogBufferRef.current.length > 200) {
+      debugLogBufferRef.current.shift();
+    }
+  };
 
   const handleSendComment = async () => {
     // CRITICAL: 同期的なロックチェック（最優先）
@@ -1200,20 +1211,16 @@ function ShareViewContent() {
       return;
     }
 
-    // ★★★ C: paintMode中は自動OFF（exitEditModeは呼ばず、下書き削除しない）★★★
+    // ★★★ FIX-1/C: paintMode中は自動OFF（同時にtool='select'、下書き保持）★★★
     if (paintMode) {
-      const log = '[EXIT_DEBUG] selectComment: auto-OFF (draft preserved)';
-      console.log(log);
-      debugLogBufferRef.current.push(log);
+      addDebugLog(`[C] selectComment: auto-OFF paint (draft preserved)`);
       setPaintMode(false);
       setTool('select');
     }
 
-    // ★★★ C: 同じコメント再クリック → composerModeだけview（activeCommentIdは維持）★★★
+    // ★★★ C: 同じコメント再クリック → composerModeだけview（activeCommentId維持）★★★
     if (activeCommentId === comment.id) {
-      const log = '[EXIT_DEBUG] deselect same (activeCommentId preserved)';
-      console.log(log);
-      debugLogBufferRef.current.push(log);
+      addDebugLog(`[C] deselect same (activeCommentId preserved)`);
       setComposerMode('view');
       setComposerTargetCommentId(null);
       setComposerText('');
@@ -1249,22 +1256,21 @@ function ShareViewContent() {
       return;
     }
 
-    // ★★★ C: paintMode中は自動OFF（下書き削除しない）★★★
+    // ★★★ FIX-1/C: paintMode中は自動OFF（同時にtool='select'、下書き保持）★★★
     if (paintMode) {
-      const log = '[EXIT_DEBUG] enterEdit: auto-OFF (draft preserved)';
-      console.log(log);
-      debugLogBufferRef.current.push(log);
+      addDebugLog(`[C] enterEdit: auto-OFF paint (draft preserved)`);
       setPaintMode(false);
       setTool('select');
     }
 
-    // ★★★ A: ID確定→mode切替の順序保証（composerTargetCommentId先行）★★★
+    // ★★★ FIX-2/A: ID確定→mode切替の順序保証★★★
     setCurrentPage(comment.page_no);
+    setComposerTargetCommentId(comment.id); // 先にID確定
     setActiveCommentId(comment.id);
-    setComposerTargetCommentId(comment.id); // 先に確定
     setComposerText(comment.body || '');
-    setComposerMode('edit'); // 後でmode切替
+    setComposerMode('edit'); // 後にmode切替
     setIsDockOpen(true);
+    addDebugLog(`[A] enterEdit: targetId=${comment.id.substring(0, 12)} → mode=edit`);
 
     setPaintSessionCommentId(null);
     setDraftShapes([]);
@@ -1278,13 +1284,11 @@ function ShareViewContent() {
     enterEdit(comment);
   };
 
-  // ★★★ C: 編集モード解除の統一関数（明示キャンセル時のみ下書き削除）★★★
+  // ★★★ C: 編集モード解除（明示キャンセル時のみ下書き削除）★★★
   const exitEditMode = (reason = 'unknown') => {
-    const log = `[EXIT_DEBUG] exitEditMode: reason=${reason} mode=${composerMode} target=${composerTargetCommentId?.substring(0, 12) || 'null'}`;
-    console.log(log);
-    debugLogBufferRef.current.push(log);
+    addDebugLog(`[exitEditMode] reason=${reason} mode=${composerMode}`);
 
-    // ★★★ C: 明示キャンセル時のみ下書き削除（auto系では削除しない）★★★
+    // ★★★ C: 明示キャンセルのみ削除★★★
     const shouldDeleteDraft = ['cancel_button', 'cancel_x', 'clear_all'].includes(reason);
 
     if (shouldDeleteDraft && composerMode === 'edit' && composerTargetCommentId && shareLink?.file_id) {
@@ -1292,14 +1296,10 @@ function ShareViewContent() {
       if (editKey) {
         deleteDraft(editKey);
         draftCacheRef.current.delete(editKey);
-        const delLog = `[EXIT_DEBUG] Draft deleted: ${editKey.substring(0, 30)} reason=${reason}`;
-        console.log(delLog);
-        debugLogBufferRef.current.push(delLog);
+        addDebugLog(`[C] draft deleted: ${editKey.substring(0, 30)} reason=${reason}`);
       }
     } else {
-      const preserveLog = `[EXIT_DEBUG] Draft preserved: reason=${reason}`;
-      console.log(preserveLog);
-      debugLogBufferRef.current.push(preserveLog);
+      addDebugLog(`[C] draft preserved: reason=${reason}`);
     }
     
     // ViewerCanvasの描画をクリア
@@ -1372,11 +1372,9 @@ function ShareViewContent() {
       return;
     }
 
-    // ★★★ C: paintMode中は自動OFF（下書き削除しない）★★★
+    // ★★★ FIX-1/C: paintMode中は自動OFF（同時にtool='select'、下書き保持）★★★
     if (paintMode) {
-      const log = '[EXIT_DEBUG] handleStartReply: auto-OFF (draft preserved)';
-      console.log(log);
-      debugLogBufferRef.current.push(log);
+      addDebugLog(`[C] handleStartReply: auto-OFF paint (draft preserved)`);
       setPaintMode(false);
       setTool('select');
     }
@@ -1559,13 +1557,14 @@ function ShareViewContent() {
     return `${fileId}:${mode}:${scope}:${paintContextId || 'none'}:${showDraft}`;
   }, [shareLink?.file_id, showAllPaint, composerMode, draftScope, paintContextId, shouldShowDraft]);
   
-  // ★★★ D: Canvas遷移中フラグ（incoming empty時のMap保持用）★★★
+  // ★★★ FIX-3: Canvas遷移中フラグ（空を描かない）★★★
   const [contextSwitchingUntil, setContextSwitchingUntil] = useState(0);
-  const isCanvasTransitioning = shapesFetching || !storageDraftReady || Date.now() < contextSwitchingUntil;
+  const isCanvasTransitioning = shapesFetching || !shapesLoaded || !storageDraftReady || Date.now() < contextSwitchingUntil;
   
-  // ★★★ D: context切替時に200ms遷移期間を設定 ★★★
   useEffect(() => {
-    setContextSwitchingUntil(Date.now() + 200);
+    const until = Date.now() + 200;
+    setContextSwitchingUntil(until);
+    addDebugLog(`[FIX-3] ctx switch until +200ms`);
   }, [canvasInternalResetKey]);
 
   // ★★★ C: チラつき防止 - DB素材が読み込まれるまでドラフトを表示しない ★★★
@@ -1613,38 +1612,16 @@ function ShareViewContent() {
     const dbShapesWithoutDuplicates = dbShapesForView.filter(s => !draftIds.has(s.id));
     const merged = [...dbShapesWithoutDuplicates, ...draftShapesForView];
     
-    const resultLog = JSON.stringify({
-      paintContextId: paintContextId?.substring(0, 12) || 'null',
-      composerMode,
-      draftScope,
-      targetKey: targetKey?.substring(0, 30) || 'null',
-      isEditMode,
-      isNewMode,
-      shouldShowDraft,
-      showEditDraft,
-      showNewDraft,
-      shouldShowAnyDraft,
-      storageDraftReady,
-      hasCacheForKey,
-      canvasReady,
-      shapesLoaded,
-      dbCount: dbShapesForView.length,
-      draftCount: draftShapesForView.length,
-      mergedTotal: merged.length,
-      isTransitioning: isCanvasTransitioning,
-    });
-    console.log('[ShareView] shapesForCanvas result:', resultLog);
-    debugLogBufferRef.current.push(`[shapesForCanvas] ${resultLog}`);
+    const resultLog = `paintCtx=${paintContextId?.substring(0, 12) || 'null'} mode=${composerMode} db=${dbShapesForView.length} draft=${draftShapesForView.length} merged=${merged.length} trans=${isCanvasTransitioning}`;
+    console.log('[shapesForCanvas]', resultLog);
+    addDebugLog(`[shapesForCanvas] ${resultLog}`);
     
-    // ★★★ D: 遷移中で空の場合は前回値を保持（チラつき防止）★★★
+    // ★★★ FIX-3: 遷移中で空なら前回値保持（チラつき防止）★★★
     if (isCanvasTransitioning && merged.length === 0 && lastMergedShapesRef.current.length > 0) {
-      const preserveLog = `[D] preserve last merged: ${lastMergedShapesRef.current.length} (transitioning)`;
-      console.log(preserveLog);
-      debugLogBufferRef.current.push(preserveLog);
+      addDebugLog(`[FIX-3] preserve ${lastMergedShapesRef.current.length} shapes (transitioning)`);
       return lastMergedShapesRef.current;
     }
     
-    // 確定したら保存
     lastMergedShapesRef.current = merged;
     return merged;
   }, [allShapes, draftShapes, showAllPaint, paintContextId, shouldShowDraft, storageDraftReady, composerMode, tempCommentId, canvasReady]);
@@ -2010,14 +1987,15 @@ function ShareViewContent() {
               />
             )}
 
-            {/* Debugコピーボタン */}
-            {DEBUG_MODE && (
-              <div className="absolute top-4 left-4 z-50">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
+            {/* ★★★ FIX-4: Debugコピーボタン（必ず表示）★★★ */}
+            <div className="absolute top-4 left-4 z-50">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  try {
                     const debugData = {
+                      timestamp: new Date().toISOString(),
                       composerMode,
                       activeCommentId: activeCommentId?.substring(0, 12) || 'null',
                       composerTargetCommentId: composerTargetCommentId?.substring(0, 12) || 'null',
@@ -2034,18 +2012,24 @@ function ShareViewContent() {
                       dbShapesCount: paintShapes.length,
                       draftShapesCount: draftShapes.length,
                       mergedCount: shapesForCanvas.length,
-                      recentLogs: debugLogBufferRef.current.slice(-50),
+                      lastMergedCount: lastMergedShapesRef.current.length,
+                      recentLogs: debugLogBufferRef.current.slice(-100),
                     };
                     const text = JSON.stringify(debugData, null, 2);
-                    navigator.clipboard.writeText(text);
-                    showToast('Debug情報をコピーしました', 'success');
-                  }}
-                  className="text-xs"
-                >
-                  📋 Debug
-                </Button>
-              </div>
-            )}
+                    navigator.clipboard.writeText(text).then(() => {
+                      showToast('📋 Debug情報をコピーしました', 'success');
+                    }).catch(() => {
+                      prompt('Debug情報（コピーしてください）:', text);
+                    });
+                  } catch (e) {
+                    showToast('コピー失敗: ' + e.message, 'error');
+                  }
+                }}
+                className="text-xs bg-yellow-100 hover:bg-yellow-200 border-yellow-400"
+              >
+                📋 Debug
+              </Button>
+            </div>
             
             {/* ズーム制御 */}
             <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-2 flex items-center gap-2">

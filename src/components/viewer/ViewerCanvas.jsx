@@ -510,32 +510,21 @@ const ViewerCanvas = forwardRef(({
     const prevMapSize = shapesMapRef.current.size;
     const ctx = canvasContextKey || 'no-ctx';
 
-    // ★★★ D: incoming empty時の処理（遷移中はMap保持、確定時のみクリア）★★★
+    // ★★★ FIX-3: incoming empty時の処理（遷移中はMap保持）★★★
     if (incomingEmpty) {
       if (isCanvasTransitioning) {
-        console.log('[ViewerCanvas] FULL SYNC SKIPPED: incoming empty during transition (Map preserved)', {
-          ctx,
-          prevMapSize,
-          isCanvasTransitioning,
-        });
+        console.log('[FIX-3] SYNC SKIP: transitioning, Map preserved', { ctx, prevMapSize });
         return;
       }
       
       if (prevMapSize > 0) {
-        console.log('[ViewerCanvas] FULL SYNC: incoming empty, clearing Map', {
-          ctx,
-          prevMapSize,
-          isCanvasTransitioning,
-        });
+        console.log('[FIX-3] SYNC: empty confirmed, Map cleared', { ctx, prevMapSize });
         shapesMapRef.current = new Map();
         bump();
         return;
       }
       
-      console.log('[ViewerCanvas] FULL SYNC SKIPPED: incoming empty, Map already empty', {
-        ctx,
-        prevMapSize,
-      });
+      console.log('[FIX-3] SYNC SKIP: Map already empty', { ctx });
       return;
     }
 
@@ -1073,15 +1062,14 @@ const ViewerCanvas = forwardRef(({
       });
     }
 
-    // ★★★ B: tool='select'時は描画開始しない（明示ログ、常時出力）★★★
+    // ★★★ FIX-1: tool='select'時は描画開始しない（常時ログ）★★★
     if (tool === 'select') {
-      console.log('[ViewerCanvas] PointerDown blocked: tool=select', { paintMode, canDrawNew, draftReady });
+      console.warn('[FIX-1] PointerDown blocked: tool=select', { paintMode, canDrawNew, draftReady });
       return;
     }
     
-    // ★★★ CRITICAL: 描画開始は canDrawNew でOK（draftReady不要）★★★
     if (!canDrawNew && tool !== 'text') {
-      console.log('[ViewerCanvas] PointerDown blocked: canDrawNew=false', { paintMode, tool });
+      console.warn('[ViewerCanvas] PointerDown blocked: canDrawNew=false', { paintMode, tool });
       return;
     }
 
