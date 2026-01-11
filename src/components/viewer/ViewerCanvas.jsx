@@ -140,8 +140,6 @@ const ViewerCanvas = forwardRef(({
   const isInteractingRef = useRef(false); // ★ B) 操作中はtrue（drag/transform）
   const pendingIncomingShapesRef = useRef(null); // ★ B) 操作中に保留された外部Shapes
   const isDraggingRef = useRef(false); // CRITICAL: ドラッグ中フラグ（残像防止）
-  const isInteractingRef = useRef(false); // ★ ドラッグ/変形中フラグ
-  const pendingIncomingShapesRef = useRef(null); // ★ 操作中に保留された外部Shapes
   const dragRafRef = useRef(null); // RAF間引き用
   const pendingDragRef = useRef(null); // ドラッグ座標バッファ
   
