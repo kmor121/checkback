@@ -1361,9 +1361,22 @@ function ShareViewContent() {
     setIsDockOpen(true);
     addDebugLog(`[A] enterEdit: targetId=${comment.id.substring(0, 12)} → mode=edit`);
 
+    // ★★★ P1-seed FIX: 編集開始時に対象コメントのDB shapesをドラフトにseed ★★★
+    // DBからフェッチ済みの全シェイプから、このコメントのシェイプのみを抽出
+    // resolveCommentId を使用して型ブレを考慮した比較を行う
+    const shapesToSeed = allShapes.filter(s => resolveCommentId(s) === String(comment.id));
+    
+    // draftShapes にコピーし、既存ドラフトとして扱う
+    setDraftShapes(shapesToSeed);
+    draftShapesRef.current = shapesToSeed;
+    
+    // キャッシュにも即座に反映 (targetKey は composerTargetCommentId に確定済み)
+    const editDraftKey = getDraftKey(shareLink.file_id, comment.id, null, 'edit');
+    draftCacheRef.current.set(editDraftKey, shapesToSeed);
+
+    addDebugLog(`[P1-seed] Seeded ${shapesToSeed.length} shapes to draft for comment ${comment.id.substring(0, 12)}`);
+
     setPaintSessionCommentId(null);
-    setDraftShapes([]);
-    draftShapesRef.current = [];
     
     hydratedKeyRef.current = null;
     setHydratedKeyState(null);
@@ -1706,9 +1719,12 @@ function ShareViewContent() {
     const draftShapesNormalized = draftShapes.map(s => normalizeShape(s, tempCommentId)).filter(Boolean);
     
     // ★★★ FIX-2: DB shapes を常にベースにする（DB優先、merged≥dbを保証）★★★
-    const dbShapesForView = showAllPaint
-      ? allShapesNormalized
-      : (paintContextId ? allShapesNormalized.filter(s => resolveCommentId(s) === paintContextId) : []);
+    // ★★★ P1 FIX: edit/new 中はDB shapesを混ぜない（ドラフト単一ソース）★★★
+    const dbShapesForView = (isEditMode || isNewMode)
+      ? []
+      : (showAllPaint
+        ? allShapesNormalized
+        : (paintContextId ? allShapesNormalized.filter(s => resolveCommentId(s) === paintContextId) : []));
     
     // ★★★ FIX-DELETE: 削除済みshapeを除外（復活防止）★★★
     const dbShapesFiltered = dbShapesForView.filter(s => !deletedShapeIdsRef.current.has(s.id));
