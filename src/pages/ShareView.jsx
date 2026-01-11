@@ -374,6 +374,12 @@ function ShareViewContent() {
   const storageDraftReady = !!(hydratedKeyState); // Ready when hydrate completes
   const shouldShowDraft = (isEditMode || isNewMode) && storageDraftReady;
 
+  // ★★★ CRITICAL: Draft state logic moved here to resolve TDZ
+  const hydratedKeyRef = useRef(null);
+  const [hydratedKeyState, setHydratedKeyState] = useState(null);
+  const storageDraftReady = !!(hydratedKeyState); // Ready when hydrate completes
+  const shouldShowDraft = (isEditMode || isNewMode) && storageDraftReady;
+
   // ★★★ FIX-2: computed版（通常計算）- Original logic restored
   const computedPaintContextId = React.useMemo(() => {
     if (showAllPaint) return null;
