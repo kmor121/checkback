@@ -1042,6 +1042,9 @@ function ShareViewContent() {
         try {
           const existingPaintShapes = await base44.entities.PaintShape.filter({
             comment_id: composerTargetCommentId,
+            // 安全のため絞り込み
+            share_token: token,
+            file_id: shareLink.file_id,
           });
 
           if (existingPaintShapes && existingPaintShapes.length > 0) {
