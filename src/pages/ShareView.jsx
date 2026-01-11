@@ -356,7 +356,6 @@ function ShareViewContent() {
     // ファイル変更時は強制クリア
     if (fileId && fileId !== prevFileIdRef) {
       stablePaintContextIdRef.current = { fileId, id: null };
-      addDebugLog(`[FIX-2] file changed, stable cleared`);
       return null;
     }
     
@@ -368,7 +367,6 @@ function ShareViewContent() {
     
     // computed=nullでも前回値があれば保持（チラつき防止）
     if (prev && fileId === prevFileIdRef) {
-      addDebugLog(`[FIX-2] stable preserve: ${prev.substring(0, 12)} (computed=null)`);
       return prev;
     }
     
@@ -690,24 +688,13 @@ function ShareViewContent() {
     setIsDockOpen(true);
   };
   
-  // ★★★ FIX-1: paintMode/tool 不整合禁止（描画ツール記録のみ）★★★
+  // ★★★ FIX-1: 描画ツール記録のみ（select禁止は削除）★★★
   useEffect(() => {
     if (['pen', 'rect', 'circle', 'arrow', 'text'].includes(tool)) {
       lastDrawToolRef.current = tool;
       addDebugLog(`[tool] recorded: ${tool}`);
     }
   }, [tool]);
-  
-  // ★★★ FIX-1: paintMode=true のとき tool='select' は禁止（強制矯正）★★★
-  useEffect(() => {
-    if (paintMode && tool === 'select') {
-      const drawTool = lastDrawToolRef.current || 'pen';
-      const log = `[FIX-1] tool='select' blocked in paintMode, forcing: ${drawTool}`;
-      console.warn(log);
-      addDebugLog(log);
-      setTool(drawTool);
-    }
-  }, [paintMode, tool]);
 
   const handleBeginPaint = () => {
     // ペイント開始時はコメントを作らず、セッション開始のみ
@@ -1570,9 +1557,9 @@ function ShareViewContent() {
     return `${fileId}:${mode}:${scope}:${paintContextId || 'none'}:${showDraft}`;
   }, [shareLink?.file_id, showAllPaint, composerMode, draftScope, paintContextId, shouldShowDraft]);
   
-  // ★★★ FIX-3: Canvas遷移中フラグ（空を描かない）★★★
+  // ★★★ FIX-3: Canvas遷移中フラグ（DBロード中心、view時はdraftReady不使用）★★★
   const [contextSwitchingUntil, setContextSwitchingUntil] = useState(0);
-  const isCanvasTransitioning = shapesFetching || !shapesLoaded || !storageDraftReady || Date.now() < contextSwitchingUntil;
+  const isCanvasTransitioning = shapesFetching || !shapesLoaded || Date.now() < contextSwitchingUntil;
   
   useEffect(() => {
     const until = Date.now() + 200;
@@ -1605,14 +1592,14 @@ function ShareViewContent() {
     // ★★★ CRITICAL: draftShapes を正規化（defaultCommentId=tempCommentId）★★★
     const draftShapesNormalized = draftShapes.map(s => normalizeShape(s, tempCommentId)).filter(Boolean);
     
-    // ★★★ CRITICAL: DB/draft両方とも paintContextId で統一（Single Source of Truth）★★★
+    // ★★★ FIX-2: DB shapes を常にベースにする（DB優先、merged≥dbを保証）★★★
     const dbShapesForView = showAllPaint
       ? allShapesNormalized
       : (paintContextId ? allShapesNormalized.filter(s => resolveCommentId(s) === paintContextId) : []);
     
-    // ★★★ CRITICAL: edit/new 下書き表示条件（boolean完全統一、ID明確化）★★★
-    const showEditDraft = !!(canvasReady && isEditMode && storageDraftReady);
-    const showNewDraft = !!(canvasReady && isNewMode && storageDraftReady);
+    // ★★★ FIX-2/4: 下書き表示条件（素材ロード後のみ、viewではdraft不使用）★★★
+    const showEditDraft = !!(shapesLoaded && isEditMode && storageDraftReady);
+    const showNewDraft = !!(shapesLoaded && isNewMode && storageDraftReady);
     const shouldShowAnyDraft = showEditDraft || showNewDraft;
     const filterIdForDraft = isEditMode ? String(composerTargetCommentId) : (isNewMode ? String(tempCommentId) : null);
     
@@ -1620,7 +1607,7 @@ function ShareViewContent() {
       ? draftShapesNormalized.filter(s => String(resolveCommentId(s) || '') === filterIdForDraft)
       : [];
     
-    // ★★★ CRITICAL: DB + draft を合流（重複除去、draftが優先）★★★
+    // ★★★ FIX-2: DB優先マージ（DBを消さない、draftで上書きのみ）★★★
     const draftIds = new Set(draftShapesForView.map(s => s.id));
     const dbShapesWithoutDuplicates = dbShapesForView.filter(s => !draftIds.has(s.id));
     const merged = [...dbShapesWithoutDuplicates, ...draftShapesForView];
@@ -1628,6 +1615,17 @@ function ShareViewContent() {
     const resultLog = `paintCtx=${paintContextId?.substring(0, 12) || 'null'} mode=${composerMode} db=${dbShapesForView.length} draft=${draftShapesForView.length} merged=${merged.length} trans=${isCanvasTransitioning}`;
     console.log('[shapesForCanvas]', resultLog);
     addDebugLog(`[shapesForCanvas] ${resultLog}`);
+    
+    // ★★★ FIX-2: mergedがdbより少ないのは異常（DBを消さない保証）★★★
+    if (merged.length < dbShapesForView.length) {
+      console.error('[FIX-2] merged < db detected, returning db only:', {
+        merged: merged.length,
+        db: dbShapesForView.length,
+        draft: draftShapesForView.length,
+      });
+      addDebugLog(`[FIX-2] ERROR: merged < db, using db only`);
+      return dbShapesForView;
+    }
     
     // ★★★ FIX-3: 遷移中で空なら前回値保持（同じpaintContextIdの時のみ）★★★
     if (isCanvasTransitioning && merged.length === 0 && lastMergedShapesRef.current.length > 0) {
@@ -2003,49 +2001,62 @@ function ShareViewContent() {
               />
             )}
 
-            {/* ★★★ FIX-4: Debugコピーボタン（必ず表示）★★★ */}
-            <div className="absolute top-4 left-4 z-50">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  try {
-                    const debugData = {
-                      timestamp: new Date().toISOString(),
-                      composerMode,
-                      activeCommentId: activeCommentId?.substring(0, 12) || 'null',
-                      composerTargetCommentId: composerTargetCommentId?.substring(0, 12) || 'null',
-                      tempCommentId: tempCommentId?.substring(0, 12) || 'null',
-                      computedPaintContextId: computedPaintContextId?.substring(0, 12) || 'null',
-                      stablePaintContextId: stablePaintContextId?.substring(0, 12) || 'null',
-                      targetKey: targetKey?.substring(0, 30) || 'null',
-                      paintMode,
-                      tool,
-                      shapesFetching,
-                      shapesLoaded,
-                      isCanvasTransitioning,
-                      storageDraftReady,
-                      dbShapesCount: paintShapes.length,
-                      draftShapesCount: draftShapes.length,
-                      mergedCount: shapesForCanvas.length,
-                      lastMergedCount: lastMergedShapesRef.current.length,
-                      recentLogs: debugLogBufferRef.current.slice(-100),
-                    };
-                    const text = JSON.stringify(debugData, null, 2);
-                    navigator.clipboard.writeText(text).then(() => {
-                      showToast('📋 Debug情報をコピーしました', 'success');
-                    }).catch(() => {
-                      prompt('Debug情報（コピーしてください）:', text);
-                    });
-                  } catch (e) {
-                    showToast('コピー失敗: ' + e.message, 'error');
-                  }
-                }}
-                className="text-xs bg-yellow-100 hover:bg-yellow-200 border-yellow-400"
-              >
-                📋 Debug
-              </Button>
-            </div>
+            {/* ★★★ FIX-5: Debugコピーボタン（?debug=1 or 常時表示）★★★ */}
+            {(DEBUG_MODE || params.get('debug') === '1') && (
+              <div className="absolute top-4 right-12 z-[9999]" style={{ position: 'fixed', top: '12px', right: '12px' }}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    try {
+                      const debugData = {
+                        timestamp: new Date().toISOString(),
+                        composerMode,
+                        activeCommentId: activeCommentId?.substring(0, 12) || 'null',
+                        composerTargetCommentId: composerTargetCommentId?.substring(0, 12) || 'null',
+                        tempCommentId: tempCommentId?.substring(0, 12) || 'null',
+                        computedPaintContextId: computedPaintContextId?.substring(0, 12) || 'null',
+                        stablePaintContextId: stablePaintContextId?.substring(0, 12) || 'null',
+                        targetKey: targetKey?.substring(0, 40) || 'null',
+                        paintMode,
+                        tool,
+                        shapesFetching,
+                        shapesLoaded,
+                        isCanvasTransitioning,
+                        storageDraftReady,
+                        dbShapesCount: paintShapes.length,
+                        draftShapesCount: draftShapes.length,
+                        mergedCount: shapesForCanvas.length,
+                        lastMergedCount: lastMergedShapesRef.current.length,
+                        recentLogs: debugLogBufferRef.current.slice(-100),
+                      };
+                      const text = JSON.stringify(debugData, null, 2);
+                      
+                      if (navigator.clipboard) {
+                        navigator.clipboard.writeText(text).then(() => {
+                          showToast('📋 Debug情報をコピーしました', 'success');
+                        }).catch((err) => {
+                          // clipboard失敗時はtextareaモーダル表示
+                          const textarea = document.createElement('textarea');
+                          textarea.value = text;
+                          textarea.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:80%;height:60%;z-index:99999;padding:20px;font-family:monospace;font-size:12px;';
+                          document.body.appendChild(textarea);
+                          textarea.select();
+                          setTimeout(() => textarea.remove(), 30000);
+                        });
+                      } else {
+                        alert('Debug情報:\n\n' + text.substring(0, 1000) + '\n\n...(省略)');
+                      }
+                    } catch (e) {
+                      showToast('コピー失敗: ' + e.message, 'error');
+                    }
+                  }}
+                  className="text-xs bg-yellow-100 hover:bg-yellow-200 border-yellow-400 shadow-lg"
+                >
+                  📋 Debug
+                </Button>
+              </div>
+            )}
             
             {/* ズーム制御 */}
             <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-2 flex items-center gap-2">

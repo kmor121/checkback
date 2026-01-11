@@ -229,23 +229,22 @@ const ViewerCanvas = forwardRef(({
   // ★★★ A: draftCommentIdRef.currentではなく、propsのdraftCommentIdを優先 ★★★
   const effectiveActiveId = activeCommentId ?? draftCommentId ?? draftCommentIdRef.current ?? null;
 
-  // ★★★ CRITICAL: 新規描画と既存編集を分離、paintMode OFF時は完全無効化 ★★★
-  const canDrawNew = !!paintMode;                      // 新規描画開始は paintMode だけでOK
-  const canCommitNew = !!paintMode;                    // ★ NEW: 新規shape確定もpaintModeだけでOK（draftReady不要）
-  const canMutateExisting = !!paintMode && !!draftReady;  // 既存shapeの編集/削除は draftReady 必須
-  const canEdit = canMutateExisting && isEditMode;     // 後方互換用エイリアス
-  const canSelect = !!paintMode && canEdit;            // ★ CRITICAL: paintMode必須化
-  const canDeleteExisting = canMutateExisting && isEditMode;  // ★ NEW: 削除は既存shape編集と同じ条件
+  // ★★★ FIX-1: tool分離（selectツール許可、権限フラグ再定義）★★★
+  const isSelectTool = tool === 'select';
+  const canDrawNew = paintMode && !isSelectTool;           // 新規描画：paintMode && 描画ツール
+  const canCommitNew = paintMode && !isSelectTool;         // 新規確定：paintMode && 描画ツール
+  const canSelectExisting = paintMode && isSelectTool;     // 既存選択：paintMode && selectツール
+  const canMutateExisting = paintMode && draftReady && isSelectTool;  // 既存編集：paintMode && draftReady && selectツール
+  const canEdit = canMutateExisting;                       // 後方互換
+  const canDeleteExisting = canMutateExisting;             // 削除：既存編集と同条件
   
   // ★★★ NEW: 削除専用フラグ（paintMode不問、targetIdがあれば削除可能）★★★
   const targetIdForDelete = effectiveActiveId != null ? String(effectiveActiveId) : '';
   const canEditPaint = targetIdForDelete !== '';  // 削除操作の可否
 
-  // ★★★ CRITICAL: 選択可能性（paintMode && canEdit && selectツール && commentId一致）★★★
+  // ★★★ FIX-1: 選択可能性（paintMode && selectツール && commentId一致）★★★
   const isSelectableShape = (shape) => {
-    if (!paintMode) return false;  // ★ CRITICAL: paintMode OFF時は選択不可
-    if (!canEdit) return false;
-    if (tool !== 'select') return false;
+    if (!canSelectExisting) return false;  // paintMode && selectツール
     if (effectiveActiveId == null) return false;
     return sameId(shapeCommentId(shape), effectiveActiveId);
   };
@@ -1062,9 +1061,8 @@ const ViewerCanvas = forwardRef(({
       });
     }
 
-    // ★★★ FIX-1: tool='select'時は描画開始しない（常時ログ）★★★
-    if (tool === 'select') {
-      console.warn('[FIX-1] PointerDown blocked: tool=select', { paintMode, canDrawNew, draftReady });
+    // ★★★ FIX-1: selectツール時は描画開始しない（選択判定は別処理）★★★
+    if (isSelectTool) {
       return;
     }
     
