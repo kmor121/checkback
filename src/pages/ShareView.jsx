@@ -699,17 +699,18 @@ function ShareViewContent() {
       setPaintSessionCommentId(composerTargetCommentId);
       setActiveCommentId(composerTargetCommentId);
       
-      const shapesToSeed = allShapes.filter(s => resolveCommentId(s) === String(comment.id));
+      // ★★★ FIX: comment → editingComment （未定義参照を修正）★★★
+      const shapesToSeed = allShapes.filter(s => resolveCommentId(s) === String(editingComment.id));
 
       // draftShapes にコピーし、既存ドラフトとして扱う
       setDraftShapes(shapesToSeed);
       draftShapesRef.current = shapesToSeed;
 
       // キャッシュにも即座に反映 (targetKey は composerTargetCommentId に確定済み)
-      const editDraftKey = getDraftKey(shareLink.file_id, comment.id, null, 'edit');
+      const editDraftKey = getDraftKey(shareLink.file_id, editingComment.id, null, 'edit');
       draftCacheRef.current.set(editDraftKey, shapesToSeed);
 
-      console.log(`[C-FIX] Seeded ${shapesToSeed.length} shapes to draft for comment ${comment.id.substring(0, 12)}`);
+      console.log(`[C-FIX] Seeded ${shapesToSeed.length} shapes to draft for comment ${editingComment.id.substring(0, 12)}`);
 
       setPaintSessionCommentId(null);
 
