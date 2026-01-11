@@ -530,14 +530,14 @@ function ShareViewContent() {
     const normalizedShapes = shapes.map(s => normalizeShape(s, normalizeCtxId)).filter(Boolean);
     
     // ★★★ CRITICAL: hydrateは置換ではなくマージ（メモリ上の最新を優先）★★★
-    const currentInMemoryShapes = draftShapesRef.current || [];
+    const prevShapes = draftShapesRef.current || [];
     
     // localStorage由来のshapesをベースマップに
     const mergedMap = new Map();
     normalizedShapes.forEach(s => mergedMap.set(s.id, s));
 
     // メモリ上の最新shapesを上書きマージ（ユーザーの編集を優先）
-    currentInMemoryShapes.forEach(s => mergedMap.set(s.id, s));
+    prevShapes.forEach(s => mergedMap.set(s.id, s));
     
     const merged = Array.from(mergedMap.values());
     
