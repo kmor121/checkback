@@ -1738,9 +1738,9 @@ function ShareViewContent() {
     console.log('[shapesForCanvas]', resultLog);
     addDebugLog(`[shapesForCanvas] ${resultLog}`);
     
-    // ★★★ FIX-C: 遷移中で空なら前回値保持（ctx不問、opacity=0で隠す）★★★
-    if (isCanvasTransitioning && merged.length === 0 && lastMergedShapesRef.current.length > 0) {
-      addDebugLog(`[FIX-C] preserve ${lastMergedShapesRef.current.length} shapes (transitioning)`);
+    // ★★★ FIX-C: 遷移中で空なら前回値保持（同一コンテキスト内のみ）★★★
+    if (isCanvasTransitioning && merged.length === 0 && lastMergedShapesRef.current.length > 0 && prevPaintContextIdForMergedRef.current === paintContextId) {
+      addDebugLog(`[FIX-C] preserve ${lastMergedShapesRef.current.length} shapes (transitioning for same ctx)`);
       return lastMergedShapesRef.current;
     }
     

@@ -116,7 +116,7 @@ const ViewerCanvas = forwardRef(({
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [bgSize, setBgSize] = useState({ width: 800, height: 600 });
   const [error, setError] = useState(null);
-  const [shapesResolved, setShapesResolved] = useState(false);
+
   
   // 描画状態（CRITICAL: Map方式で置換禁止）
   const [isDrawing, setIsDrawing] = useState(false);
@@ -275,25 +275,8 @@ const ViewerCanvas = forwardRef(({
     // ★★★ CRITICAL: Map由来のshapes（shapesVersionで再計算トリガー）★★★
     const mapShapes = getAllShapes();
 
-    // ★★★ P2/P3: fallbackは「未解決」かつ「遷移中」のみ許可 ★★★
-    const shouldFallback = !shapesResolved && isCanvasTransitioning;
-    if (shouldFallback && mapShapes.length === 0 && existingShapes && existingShapes.length > 0) {
-      console.log('[renderedShapes] FALLBACK to existingShapes (PENDING):', {
-        mapSize: 0,
-        existingShapesLength: existingShapes.length,
-        renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
-      });
-      const fallbackShapes = existingShapes.map(s => normalizeShape(s, null)).filter(Boolean);
+    // Fallback logic removed. The parent component is now the single source of truth for shapes.
 
-      // targetId でフィルタ（showAllPaint考慮）
-      if (showAllPaint) return fallbackShapes;
-      const targetId = renderTargetCommentId ? String(renderTargetCommentId) : '';
-      if (targetId === '') return [];
-      return fallbackShapes.filter(s => {
-        const cid = resolveCommentId(s);
-        return cid != null && cid !== '' && cid === targetId;
-      });
-    }
 
     // ★★★ DEBUG: 計算開始時の状態を詳細ログ ★★★
     console.log('[renderedShapes] CALC START:', {
@@ -498,10 +481,10 @@ const ViewerCanvas = forwardRef(({
       // ★ CRITICAL: Mapは即クリアせず、pendingCtxをセット
       pendingCtxRef.current = canvasContextKey;
       prevCanvasContextKeyRef.current = canvasContextKey;
-      setShapesResolved(false); // ★★★ P3: データ未解決フラグ
+      
       // shapesMapRef.current = new Map(); 削除
       // bump(); 削除
-      setShapesResolved(false); // ★★★ P3: データ未解決フラグ
+      
       setSelectedId(null);
       setCurrentShape(null);
       setIsDrawing(false);
@@ -554,14 +537,11 @@ const ViewerCanvas = forwardRef(({
   useLayoutEffect(() => {
     if (!existingShapes) return;
 
-    // ★★★ P3: データ到着（0件でも）した時点で解決済とする ★★★
-    setShapesResolved(true);
+    
 
-    // ★★★ P3: データ到着（0件でも）した時点で解決済とする ★★★
-    setShapesResolved(true);
+    
 
-    // ★★★ P3: データ到着（0件でも）した時点で解決済とする ★★★
-    setShapesResolved(true);
+    
 
     const incomingEmpty = existingShapes.length === 0;
     const prevMapSize = shapesMapRef.current.size;
