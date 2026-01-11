@@ -116,6 +116,7 @@ const ViewerCanvas = forwardRef(({
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [bgSize, setBgSize] = useState({ width: 800, height: 600 });
   const [error, setError] = useState(null);
+  const [bgReady, setBgReady] = useState(false); // P2 FIX: 背景ロード完了フラグ
 
   
   // 描画状態（CRITICAL: Map方式で置換禁止）
@@ -457,6 +458,7 @@ const ViewerCanvas = forwardRef(({
     setUndoStack([]);
     setRedoStack([]);
     setPan({ x: 0, y: 0 });
+    setBgReady(false); // P2 FIX: Reset background ready state
   }, [fileIdentity, pageNumber]);
 
   // zoom変更時はpanのクランプのみ（shapesは触らない）
@@ -576,12 +578,22 @@ const ViewerCanvas = forwardRef(({
 
     // ★★★ 同一ctx（!isPending）での処理 ★★★
     if (incomingEmpty) {
-      // transition中は保持
-      if (isCanvasTransitioning) {
-        console.log('[FIX-3] SYNC SKIP: transitioning (same ctx), Map preserved', { ctx, prevMapSize });
-        return;
+      // P1 FIX: 描画がないコメントを選択した場合（renderTargetCommentId があり、existingShapes が空）、
+      // 遷移中であっても即座にCanvasをクリアする。これが描画混入の根本対策。
+      if (renderTargetCommentId) {
+          console.log('[P1 FIX] Empty shapes for a specific comment confirmed. Clearing map.', { ctx, prevMapSize, renderTargetCommentId: renderTargetCommentId.substring(0,12) });
+          shapesMapRef.current = new Map();
+          bump();
+          return;
       }
-      
+
+      // 既存のロジック：描画がないコメント選択以外のケース（例：初回ロードなど）
+      // 遷移中はMapを保持してちらつきを防ぐ
+      if (isCanvasTransitioning) {
+          console.log('[FIX-3] SYNC SKIP: transitioning (same ctx), Map preserved', { ctx, prevMapSize });
+          return;
+      }
+    
       // ★★★ FIX-4: transition完了後の空配列は常にMapをクリア ★★★
       console.log('[FIX-3] SYNC: empty confirmed (same ctx), Map cleared', { ctx, prevMapSize });
       shapesMapRef.current = new Map();
@@ -806,6 +818,12 @@ const ViewerCanvas = forwardRef(({
   // 実際の表示位置（パンを考慮）
   const viewX = offsetX + pan.x;
   const viewY = offsetY + pan.y;
+
+  // P2 FIX: Handle background image load
+  const handleBgLoad = (size) => {
+    setBgSize(size);
+    setBgReady(true);
+  };
   
   // CRITICAL: パンは select ツール時のみ（描画ツールとの競合回避）
   const canPan = paintMode && tool === 'select' && zoom > 100;
@@ -2919,13 +2937,14 @@ const ViewerCanvas = forwardRef(({
             scaleY={contentScale}
           >
             {isImage && stableFileUrlRef.current && (
-              <BackgroundImage src={stableFileUrlRef.current} onLoad={setBgSize} />
+              <BackgroundImage src={stableFileUrlRef.current} onLoad={handleBgLoad} />
             )}
           </Group>
         </Layer>
 
         {/* 注釈Layer（contentGroup内に配置） */}
-        <Layer>
+        {/* P2 FIX: 背景ロード完了まで描画レイヤーを非表示 */}
+        <Layer visible={bgReady}>
           <Group
             ref={contentGroupRef}
             x={viewX}

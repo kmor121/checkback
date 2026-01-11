@@ -1738,11 +1738,8 @@ function ShareViewContent() {
     console.log('[shapesForCanvas]', resultLog);
     addDebugLog(`[shapesForCanvas] ${resultLog}`);
     
-    // ★★★ FIX-C: 遷移中で空なら前回値保持（同一コンテキスト内のみ）★★★
-    if (isCanvasTransitioning && merged.length === 0 && lastMergedShapesRef.current.length > 0 && prevPaintContextIdForMergedRef.current === paintContextId) {
-      addDebugLog(`[FIX-C] preserve ${lastMergedShapesRef.current.length} shapes (transitioning for same ctx)`);
-      return lastMergedShapesRef.current;
-    }
+    // P1 FIX: 描画混入の直接原因であるため、このブロックを削除。
+    // これにより、描画がないコメントを選択した際に、古い描画が返されることがなくなります。
     
     prevPaintContextIdForMergedRef.current = paintContextId;
     lastMergedShapesRef.current = merged;
