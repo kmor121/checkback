@@ -1228,6 +1228,9 @@ function ShareViewContent() {
       // ★★★ FIX-DELETE: 削除IDセットをクリア（送信完了で復活許可）★★★
       deletedShapeIdsRef.current.clear();
       
+      // ★★★ P2: 送信完了時に showAllPaint=false をセット（安全性向上）★★★
+      setShowAllPaint(false);
+      
       // ★★★ FIX-B: スコープ別クリア（edit送信時は新規下書きを壊さない）★★★
       setComposerText('');
       
@@ -1309,6 +1312,8 @@ function ShareViewContent() {
     setActiveCommentId(comment.id);
     setPaintSessionCommentId(null);
     setIsDockOpen(true);
+    // ★★★ P1 FIX: コメント選択時は showAllPaint=false にする（前コメントの描画消失対策）★★★
+    setShowAllPaint(false);
 
     // ★★★ CRITICAL: 既存コメント選択時は view 状態に（"新規作成中"バッジ防止）★★★
     setComposerMode('view');
