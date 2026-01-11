@@ -529,15 +529,17 @@ function ShareViewContent() {
     const normalizeCtxId = (draftScope === 'edit') ? paintContextId : tempCommentId;
     const normalizedShapes = shapes.map(s => normalizeShape(s, normalizeCtxId)).filter(Boolean);
     
-    // ★★★ CRITICAL: hydrateは置換ではなくマージ（draftReady前の描画を消さない）★★★
-    const prevShapes = draftShapesRef.current || [];
-    const prevIds = new Set(prevShapes.map(s => s.id));
-    const loadedIds = new Set(normalizedShapes.map(s => s.id));
+    // ★★★ CRITICAL: hydrateは置換ではなくマージ（メモリ上の最新を優先）★★★
+    const currentInMemoryShapes = draftShapesRef.current || [];
     
-    // prevにあってloadedに無い → 保持（draftReady前の新規描画）
-    const prevOnlyShapes = prevShapes.filter(s => !loadedIds.has(s.id));
-    // loadedにある → 採用（hydrate内容で上書き）
-    const merged = [...normalizedShapes, ...prevOnlyShapes];
+    // localStorage由来のshapesをベースマップに
+    const mergedMap = new Map();
+    normalizedShapes.forEach(s => mergedMap.set(s.id, s));
+
+    // メモリ上の最新shapesを上書きマージ（ユーザーの編集を優先）
+    currentInMemoryShapes.forEach(s => mergedMap.set(s.id, s));
+    
+    const merged = Array.from(mergedMap.values());
     
     // ★★★ P1: キャッシュに保存 ★★★
     draftCacheRef.current.set(targetKey, merged);
