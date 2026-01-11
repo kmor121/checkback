@@ -608,9 +608,11 @@ const ViewerCanvas = forwardRef(({
       }
     
       // ★★★ FIX-4: transition完了後の空配列は常にMapをクリア ★★★
-      console.log('[FIX-3] SYNC: empty confirmed (same ctx), Map cleared', { ctx, prevMapSize });
-      shapesMapRef.current = new Map();
-      bump();
+      if (prevMapSize > 0) {
+        console.log('[P1-FIX] SYNC: empty confirmed (same ctx), Map cleared', { ctx, prevMapSize });
+        shapesMapRef.current = new Map();
+        bump();
+      }
       return;
     }
 
