@@ -10,14 +10,37 @@
 
 ## 影響範囲
 <!-- どのページ/コンポーネントに影響があるか -->
-- [ ] ShareView
-- [ ] FileView
-- [ ] Projects
+- [ ] ShareView（ペイント機能・コメント機能）
+- [ ] FileView（ビューア機能）
+- [ ] Projects（プロジェクト管理）
 - [ ] その他: 
 
-## スモークテスト実施チェック
+---
 
-**⚠️ 必須**: [components/TEST_CHECKLIST.md](./TEST_CHECKLIST.md) を参照して該当項目をテストしてください。
+## ⚠️ スモークテスト実施（必須）
+
+**回帰防止のため、以下を必ず実施してください**：
+
+- [ ] **[components/TEST_CHECKLIST.md](./TEST_CHECKLIST.md) を1周実施した**
+- [ ] **失敗した項目があれば、再現手順と結果を下記に記載した**
+
+### スモークテスト結果
+<!-- 失敗した項目があれば、以下のフォーマットで記載してください -->
+<!-- 
+- テスト項目: B-1. リサイズ直後の巻き戻り確認
+- 結果: ❌ 失敗
+- 再現手順: 
+  1. 新規コメント作成モードでRect描画
+  2. Transformerでリサイズ
+  3. → 元のサイズに戻った（期待: 保持される）
+- 備考: ViewerCanvas.js の L1234 で merge ロジックが原因と思われる
+-->
+
+---
+
+## 詳細テストチェック（該当項目のみ）
+
+**⚠️ 以下は詳細版です。詳しい手順は [components/TEST_CHECKLIST.md](./TEST_CHECKLIST.md) を参照してください。**
 
 ### A. Canvas ちらつき対策
 - [ ] A-1. 初回表示でのちらつき確認
@@ -51,9 +74,11 @@
 - [ ] ErrorBoundary のエラー画面が表示されない
 - [ ] Console に CRITICAL ERROR が出ていない
 
+---
+
 ## レビュアーへの補足
 <!-- レビュー時に特に見てほしいポイントがあれば記載してください -->
 
 ---
 
-📋 詳細なテスト手順は [components/TEST_CHECKLIST.md](./TEST_CHECKLIST.md) を参照してください。
+📋 **運用フロー全体**: [components/CONTRIBUTING.md](./CONTRIBUTING.md) を参照してください。
