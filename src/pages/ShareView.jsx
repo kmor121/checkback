@@ -150,6 +150,7 @@ function ShareViewContent() {
   const debugLogBufferRef = useRef([]); // Debug: ログ保持用
   const prevPaintContextIdForMergedRef = useRef(null); // FIX-3: lastMerged保持条件用
   const lastNonNullPaintContextIdRef = useRef(null); // FIX-NO-BLANK: null落ち防止用
+  const deletedShapeIdsRef = useRef(new Set()); // FIX-DELETE: 削除復活防止用
   
   // ★★★ FIX-4: addDebugLog を最優先定義（TDZ根絶）★★★
   const addDebugLog = (msg) => {
@@ -354,7 +355,8 @@ function ShareViewContent() {
     // ★★★ FIX-PAINT: new mode優先（paintMode ON なら即 temp へ）★★★
     if (composerMode === 'new' && tempCommentId) {
       const hasDraftContent = draftShapes.length > 0 || composerText.trim().length > 0;
-      const shouldUseTemp = hasDraftContent || paintMode;
+      // ★★★ FIX-NO-BLANK: shouldShowDraft も必須（送信直後の空フレーム防止）★★★
+      const shouldUseTemp = shouldShowDraft && (hasDraftContent || paintMode);
       if (shouldUseTemp) return String(tempCommentId);
     }
     
@@ -899,6 +901,9 @@ function ShareViewContent() {
       return;
     }
     
+    // ★★★ FIX-DELETE: 削除IDを記録（復活防止）★★★
+    deletedShapeIdsRef.current.add(shape.id);
+    
     // P2 FIX: functional update でメモリから削除
     setDraftShapes(prev => {
       const next = prev.filter(s => s.id !== shape.id);
@@ -911,10 +916,11 @@ function ShareViewContent() {
       return next;
     });
     
-    console.log('[ShareView] Shape deleted from draft (NOT DB):', {
+    console.log('[ShareView] Shape deleted from draft (NOT DB), added to deletedSet:', {
       shapeId: shape.id,
       targetKey,
       remainingDraftCount: draftShapesRef.current.length,
+      deletedSetSize: deletedShapeIdsRef.current.size,
     });
   };
 
@@ -1209,6 +1215,9 @@ function ShareViewContent() {
       setForceClearToken(prev => prev + 1);
       viewerCanvasRef.current?.afterSubmitClear();
       viewerCanvasRef.current?.clear();
+      
+      // ★★★ FIX-DELETE: 削除IDセットをクリア（送信完了で復活許可）★★★
+      deletedShapeIdsRef.current.clear();
       
       // ★★★ FIX-B: スコープ別クリア（edit送信時は新規下書きを壊さない）★★★
       setComposerText('');
@@ -1672,7 +1681,19 @@ function ShareViewContent() {
       ? allShapesNormalized
       : (paintContextId ? allShapesNormalized.filter(s => resolveCommentId(s) === paintContextId) : []);
     
-    // ★★★ FIX-2/4: 下書き表示条件（素材ロード後のみ、viewではdraft不使用）★★★
+    // ★★★ FIX-DELETE: 削除済みshapeを除外（復活防止）★★★
+    const dbShapesFiltered = dbShapesForView.filter(s => !deletedShapeIdsRef.current.has(s.id));
+    
+    // ★★★ FIX-NO-BLANK: view時はdraftを混ぜない（欠損/ちらつき防止）★★★
+    if (!shouldShowDraft) {
+      const resultLog = `paintCtx=${paintContextId?.substring(0, 12) || 'null'} mode=${composerMode} db=${dbShapesFiltered.length} draft=0 merged=${dbShapesFiltered.length} (NO_DRAFT_VIEW)`;
+      console.log('[shapesForCanvas]', resultLog);
+      addDebugLog(`[shapesForCanvas] ${resultLog}`);
+      lastMergedShapesRef.current = dbShapesFiltered;
+      return dbShapesFiltered;
+    }
+    
+    // ★★★ FIX-2/4: 下書き表示条件（素材ロード後のみ、edit/new時のみ）★★★
     const showEditDraft = !!(shapesLoaded && isEditMode && storageDraftReady);
     const showNewDraft = !!(shapesLoaded && isNewMode && storageDraftReady);
     const shouldShowAnyDraft = showEditDraft || showNewDraft;
@@ -1682,13 +1703,16 @@ function ShareViewContent() {
       ? draftShapesNormalized.filter(s => String(resolveCommentId(s) || '') === filterIdForDraft)
       : [];
     
+    // ★★★ FIX-DELETE: 削除済みshapeを除外（復活防止）★★★
+    const draftShapesFiltered = draftShapesForView.filter(s => !deletedShapeIdsRef.current.has(s.id));
+    
     // ★★★ FIX-A: shapeIdベースMapマージ（count比較禁止、DB+draft上書き）★★★
     const shapeMap = new Map();
-    dbShapesForView.forEach(s => shapeMap.set(s.id, s));
-    draftShapesForView.forEach(s => shapeMap.set(s.id, s));
+    dbShapesFiltered.forEach(s => shapeMap.set(s.id, s));
+    draftShapesFiltered.forEach(s => shapeMap.set(s.id, s));
     const merged = Array.from(shapeMap.values());
     
-    const resultLog = `paintCtx=${paintContextId?.substring(0, 12) || 'null'} mode=${composerMode} db=${dbShapesForView.length} draft=${draftShapesForView.length} merged=${merged.length} trans=${isCanvasTransitioning}`;
+    const resultLog = `paintCtx=${paintContextId?.substring(0, 12) || 'null'} mode=${composerMode} db=${dbShapesFiltered.length} draft=${draftShapesFiltered.length} merged=${merged.length} trans=${isCanvasTransitioning}`;
     console.log('[shapesForCanvas]', resultLog);
     addDebugLog(`[shapesForCanvas] ${resultLog}`);
     
