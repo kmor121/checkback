@@ -45,7 +45,7 @@ const normalizeShape = (s, defaultCommentId = null) => {
   return {
     ...base,
     comment_id: commentId,
-    id: base.id || base.client_shape_id,
+    id: base.id ?? base.client_shape_id ?? base._local_id ?? (base._local_id = generateUUID()),
   };
 };
 

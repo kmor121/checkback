@@ -92,7 +92,7 @@ const normalizeShape = (s, defaultCommentId = null) => {
   return {
     ...base,
     comment_id: commentId,
-    id: base.id || base.client_shape_id || safeUUID(),
+    id: base.id ?? base.client_shape_id ?? base._local_id ?? (base._local_id = safeUUID()),
   };
 };
 
@@ -1871,6 +1871,68 @@ function ShareViewContent() {
 
   return (
   <div className="max-w-full mx-auto h-screen flex flex-col">
+    {/* Debugボタン（固定表示、isReady不問） */}
+    {(debugParam === '1' || (typeof window !== 'undefined' && localStorage.getItem('forceDebug') === '1') || DEBUG_MODE) && (
+      <div style={{ position: 'fixed', top: '12px', right: '12px', zIndex: 99999, pointerEvents: 'auto' }}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            try {
+              const debugData = {
+                timestamp: new Date().toISOString(),
+                paintMode,
+                tool,
+                composerMode,
+                isEditMode,
+                isNewMode,
+                paintContextId: paintContextId?.substring(0, 12) || 'null',
+                targetKey: targetKey?.substring(0, 50) || 'null',
+                draftScope,
+                draftReady,
+                shapesLoaded,
+                shapesFetching,
+                dbCount: paintShapes.length,
+                draftCount: draftShapes.length,
+                mergedCount: shapesForCanvas.length,
+                isCanvasTransitioning,
+                ctx: canvasInternalResetKey?.substring(0, 50) || 'null',
+                recentLogs: debugLogBufferRef.current.slice(-100),
+              };
+              const text = JSON.stringify(debugData, null, 2);
+              
+              if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                navigator.clipboard.writeText(text).then(() => {
+                  showToast('📋 Debug情報をコピーしました', 'success');
+                }).catch(() => {
+                  const textarea = document.createElement('textarea');
+                  textarea.value = text;
+                  textarea.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:80%;height:60%;z-index:99999;padding:20px;font-family:monospace;font-size:12px;border:2px solid #000;background:white;';
+                  document.body.appendChild(textarea);
+                  textarea.focus();
+                  textarea.select();
+                  setTimeout(() => textarea.remove(), 60000);
+                });
+              } else {
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:80%;height:60%;z-index:99999;padding:20px;font-family:monospace;font-size:12px;border:2px solid #000;background:white;';
+                document.body.appendChild(textarea);
+                textarea.focus();
+                textarea.select();
+                setTimeout(() => textarea.remove(), 60000);
+              }
+            } catch (e) {
+              showToast('コピー失敗: ' + e.message, 'error');
+            }
+          }}
+          className="text-xs bg-yellow-100 hover:bg-yellow-200 border-yellow-400 shadow-lg font-bold"
+        >
+          📋 Debug
+        </Button>
+      </div>
+    )}
+    
     {/* ★★★ デバッグHUD（下書き状態表示）★★★ */}
     {DEBUG_MODE && (
       <div className="fixed top-0 left-0 z-[9999] bg-black/90 text-green-400 text-xs font-mono p-2 max-w-sm">
@@ -2033,74 +2095,6 @@ function ShareViewContent() {
                 }}
               />
             )}
-
-            {/* ★★★ FIX-A: Debugボタン確実表示（localStorage永続化、iframe対策）★★★ */}
-            {(() => {
-              const forceDebug = typeof window !== 'undefined' && localStorage.getItem('forceDebug') === '1';
-              const showDebug = debugParam === '1' || forceDebug || DEBUG_MODE;
-              if (!showDebug) return null;
-              
-              return (
-                <div style={{ position: 'fixed', top: '12px', right: '12px', zIndex: 99999, pointerEvents: 'auto' }}>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      try {
-                        const debugData = {
-                          timestamp: new Date().toISOString(),
-                          paintMode,
-                          tool,
-                          composerMode,
-                          isEditMode,
-                          isNewMode,
-                          paintContextId: paintContextId?.substring(0, 12) || 'null',
-                          targetKey: targetKey?.substring(0, 50) || 'null',
-                          draftScope,
-                          draftReady,
-                          shapesLoaded,
-                          shapesFetching,
-                          dbCount: paintShapes.length,
-                          draftCount: draftShapes.length,
-                          mergedCount: shapesForCanvas.length,
-                          isCanvasTransitioning,
-                          ctx: canvasInternalResetKey?.substring(0, 50) || 'null',
-                          recentLogs: debugLogBufferRef.current.slice(-100),
-                        };
-                        const text = JSON.stringify(debugData, null, 2);
-                        
-                        if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                          navigator.clipboard.writeText(text).then(() => {
-                            showToast('📋 Debug情報をコピーしました', 'success');
-                          }).catch(() => {
-                            const textarea = document.createElement('textarea');
-                            textarea.value = text;
-                            textarea.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:80%;height:60%;z-index:99999;padding:20px;font-family:monospace;font-size:12px;border:2px solid #000;background:white;';
-                            document.body.appendChild(textarea);
-                            textarea.focus();
-                            textarea.select();
-                            setTimeout(() => textarea.remove(), 60000);
-                          });
-                        } else {
-                          const textarea = document.createElement('textarea');
-                          textarea.value = text;
-                          textarea.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:80%;height:60%;z-index:99999;padding:20px;font-family:monospace;font-size:12px;border:2px solid #000;background:white;';
-                          document.body.appendChild(textarea);
-                          textarea.focus();
-                          textarea.select();
-                          setTimeout(() => textarea.remove(), 60000);
-                        }
-                      } catch (e) {
-                        showToast('コピー失敗: ' + e.message, 'error');
-                      }
-                    }}
-                    className="text-xs bg-yellow-100 hover:bg-yellow-200 border-yellow-400 shadow-lg font-bold"
-                  >
-                    📋 Debug
-                  </Button>
-                </div>
-              );
-            })()}
             
             {/* ズーム制御 */}
             <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-2 flex items-center gap-2">
