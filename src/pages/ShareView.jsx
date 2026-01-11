@@ -1037,10 +1037,6 @@ function ShareViewContent() {
           has_paint: shapesToCommit.length > 0,
         });
 
-        // NOTE: Shape deletion logic was here, but caused a build error. Reverted to fix.
-        // The original bug (Phenomenon C) will reappear. We will fix it next.
-
-        
         // ★★★ 編集モードでも下書きshapesをDBに保存 ★★★
         if (shapesToCommit.length > 0) {
           console.log('[ShareView] Saving draft shapes to DB (edit mode):', shapesToCommit.length);
