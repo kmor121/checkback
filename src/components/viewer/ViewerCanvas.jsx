@@ -493,10 +493,8 @@ const ViewerCanvas = forwardRef(({
 
   // CRITICAL: fileIdentity/pageNumber変更時のみリセット（Mapをクリア）
   useEffect(() => {
-    if (DEBUG_MODE) {
-      console.log('[ViewerCanvas] fileIdentity/pageNumber changed, resetting state', { fileIdentity, pageNumber });
-    }
-    shapesMapRef.current = new Map(); // ★ Mapをクリア
+    console.log('[ViewerCanvas] fileIdentity/pageNumber changed, resetting state (INTENDED)', { fileIdentity, pageNumber, mapSizeBefore: shapesMapRef.current.size });
+    shapesMapRef.current = new Map(); // ★ Mapをクリア（ファイル/ページ変更時のみ）
     bump();
     setSelectedId(null);
     setCurrentShape(null);
