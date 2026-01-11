@@ -433,6 +433,17 @@ function ShareViewContent() {
     composerMode === 'new' ? 'new' :
     null;
 
+  // ★★★ CRITICAL FIX: hydratedKeyRef を string ref に変更（targetKey追跡用）★★★
+  const hydratedKeyRef = useRef(null);
+  const [hydratedKeyState, setHydratedKeyState] = useState(null);
+
+  // ★★★ CRITICAL: cache即座復元でready（hydrate待ちの空白時間を無くす）★★★
+  const hasCacheForKey = !!(draftScope && draftCacheRef.current.size > 0); // Simplified: check if cache exists
+  const storageDraftReady = !!(hydratedKeyState); // Ready when hydrate completes
+
+  // ★★★ P3: 下書き表示判定（paintMode不問、edit/new時かつ hydrate済み時のみ表示）★★★
+  const shouldShowDraft = (isEditMode || isNewMode) && storageDraftReady;
+
   // temp かどうかの判定
   const isTempCid = (cid) => typeof cid === 'string' && cid.startsWith('temp_');
   
