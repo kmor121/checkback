@@ -483,13 +483,6 @@ function ShareViewContent() {
     });
   }, [shouldShowDraft, composerMode, draftScope, targetKey]);
   
-  // ★★★ CRITICAL: cache即座復元でready（hydrate待ちの空白時間を無くす）★★★
-  const hasCacheForKey = !!(targetKey && draftCacheRef.current.has(targetKey));
-  const storageDraftReady = !!(targetKey && (hasCacheForKey || hydratedKeyState === targetKey));
-
-  // ★★★ P3: 下書き表示判定（paintMode不問、edit/new時かつ hydrate済み時のみ表示）★★★
-  const shouldShowDraft = (isEditMode || isNewMode) && storageDraftReady;
-  
   // ★★★ CRITICAL: 下書きをcanvasに混ぜるか（storage準備完了 && mode判定）★★★
   const includeDraftInCanvas = React.useMemo(() => {
     return shouldShowDraft && storageDraftReady;
