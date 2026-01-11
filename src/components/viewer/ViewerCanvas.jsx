@@ -2969,14 +2969,12 @@ const ViewerCanvas = forwardRef(({
 
         {/* 注釈Layer（contentGroup内に配置） */}
         <Layer>
-          {/* ★★★ FIX-NO-BLANK: shapesのみopacity制御（背景は常に見える）★★★ */}
           <Group
             ref={contentGroupRef}
             x={viewX}
             y={viewY}
             scaleX={contentScale}
             scaleY={contentScale}
-            opacity={isPending ? 0 : 1}
           >
             {/* ★★★ CRITICAL: 確定済みshapeのみ描画（currentShapeとの重複は既に除外済み）★★★ */}
             {renderedShapes.map(s => renderShape(s, true))}

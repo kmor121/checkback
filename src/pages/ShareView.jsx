@@ -321,13 +321,16 @@ function ShareViewContent() {
     
     // ★★★ CRITICAL: 復元 or 即座に生成（どちらかを必ず実行）★★★
     const savedTempId = localStorage.getItem(`tempCommentId:${shareLink.file_id}`);
-    if (savedTempId) {
+    if (savedTempId && savedTempId !== 'null' && savedTempId !== 'undefined' && savedTempId.trim() !== '') {
       setTempCommentId(savedTempId);
       console.log('[ShareView] ✓ Restored tempCommentId:', {
         scopeId: shareLink.file_id.substring(0, 12),
         tempCommentId: savedTempId.substring(0, 12),
       });
     } else {
+      if (savedTempId && (savedTempId === 'null' || savedTempId === 'undefined' || savedTempId.trim() === '')) {
+        localStorage.removeItem(`tempCommentId:${shareLink.file_id}`);
+      }
       // ★★★ CRITICAL: 無ければ即座に生成（描画開始前に必ず確定）★★★
       const newTempId = generateTempCommentId();
       setTempCommentId(newTempId);
@@ -341,7 +344,11 @@ function ShareViewContent() {
 
   // ★★★ tempCommentIdの永続化 ★★★
   useEffect(() => {
-    if (!shareLink?.file_id || !tempCommentId) return;
+    if (!shareLink?.file_id) return;
+    if (!tempCommentId || tempCommentId === 'null' || tempCommentId === 'undefined') {
+      localStorage.removeItem(`tempCommentId:${shareLink.file_id}`);
+      return;
+    }
     localStorage.setItem(`tempCommentId:${shareLink.file_id}`, tempCommentId);
     console.log('[ShareView] Saved tempCommentId to localStorage:', tempCommentId);
   }, [shareLink?.file_id, tempCommentId]);
@@ -842,8 +849,8 @@ function ShareViewContent() {
     // ★★★ CRITICAL: comment_id を必ず paintContextId に固定（UUID禁止）★★★
     const shapeWithDirty = { 
       ...shapeWithId, 
-      comment_id: String(paintContextId),
-      commentId: String(paintContextId),
+      comment_id: paintContextId || '',
+      commentId: paintContextId || '',
       _dirty: true, 
       _localTs: Date.now() 
     };
@@ -1600,25 +1607,19 @@ function ShareViewContent() {
     });
   }, [paintContextId, shouldShowDraft, storageDraftReady, composerMode, activeCommentId, tempCommentId]);
 
-  // ★★★ P1: canvasContextKey（再マウント用、paintContextId除外でちらつき防止）★★★
+  // ★★★ P1: canvasContextKey（再マウント用、ファイル＋ページのみ）★★★
   const canvasContextKey = React.useMemo(() => {
     const fileId = shareLink?.file_id || 'no-file';
     const page = currentPage;
-    const mode = composerMode || 'view';
-    const scope = draftScope || 'none';
-    const showDraft = shouldShowDraft ? 'draft' : 'nodraft';
-    return `${fileId}:${page}:${mode}:${scope}:${showDraft}`;
-  }, [shareLink?.file_id, currentPage, composerMode, draftScope, shouldShowDraft]);
+    return `${fileId}:${page}`;
+  }, [shareLink?.file_id, currentPage]);
   
-  // ★★★ P1: ViewerCanvas内部リセット用キー（paintContextId含む、props渡し）★★★
+  // ★★★ P1: ViewerCanvas内部リセット用キー（fileId + paintContextIdのみ）★★★
   const canvasInternalResetKey = React.useMemo(() => {
     const fileId = shareLink?.file_id || 'no-file';
     if (showAllPaint) return `${fileId}:all`;
-    const mode = composerMode || 'view';
-    const scope = draftScope || 'none';
-    const showDraft = shouldShowDraft ? 'draft' : 'nodraft';
-    return `${fileId}:${mode}:${scope}:${paintContextId || 'none'}:${showDraft}`;
-  }, [shareLink?.file_id, showAllPaint, composerMode, draftScope, paintContextId, shouldShowDraft]);
+    return `${fileId}:${paintContextId || 'none'}`;
+  }, [shareLink?.file_id, showAllPaint, paintContextId]);
   
   // ★★★ FIX-T3: Canvas遷移中フラグ（ctx変化→shapesLoaded完了まで）★★★
   const [isTransitioningCtx, setIsTransitioningCtx] = useState(false);
