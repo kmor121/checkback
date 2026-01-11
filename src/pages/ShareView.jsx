@@ -807,11 +807,11 @@ function ShareViewContent() {
         fileId: shareLink.file_id, 
         pageNo: currentPage 
       });
-      const shapes = await base44.entities.PaintShape.filter({ 
+      const allShapesOnPage = await base44.entities.PaintShape.filter({
         share_token: token,
-        file_id: shareLink.file_id,
-        page_no: currentPage
+        file_id: shareLink.file_id
       });
+      const shapes = allShapesOnPage.filter(s => s.page_no === currentPage);
       console.log('[ShareView] Fetched shapes count:', shapes.length);
       return shapes;
     },
