@@ -464,18 +464,7 @@ function ShareViewContent() {
     return null;
   }, [shareLink?.file_id, paintContextId, draftScope]);
 
-  // ★★★ CRITICAL: cache即座復元でready（hydrate待ちの空白時間を無くす）★★★
-  const hasCacheForKey = !!(targetKey && draftCacheRef.current.has(targetKey));
-  const storageDraftReady = !!(targetKey && (hasCacheForKey || hydratedKeyState === targetKey));
-
-  // ★★★ P3: 下書き表示判定（paintMode不問、edit/new時かつ hydrate済み時のみ表示）★★★
-  const shouldShowDraft = (isEditMode || isNewMode) && storageDraftReady;
-
-  // ★★★ CRITICAL FIX: hydratedKeyRef を string ref に変更（targetKey追跡用）★★★
-  const hydratedKeyRef = useRef(null);
-  const [hydratedKeyState, setHydratedKeyState] = useState(null);
-  
-  // ★★★ CRITICAL: paintContextId変化検知（コメント切替時のクリーンスタート）★★★
+    // ★★★ CRITICAL: paintContextId変化検知（コメント切替時のクリーンスタート）★★★
   const prevPaintContextIdRef = useRef(paintContextId);
   
   useEffect(() => {
