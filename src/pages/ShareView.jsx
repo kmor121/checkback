@@ -1034,7 +1034,25 @@ function ShareViewContent() {
         // 編集モード: 既存コメントを更新
         await base44.entities.ReviewComment.update(composerTargetCommentId, {
           body: composerText,
+          has_paint: shapesToCommit.length > 0,
         });
+
+        // ★★★ P0 FIX: 既存のPaintShapeを全て削除してから再作成（置換型） ★★★
+        console.log('[ShareView] Deleting existing PaintShapes for comment:', composerTargetCommentId);
+        const existingPaintShapes = await base44.entities.PaintShape.filter({
+          comment_id: composerTargetCommentId,
+          // 安全のため絞り込み
+          share_token: token,
+          file_id: shareLink.file_id,
+        });
+
+        if (existingPaintShapes.length > 0) {
+          console.log(`[ShareView] Found ${existingPaintShapes.length} shapes to delete. Deleting...`);
+          for (const shape of existingPaintShapes) {
+            await base44.entities.PaintShape.delete(shape.id);
+          }
+          console.log(`[ShareView] Finished deleting old shapes.`);
+        }
         
         // ★★★ 編集モードでも下書きshapesをDBに保存 ★★★
         if (shapesToCommit.length > 0) {
