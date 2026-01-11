@@ -1564,15 +1564,35 @@ function ShareViewContent() {
     return `${fileId}:${mode}:${scope}:${paintContextId || 'none'}:${showDraft}`;
   }, [shareLink?.file_id, showAllPaint, composerMode, draftScope, paintContextId, shouldShowDraft]);
   
-  // ★★★ FIX-3: Canvas遷移中フラグ（DBロード中心、view時はdraftReady不使用）★★★
-  const [contextSwitchingUntil, setContextSwitchingUntil] = useState(0);
-  const isCanvasTransitioning = shapesFetching || !shapesLoaded || Date.now() < contextSwitchingUntil;
+  // ★★★ FIX-T3: Canvas遷移中フラグ（ctx変化→shapesLoaded完了まで）★★★
+  const [isTransitioningCtx, setIsTransitioningCtx] = useState(false);
+  const transitionTimeoutRef = useRef(null);
+  const prevPaintContextIdForTransitionRef = useRef(paintContextId);
   
   useEffect(() => {
-    const until = Date.now() + 200;
-    setContextSwitchingUntil(until);
-    addDebugLog(`[FIX-3] ctx switch until +200ms`);
-  }, [canvasInternalResetKey]);
+    const prev = prevPaintContextIdForTransitionRef.current;
+    if (prev !== paintContextId) {
+      prevPaintContextIdForTransitionRef.current = paintContextId;
+      setIsTransitioningCtx(true);
+      addDebugLog(`[FIX-T3] ctx changed, start transition`);
+      
+      if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
+      transitionTimeoutRef.current = setTimeout(() => {
+        setIsTransitioningCtx(false);
+        addDebugLog(`[FIX-T3] transition timeout (200ms)`);
+      }, 200);
+    }
+  }, [paintContextId]);
+  
+  useEffect(() => {
+    if (isTransitioningCtx && shapesLoaded && !shapesFetching) {
+      setIsTransitioningCtx(false);
+      addDebugLog(`[FIX-T3] transition end (shapes loaded)`);
+      if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
+    }
+  }, [isTransitioningCtx, shapesLoaded, shapesFetching]);
+  
+  const isCanvasTransitioning = isTransitioningCtx || shapesFetching || !shapesLoaded;
 
   // ★★★ C: チラつき防止 - DB素材が読み込まれるまでドラフトを表示しない ★★★
   const canvasReady = React.useMemo(() => {

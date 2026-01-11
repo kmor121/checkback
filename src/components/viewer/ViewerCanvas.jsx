@@ -2648,6 +2648,13 @@ const ViewerCanvas = forwardRef(({
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative', overflow: 'auto', background: '#e0e0e0' }}>
+      {/* ★★★ FIX-T3: 遷移中は空フレーム隠し、プレースホルダー表示 ★★★ */}
+      {isCanvasTransitioning && (
+        <div style={{ position: 'absolute', inset: 0, background: '#e0e0e0', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ color: '#999', fontSize: '14px' }}>読み込み中...</div>
+        </div>
+      )}
+      
       {/* ★★★ DEBUG HUD: DEBUG_MODE時のみ表示 ★★★ */}
       {DEBUG_MODE && (
         <div style={{
@@ -2817,24 +2824,25 @@ const ViewerCanvas = forwardRef(({
         </div>
       )}
 
-      <Stage
-        ref={stageRef}
-        width={containerSize.width}
-        height={containerSize.height}
-        onPointerDown={handleStagePointerDown}
-        onPointerMove={handleStagePointerMove}
-        onPointerUp={handleStagePointerUp}
-        onMouseDown={handleStagePointerDown}
-        onMouseMove={handleStagePointerMove}
-        onMouseUp={handleStagePointerUp}
-        onTouchStart={handleStagePointerDown}
-        onTouchMove={handleStagePointerMove}
-        onTouchEnd={handleStagePointerUp}
-        style={{ 
-          cursor: isDrawMode ? 'crosshair' : canPan ? (isPanning ? 'grabbing' : 'grab') : 'default',
-          touchAction: 'none'
-        }}
-      >
+      <div style={{ opacity: isCanvasTransitioning ? 0 : 1, transition: 'opacity 80ms linear' }}>
+        <Stage
+          ref={stageRef}
+          width={containerSize.width}
+          height={containerSize.height}
+          onPointerDown={handleStagePointerDown}
+          onPointerMove={handleStagePointerMove}
+          onPointerUp={handleStagePointerUp}
+          onMouseDown={handleStagePointerDown}
+          onMouseMove={handleStagePointerMove}
+          onMouseUp={handleStagePointerUp}
+          onTouchStart={handleStagePointerDown}
+          onTouchMove={handleStagePointerMove}
+          onTouchEnd={handleStagePointerUp}
+          style={{ 
+            cursor: isDrawMode ? 'crosshair' : canPan ? (isPanning ? 'grabbing' : 'grab') : 'default',
+            touchAction: 'none'
+          }}
+        >
         {/* 背景Layer（非インタラクティブ） */}
         <Layer listening={false}>
           <Group
@@ -2871,6 +2879,7 @@ const ViewerCanvas = forwardRef(({
         
         {/* ★ DEBUGオーバーレイ Layer削除（DOM HUDに統合） */}
       </Stage>
+      </div>
       
       {/* デバッグオーバーレイ（拡張版） */}
       {DEBUG_MODE && (
