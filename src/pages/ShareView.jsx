@@ -214,34 +214,33 @@ function ShareViewContent() {
     }
     setGuestId(storedGuestId);
     
-    // ★★★ P1: ログイン中はアカウント名を優先（ダイアログ不要）★★★
-    base44.auth.me()
-      .then(user => {
-        if (user) {
-          // ログインしている場合はダイアログを出さない
-          const name = user.full_name || user.email || 'ログインユーザー';
-          setGuestName(name);
-          localStorage.setItem(`guestName_${token}`, name);
-          return;
-        }
-        
-        // user=null の場合、従来通り
-        const storedName = localStorage.getItem(`guestName_${token}`);
-        if (storedName) {
-          setGuestName(storedName);
-        } else {
+    // ★★★ P0: 2段階の名前取得（token単位 → global → auth.me）★★★
+    const tokenName = localStorage.getItem(`guestName_${token}`);
+    const globalName = localStorage.getItem('guestName_global');
+    
+    if (tokenName) {
+      setGuestName(tokenName);
+    } else if (globalName) {
+      setGuestName(globalName);
+      localStorage.setItem(`guestName_${token}`, globalName);
+    } else {
+      // どちらも無い場合のみ auth.me を試す
+      base44.auth.me()
+        .then(user => {
+          if (user) {
+            const name = user.full_name || user.email || 'ログインユーザー';
+            setGuestName(name);
+            localStorage.setItem(`guestName_${token}`, name);
+            localStorage.setItem('guestName_global', name);
+          } else {
+            setShowNameDialog(true);
+          }
+        })
+        .catch(() => {
+          // 401は想定内（ShareViewは未認証でアクセスされることが多い）
           setShowNameDialog(true);
-        }
-      })
-      .catch(() => {
-        // 認証失敗時は未ログイン扱い（従来フロー）
-        const storedName = localStorage.getItem(`guestName_${token}`);
-        if (storedName) {
-          setGuestName(storedName);
-        } else {
-          setShowNameDialog(true);
-        }
-      });
+        });
+    }
 
     // パスワード検証済みフラグを確認
     const isVerified = sessionStorage.getItem(`passwordVerified_${token}`) === '1';
