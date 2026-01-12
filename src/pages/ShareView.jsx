@@ -1156,7 +1156,7 @@ function ShareViewContent() {
       return;
     }
 
-    if (!guestName.trim()) {
+    if (authStatus === 'guest' && !guestName.trim()) {
       setShowNameDialog(true);
       return;
     }
