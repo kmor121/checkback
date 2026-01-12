@@ -1283,11 +1283,15 @@ function ShareViewContent() {
           localStorage.removeItem(`tempCommentId:${shareLink.file_id}`);
         }
       } else if (sendDraftScope === 'edit') {
-        // 編集送信時：draftShapes/cache/tempCommentIdを消さない（新規下書き保持）
-        // 編集targetKeyのみクリア
+        // 編集送信時：編集対象のdraftのみクリア（新規下書きは保持）
         if (sendTargetKey) {
           draftCacheRef.current.delete(sendTargetKey);
         }
+        // P2 FIX: メモリとstateもクリア（復活防止）
+        setDraftShapes([]);
+        draftShapesRef.current = [];
+        setHydratedKeyState(null);
+        hydratedKeyRef.current = null;
       }
       
       setPendingFiles([]);
