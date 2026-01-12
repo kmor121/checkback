@@ -2033,13 +2033,23 @@ function ShareViewContent() {
           try {
             const draft = loadDraft(editDraftKey);
             
+            // ★★★ P0-A: authorKey必須チェック（古い下書き除外）★★★
+            if (!draft?.authorKey) {
+              return;
+            }
+            
             // ★★★ P0-A: 本人の下書きのみカウント ★★★
-            if (draft?.authorKey && draft.authorKey !== guestId) {
+            if (draft.authorKey !== guestId) {
+              return;
+            }
+            
+            // ★★★ P0-B: commentId必須チェック（古い下書き除外）★★★
+            if (!draft?.commentId) {
               return;
             }
             
             // ★★★ P0-B: commentId照合（混線防止）★★★
-            if (draft?.commentId && String(draft.commentId) !== String(comment.id)) {
+            if (String(draft.commentId) !== String(comment.id)) {
               console.warn('[draftCountByCommentId] commentId mismatch, skipping:', {
                 commentId: comment.id.substring(0, 12),
                 draftCommentId: draft.commentId?.substring(0, 12),
