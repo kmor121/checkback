@@ -421,28 +421,29 @@ function ShareViewContent() {
   const hydratedKeyRef = useRef(null);
   const [hydratedKeyState, setHydratedKeyState] = useState(null);
   const storageDraftReady = !!(hydratedKeyState); // Ready when hydrate completes
-  const shouldShowDraft = (isEditMode || isNewMode) && storageDraftReady;
+  const shouldShowDraft = composerMode === 'new' || composerMode === 'edit';
 
   // ★★★ FIX-2: computed版（通常計算）- Original logic restored
   const computedPaintContextId = React.useMemo(() => {
-    if (showAllPaint) return null;
-    
-    if (composerMode === 'edit' && composerTargetCommentId) return String(composerTargetCommentId);
-    
-    // ★★★ P0-1 FIX: new時は tempCommentId を直接返す（shouldShowDraft循環依存を回避）★★★
-    if (composerMode === 'new' && tempCommentId) {
-      return String(tempCommentId);
+    // Hunk 1: paintContextIdの決定をモード別に固定
+    if (composerMode === 'new') {
+      // newモードはtempCommentIdが唯一のソース
+      return tempCommentId ? String(tempCommentId) : null;
     }
-    
-    // ★★★ FIX-v6: view時は activeCommentId に固定（選択解除で必ず null になる）★★★
+    if (composerMode === 'edit') {
+      return composerTargetCommentId ? String(composerTargetCommentId) : null;
+    }
     if (composerMode === 'view') {
+      // viewモードはactiveCommentId（選択解除でnullになり、描画が消える）
       return activeCommentId ? String(activeCommentId) : null;
     }
-    
+
+    // 上記以外のモード（replyなど）やフォールバック
+    if (showAllPaint) return null;
     if (activeCommentId) return String(activeCommentId);
     
     return null;
-  }, [showAllPaint, composerMode, composerTargetCommentId, tempCommentId, activeCommentId]);
+  }, [composerMode, tempCommentId, composerTargetCommentId, activeCommentId, showAllPaint]);
   
   // ★★★ FIX-2: stable版（一瞬もnullにしない、fileId変更時のみクリア）★★★
   const stablePaintContextId = React.useMemo(() => {
