@@ -689,16 +689,19 @@ function ShareViewContent() {
     }
     
     saveDraftTimeoutRef.current = setTimeout(() => {
-      // ★★★ P0-B: commentIdも保存（混線検証用）★★★
-      const commentIdForSave = draftScope === 'edit' ? composerTargetCommentId : (draftScope === 'new' ? tempCommentId : null);
+      // ★★★ P0-B: commentIdをtargetKeyから抽出（レース根絶）★★★
+      const prefix = draftScope === 'edit' 
+        ? `draftPaint:${shareLink.file_id}:edit:`
+        : `draftPaint:${shareLink.file_id}:new:`;
+      const commentIdFromKey = targetKey.substring(prefix.length);
       
       saveDraft(targetKey, draftShapes, { 
         pageNo: currentPage,
         authorKey: guestId,
         authorName: guestName,
-        commentId: commentIdForSave,
+        commentId: commentIdFromKey,
       });
-      console.log('[draft] autosave fired:', { targetKey, shapesCount: draftShapes.length, commentId: commentIdForSave?.substring(0, 12) || 'null' });
+      console.log('[draft] autosave fired:', { targetKey, shapesCount: draftShapes.length, commentId: commentIdFromKey?.substring(0, 12) || 'null' });
       
       // ★★★ P1: バッジのリアルタイム更新（edit時のみ）★★★
       if (draftScope === 'edit' && composerTargetCommentId) {
