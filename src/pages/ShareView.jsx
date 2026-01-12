@@ -580,12 +580,8 @@ function ShareViewContent() {
     
     // ★★★ P0-A: authorKey必須チェック（古い下書き除外、安全優先）★★★
     if (!draft?.authorKey) {
-      console.warn('[draft] Ignoring draft without authorKey (legacy):', { targetKey });
-      setDraftShapes([]);
-      draftShapesRef.current = [];
-      draftCacheRef.current.set(targetKey, []);
-      hydratedKeyRef.current = targetKey;
-      setHydratedKeyState(targetKey);
+      console.warn('[draft] Ignoring draft without authorKey (legacy), not loading or deleting:', { targetKey });
+      // レガシー下書きは完全に無視する（stateを更新しないことで、autosaveによる削除も防止）
       return;
     }
     
@@ -1496,7 +1492,7 @@ function ShareViewContent() {
     if (activeCommentId === comment.id) {
       addDebugLog(`[C] deselect same (toggle off)`);
       setActiveCommentId(null);
-      setShowAllPaint(true);
+      // setShowAllPaint(true); // ★★★ FIX: コメント選択解除時に全描画が残るのを防ぐため削除 ★★★
       setComposerMode('view');
       setComposerTargetCommentId(null);
       setComposerText('');
