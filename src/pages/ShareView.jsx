@@ -1523,6 +1523,11 @@ function ShareViewContent() {
   };
 
   const handleStartEditComment = (comment) => {
+    // ★★★ P1: 本人のみ編集可能（関数レベルガード）★★★
+    if (comment.author_key !== guestId) {
+      showToast('他のユーザーのコメントは編集できません', 'error');
+      return;
+    }
     enterEdit(comment);
   };
 
