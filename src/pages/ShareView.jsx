@@ -1573,9 +1573,21 @@ function ShareViewContent() {
     setHydratedKeyState(null);
   };
 
+  // ★★★ P1: コメント編集/削除権限判定（admin=オーナー、manager=管理者、member=本人のみ）★★★
+  const canEditDeleteComment = (comment) => {
+    // admin（Base44組み込み）はオーナー権限（全て可）
+    if (authUser?.role === 'admin') return true;
+    
+    // manager（アプリ権限）は管理者権限（全て可）
+    if (userAppRole === 'manager') return true;
+    
+    // member（またはログインなし）は本人のみ
+    return comment.author_key === guestId;
+  };
+
   const handleStartEditComment = (comment) => {
-    // ★★★ P1: 本人のみ編集可能（関数レベルガード）★★★
-    if (comment.author_key !== guestId) {
+    // ★★★ P1: 権限判定（admin/manager/本人のみ）★★★
+    if (!canEditDeleteComment(comment)) {
       showToast('他のユーザーのコメントは編集できません', 'error');
       return;
     }
