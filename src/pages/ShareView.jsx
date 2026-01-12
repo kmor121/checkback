@@ -434,6 +434,11 @@ function ShareViewContent() {
       return String(tempCommentId);
     }
     
+    // ★★★ FIX-v6: view時は activeCommentId に固定（選択解除で必ず null になる）★★★
+    if (composerMode === 'view') {
+      return activeCommentId ? String(activeCommentId) : null;
+    }
+    
     if (activeCommentId) return String(activeCommentId);
     
     return null;
@@ -1950,11 +1955,14 @@ function ShareViewContent() {
     
     // ★★★ FIX-2: DB shapes を常にベースにする（DB優先、merged≥dbを保証）★★★
     // ★★★ P1 FIX: edit/new 中はDB shapesを混ぜない（ドラフト単一ソース）★★★
+    // ★★★ FIX-v6: view + activeCommentId=null なら必ず [] （選択解除で描画消失）★★★
     const dbShapesForView = (isEditMode || isNewMode)
       ? []
-      : (showAllPaint
-        ? allShapesNormalized
-        : (paintContextId && activeCommentId ? allShapesNormalized.filter(s => resolveCommentId(s) === paintContextId) : []));
+      : (composerMode === 'view' && !activeCommentId
+        ? []  // FIX-v6: 選択解除時は完全クリア
+        : (showAllPaint
+          ? allShapesNormalized
+          : (paintContextId && activeCommentId ? allShapesNormalized.filter(s => resolveCommentId(s) === paintContextId) : [])));
     
     // ★★★ FIX-DELETE: 削除済みshapeを除外（復活防止）★★★
     const dbShapesFiltered = dbShapesForView.filter(s => !deletedShapeIdsRef.current.has(s.id));
