@@ -214,12 +214,32 @@ function ShareViewContent() {
     }
     setGuestId(storedGuestId);
     
-    const storedName = localStorage.getItem(`guestName_${token}`);
-    if (storedName) {
-      setGuestName(storedName);
-    } else {
-      setShowNameDialog(true);
-    }
+    // ★★★ P2: ログイン中はアカウント名を優先 ★★★
+    base44.auth.me()
+      .then(user => {
+        if (user?.full_name) {
+          setGuestName(user.full_name);
+          localStorage.setItem(`guestName_${token}`, user.full_name);
+          return;
+        }
+        
+        // 未ログインまたは名前無しの場合、従来通り
+        const storedName = localStorage.getItem(`guestName_${token}`);
+        if (storedName) {
+          setGuestName(storedName);
+        } else {
+          setShowNameDialog(true);
+        }
+      })
+      .catch(() => {
+        // 認証失敗時は未ログイン扱い（従来フロー）
+        const storedName = localStorage.getItem(`guestName_${token}`);
+        if (storedName) {
+          setGuestName(storedName);
+        } else {
+          setShowNameDialog(true);
+        }
+      });
 
     // パスワード検証済みフラグを確認
     const isVerified = sessionStorage.getItem(`passwordVerified_${token}`) === '1';
