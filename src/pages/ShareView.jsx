@@ -589,8 +589,8 @@ function ShareViewContent() {
     
     // ★★★ P0-B: commentId照合（キーから抽出したIDと一致確認、混線レース防止）★★★
     const prefix = draftScope === 'edit' 
-      ? `${DRAFT_PREFIX}${shareLink.file_id}:edit:`
-      : `${DRAFT_PREFIX}${shareLink.file_id}:new:`;
+      ? `draftPaint:${shareLink.file_id}:edit:`
+      : `draftPaint:${shareLink.file_id}:new:`;
     const commentIdFromKey = targetKey ? targetKey.substring(prefix.length) : null;
     
     if (!commentIdFromKey || String(draft.commentId) !== String(commentIdFromKey)) {
