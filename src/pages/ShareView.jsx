@@ -1978,16 +1978,7 @@ function ShareViewContent() {
   // CRITICAL: 親側でフィルタリング（ViewerCanvasに渡すshapes）
   // ★★★ CRITICAL: viewContextId（表示）と paintContextId（描画）を分離 ★★★
   const shapesForCanvas = React.useMemo(() => {
-    console.log('[ShareView] shapesForCanvas calculation:', {
-      paintContextId: paintContextId?.substring(0, 12) || 'null',
-      composerMode,
-      shouldShowDraft,
-      storageDraftReady,
-      showAllPaint,
-      canvasReady,
-      draftShapesCount: draftShapes.length,
-      allShapesCount: allShapes.length,
-    });
+    // ★★★ Hunk 0: console.logのみ許可、addDebugLog呼び出し禁止（レンダー中setState防止）★★★
     
     // ★★★ CRITICAL: allShapes は既に正規化済み（defaultCommentId=null で DB値保持）★★★
     const allShapesNormalized = allShapes;
@@ -2011,9 +2002,6 @@ function ShareViewContent() {
     
     // ★★★ FIX-NO-BLANK: view時はdraftを混ぜない（欠損/ちらつき防止）★★★
     if (!shouldShowDraft) {
-      const resultLog = `paintCtx=${paintContextId?.substring(0, 12) || 'null'} mode=${composerMode} db=${dbShapesFiltered.length} draft=0 merged=${dbShapesFiltered.length} (NO_DRAFT_VIEW)`;
-      console.log('[shapesForCanvas]', resultLog);
-      addDebugLog(`[shapesForCanvas] ${resultLog}`);
       lastMergedShapesRef.current = dbShapesFiltered;
       return dbShapesFiltered;
     }
@@ -2037,10 +2025,6 @@ function ShareViewContent() {
     draftShapesFiltered.forEach(s => shapeMap.set(s.id, s));
     const merged = Array.from(shapeMap.values());
     
-    const resultLog = `paintCtx=${paintContextId?.substring(0, 12) || 'null'} mode=${composerMode} db=${dbShapesFiltered.length} draft=${draftShapesFiltered.length} merged=${merged.length} trans=${isCanvasTransitioning}`;
-    console.log('[shapesForCanvas]', resultLog);
-    addDebugLog(`[shapesForCanvas] ${resultLog}`);
-    
     // P1 FIX: 描画混入の直接原因であるため、このブロックを削除。
     // これにより、描画がないコメントを選択した際に、古い描画が返されることがなくなります。
     
@@ -2048,6 +2032,17 @@ function ShareViewContent() {
     lastMergedShapesRef.current = merged;
     return merged;
   }, [allShapes, draftShapes, showAllPaint, paintContextId, shouldShowDraft, storageDraftReady, composerMode, tempCommentId, canvasReady, activeCommentId]);
+  
+  // ★★★ Hunk 0: useEffect でデバッグログを分離（レンダー中のaddDebugLog呼び出し廃止）★★★
+  const lastResultLogRef = useRef(null);
+  useEffect(() => {
+    const resultLog = `paintCtx=${paintContextId?.substring(0, 12) || 'null'} mode=${composerMode} db=${(shapesForCanvas.filter(s => !isTempCid(resolveCommentId(s))).length)} draft=${(shapesForCanvas.filter(s => isTempCid(resolveCommentId(s))).length)} merged=${shapesForCanvas.length} trans=${isCanvasTransitioning}`;
+    if (lastResultLogRef.current !== resultLog) {
+      lastResultLogRef.current = resultLog;
+      console.log('[shapesForCanvas]', resultLog);
+      addDebugLog(`[shapesForCanvas] ${resultLog}`);
+    }
+  }, [shapesForCanvas, paintContextId, composerMode, isCanvasTransitioning]);
 
   // 親コメントと返信を分離（条件付きreturnの前に配置）
   const filteredComments = React.useMemo(() => {
