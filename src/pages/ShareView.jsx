@@ -1944,7 +1944,7 @@ function ShareViewContent() {
       ? []
       : (showAllPaint
         ? allShapesNormalized
-        : (paintContextId ? allShapesNormalized.filter(s => resolveCommentId(s) === paintContextId) : []));
+        : (paintContextId && activeCommentId ? allShapesNormalized.filter(s => resolveCommentId(s) === paintContextId) : []));
     
     // ★★★ FIX-DELETE: 削除済みshapeを除外（復活防止）★★★
     const dbShapesFiltered = dbShapesForView.filter(s => !deletedShapeIdsRef.current.has(s.id));
@@ -1987,7 +1987,7 @@ function ShareViewContent() {
     prevPaintContextIdForMergedRef.current = paintContextId;
     lastMergedShapesRef.current = merged;
     return merged;
-  }, [allShapes, draftShapes, showAllPaint, paintContextId, shouldShowDraft, storageDraftReady, composerMode, tempCommentId, canvasReady]);
+  }, [allShapes, draftShapes, showAllPaint, paintContextId, shouldShowDraft, storageDraftReady, composerMode, tempCommentId, canvasReady, activeCommentId]);
 
   // 親コメントと返信を分離（条件付きreturnの前に配置）
   const filteredComments = React.useMemo(() => {
