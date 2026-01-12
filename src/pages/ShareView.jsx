@@ -613,6 +613,14 @@ function ShareViewContent() {
     saveDraftTimeoutRef.current = setTimeout(() => {
       saveDraft(targetKey, draftShapes, { pageNo: currentPage });
       console.log('[draft] autosave fired:', { targetKey, shapesCount: draftShapes.length });
+      
+      // ★★★ P1: バッジのリアルタイム更新（edit時のみ）★★★
+      if (draftScope === 'edit' && composerTargetCommentId) {
+        setDraftCountByCommentId(prev => ({
+          ...prev,
+          [composerTargetCommentId]: draftShapes.length
+        }));
+      }
     }, 500);
     
     return () => {
@@ -956,6 +964,14 @@ function ShareViewContent() {
       return next;
     });
     
+    // ★★★ P1: バッジのリアルタイム更新（edit時のみ）★★★
+    if (draftScope === 'edit' && composerTargetCommentId) {
+      setDraftCountByCommentId(prev => ({
+        ...prev,
+        [composerTargetCommentId]: draftShapesRef.current.length
+      }));
+    }
+    
     console.log('[ShareView] Shape deleted from draft (NOT DB), added to deletedSet:', {
       shapeId: shape.id,
       targetKey,
@@ -991,6 +1007,14 @@ function ShareViewContent() {
     // ★★★ 3. ViewerCanvasもクリア（明示クリアトークンをインクリメント）★★★
     setForceClearToken(prev => prev + 1);
     viewerCanvasRef.current?.clear();
+    
+    // ★★★ P1: バッジのリアルタイム更新（edit時のみ）★★★
+    if (draftScope === 'edit' && composerTargetCommentId) {
+      setDraftCountByCommentId(prev => ({
+        ...prev,
+        [composerTargetCommentId]: 0
+      }));
+    }
     
     console.log('[handleClearAll] ========== CLEAR ALL COMPLETE ==========');
     console.log('[handleClearAll] deletedCount:', draftCount);
@@ -1093,6 +1117,15 @@ function ShareViewContent() {
           console.log('[draft] delete reason: submit (edit)');
           deleteDraft(targetKey);
           console.log('[ShareView] Deleted edit draft after submit:', targetKey);
+        }
+        
+        // ★★★ P1: バッジのリアルタイム更新（edit送信後にクリア）★★★
+        if (composerTargetCommentId) {
+          setDraftCountByCommentId(prev => {
+            const next = { ...prev };
+            delete next[composerTargetCommentId];
+            return next;
+          });
         }
         
         // 添付ファイルがあれば追加
@@ -1234,6 +1267,8 @@ function ShareViewContent() {
           deleteDraft(targetKey);
           console.log('[ShareView] Deleted draft after submit:', targetKey);
         }
+        
+        // ★★★ P1: 新規送信後はバッジ不要（tempCommentIdなのでcommentsに無い）★★★
 
         // 添付ファイルがあればアップロード＆保存
         if (pendingFiles.length > 0) {
@@ -1858,31 +1893,64 @@ function ShareViewContent() {
     });
   }, [topLevelComments, commentSort]);
 
-  // ★★★ P0: 下書きカウント（state化で確実な再描画、初回から安定表示）★★★
+  // ★★★ P0: localStorage直接スキャンで下書き検出（comments不要、初回から安定）★★★
   const [draftCountByCommentId, setDraftCountByCommentId] = useState({});
   
+  // ヘルパー: fileId単位でedit下書きをスキャン
+  const scanEditDraftsForFile = React.useCallback((fileId) => {
+    if (!fileId) return {};
+    
+    const map = {};
+    const prefix = `draftPaint:${fileId}:edit:`;
+    
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(prefix)) {
+        try {
+          const draft = loadDraft(key);
+          const count = draft?.shapes?.length || 0;
+          if (count > 0) {
+            const commentId = key.substring(prefix.length);
+            map[commentId] = count;
+          }
+        } catch (e) {
+          console.warn('[scanEditDrafts] parse error:', key, e);
+        }
+      }
+    }
+    
+    return map;
+  }, []);
+  
   useEffect(() => {
-    if (!shareLink?.file_id || !comments || comments.length === 0) {
+    if (!shareLink?.file_id) {
       setDraftCountByCommentId({});
       return;
     }
     
-    const map = {};
-    comments.forEach((comment) => {
-      const editDraftKey = getDraftKey(shareLink.file_id, comment.id, null, 'edit');
-      try {
-        const draft = loadDraft(editDraftKey);
-        const count = draft?.shapes?.length || 0;
-        if (count > 0) {
-          map[comment.id] = count;
-        }
-      } catch (e) {
-        console.warn('[draftCountByCommentId] Failed to load draft for comment:', comment.id, e);
-      }
-    });
+    // ★ まずlocalStorageをスキャン（comments不要、初回から動く）
+    const scanned = scanEditDraftsForFile(shareLink.file_id);
     
-    setDraftCountByCommentId(map);
-  }, [shareLink?.file_id, comments]);
+    // ★ commentsが揃ったら追加補正（あれば）
+    if (comments && comments.length > 0) {
+      comments.forEach((comment) => {
+        if (!scanned[comment.id]) {
+          const editDraftKey = getDraftKey(shareLink.file_id, comment.id, null, 'edit');
+          try {
+            const draft = loadDraft(editDraftKey);
+            const count = draft?.shapes?.length || 0;
+            if (count > 0) {
+              scanned[comment.id] = count;
+            }
+          } catch (e) {
+            // ignore
+          }
+        }
+      });
+    }
+    
+    setDraftCountByCommentId(scanned);
+  }, [shareLink?.file_id, comments, scanEditDraftsForFile]);
 
   const handleSaveName = () => {
     if (!guestName.trim()) return;
