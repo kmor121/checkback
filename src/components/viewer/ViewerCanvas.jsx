@@ -54,7 +54,7 @@ const sameId = (a, b) => String(a ?? '') === String(b ?? '');
 
 // 背景画像コンポーネント（チラつき防止：前の画像を保持）
 function BackgroundImage({ src, onLoad }) {
-  const [image, status] = useImage(src);
+  const [image, status] = useImage(src, 'anonymous');
   const lastImageRef = useRef(null);
   
   useEffect(() => {
