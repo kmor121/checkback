@@ -574,8 +574,6 @@ function ShareViewContent() {
     const cached = draftCacheRef.current.get(targetKey) || [];
     draftShapesRef.current = cached;
     setDraftShapes(cached);
-    hydratedKeyRef.current = targetKey;
-    setHydratedKeyState(targetKey);
     console.log('[DRAFT_DEBUG] cache restored:', JSON.stringify({
       targetKey: targetKey.substring(0, 30),
       cachedCount: cached.length,
@@ -688,6 +686,10 @@ function ShareViewContent() {
     if (normalizedShapes.length > 0) {
       showToast(`${normalizedShapes.length}個の下書きを復元しました`, 'info');
     }
+
+    // ★★★ P0 FIX: loadDraft完了後にhydratedStateをセット ★★★
+    hydratedKeyRef.current = targetKey;
+    setHydratedKeyState(targetKey);
   }, [targetKey, shareLink?.file_id, tempCommentId, draftScope, composerMode, paintContextId]);
 
   // ★★★ P3: draftShapes 変更時に自動保存（debounce付き）★★★
@@ -2181,7 +2183,13 @@ function ShareViewContent() {
       Object.keys(scanned).some(key => scanned[key] !== draftCountByCommentId[key]);
 
     if (hasChanged) {
+      const hasChanged = 
+      Object.keys(scanned).length !== Object.keys(draftCountByCommentId).length ||
+      Object.keys(scanned).some(key => scanned[key] !== draftCountByCommentId[key]);
+
+    if (hasChanged) {
       setDraftCountByCommentId(scanned);
+    }
     }
   }, [shareLink?.file_id, guestId, comments, scanEditDraftsForFile]);
 
