@@ -792,7 +792,7 @@ function ShareViewContent() {
       return;
     }
 
-    if (!guestName.trim()) {
+    if (authStatus === 'guest' && !guestName.trim()) {
       setShowNameDialog(true);
       return;
     }
@@ -1696,6 +1696,11 @@ function ShareViewContent() {
       addDebugLog(`[FIX-5] handleStartReply: auto-OFF paint (draft preserved)`);
       setPaintMode(false);
       setTool('select');
+    }
+
+    if (authStatus === 'guest' && !guestName.trim()) {
+      setShowNameDialog(true);
+      return;
     }
 
     setReplyingThreadId(parentComment.id);
