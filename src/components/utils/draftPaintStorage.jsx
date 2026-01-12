@@ -55,7 +55,6 @@ export function saveDraft(key, shapes, metadata = {}) {
   if (!key || !shapes) return false;
   
   try {
-    // ★★★ P0-B: commentIdをdraft内に保存（混線検証用）★★★
     const draft = {
       version: DRAFT_VERSION,
       updatedAt: new Date().toISOString(),
