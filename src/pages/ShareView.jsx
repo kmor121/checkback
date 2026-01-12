@@ -2091,8 +2091,14 @@ function ShareViewContent() {
   }, []);
   
   useEffect(() => {
-    if (!shareLink?.file_id || !guestId) {
+    // ★★★ P0 FIX: fileId無しの時のみクリア（guestId無しではクリアしない）★★★
+    if (!shareLink?.file_id) {
       setDraftCountByCommentId({});
+      return;
+    }
+    
+    // ★★★ P0 FIX: guestId未確定時はスキップ（{}で上書きしない）★★★
+    if (!guestId) {
       return;
     }
     
