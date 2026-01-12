@@ -527,11 +527,22 @@ function ShareViewContent() {
       draftScope,
     }));
     
-    // ★★★ P1: localStorage読み込み → 本人チェック → commentId照合 → 正規化 ★★★
+    // ★★★ P0: localStorage読み込み → authorKey＋commentId照合 → 正規化 ★★★
     const draft = loadDraft(targetKey);
     
+    // ★★★ P0-A: authorKey必須チェック（古い下書き除外、安全優先）★★★
+    if (!draft?.authorKey) {
+      console.warn('[draft] Ignoring draft without authorKey (legacy):', { targetKey });
+      setDraftShapes([]);
+      draftShapesRef.current = [];
+      draftCacheRef.current.set(targetKey, []);
+      hydratedKeyRef.current = targetKey;
+      setHydratedKeyState(targetKey);
+      return;
+    }
+    
     // ★★★ P0-A: 本人の下書きのみ復元（混線防止）★★★
-    if (draft?.authorKey && draft.authorKey !== guestId) {
+    if (draft.authorKey !== guestId) {
       console.warn('[draft] Ignoring draft from different author:', {
         targetKey,
         draftAuthor: draft.authorKey?.substring(0, 12),
@@ -545,13 +556,28 @@ function ShareViewContent() {
       return;
     }
     
-    // ★★★ P0-B: commentId照合（キー由来とdraft内部で一致確認、混線レース防止）★★★
-    const expectedCommentId = draftScope === 'edit' ? paintContextId : (draftScope === 'new' ? tempCommentId : null);
-    if (draft?.commentId && expectedCommentId && String(draft.commentId) !== String(expectedCommentId)) {
+    // ★★★ P0-B: commentId必須チェック（古い下書き除外、安全優先）★★★
+    if (!draft?.commentId) {
+      console.warn('[draft] Ignoring draft without commentId (legacy):', { targetKey });
+      setDraftShapes([]);
+      draftShapesRef.current = [];
+      draftCacheRef.current.set(targetKey, []);
+      hydratedKeyRef.current = targetKey;
+      setHydratedKeyState(targetKey);
+      return;
+    }
+    
+    // ★★★ P0-B: commentId照合（キーから抽出したIDと一致確認、混線レース防止）★★★
+    const prefix = draftScope === 'edit' 
+      ? `${DRAFT_PREFIX}${shareLink.file_id}:edit:`
+      : `${DRAFT_PREFIX}${shareLink.file_id}:new:`;
+    const commentIdFromKey = targetKey ? targetKey.substring(prefix.length) : null;
+    
+    if (!commentIdFromKey || String(draft.commentId) !== String(commentIdFromKey)) {
       console.warn('[draft] Ignoring draft with mismatched commentId:', {
-        targetKey,
+        targetKey: targetKey?.substring(0, 40),
         draftCommentId: draft.commentId?.substring(0, 12),
-        expectedCommentId: expectedCommentId?.substring(0, 12),
+        commentIdFromKey: commentIdFromKey?.substring(0, 12),
       });
       setDraftShapes([]);
       draftShapesRef.current = [];
