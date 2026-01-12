@@ -2226,11 +2226,6 @@ function ShareViewContent() {
     if (hasChanged) {
       setDraftCountByCommentId(scanned);
     }
-    }
-    }
-    }
-    }
-    }
   }, [shareLink?.file_id, guestId, comments, scanEditDraftsForFile]);
 
   const handleSaveName = () => {
