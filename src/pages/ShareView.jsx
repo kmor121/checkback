@@ -234,6 +234,7 @@ function ShareViewContent() {
             setGuestName(name);
             localStorage.setItem(`guestName_${token}`, name);
             localStorage.setItem('guestName_global', name);
+            setAuthUser(user);
           } else {
             setShowNameDialog(true);
           }
@@ -243,6 +244,31 @@ function ShareViewContent() {
           setShowNameDialog(true);
         });
     }
+    
+    // ★★★ P1: 認証ユーザー情報とアプリ権限を取得（名前取得とは独立）★★★
+    base44.auth.me()
+      .then(user => {
+        if (user) {
+          setAuthUser(user);
+          // UserRoleエンティティから権限を取得
+          base44.entities.UserRole.filter({ user_id: user.id })
+            .then(roles => {
+              if (roles && roles.length > 0) {
+                setUserAppRole(roles[0].app_role);
+              } else {
+                setUserAppRole('member');
+              }
+            })
+            .catch(() => {
+              setUserAppRole('member');
+            });
+        }
+      })
+      .catch(() => {
+        // 401の場合は権限なし（本人のみ編集可能）
+        setAuthUser(null);
+        setUserAppRole(null);
+      });
 
     // パスワード検証済みフラグを確認
     const isVerified = sessionStorage.getItem(`passwordVerified_${token}`) === '1';
