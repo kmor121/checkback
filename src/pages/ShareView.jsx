@@ -697,12 +697,13 @@ function ShareViewContent() {
     }
     
     // ★★★ P0-FIX: 空の下書きは即座に削除して復活を防止 ★★★
-    if (draftShapes.length === 0) {
+    // ★★★ FIX-v6: new/edit 中は削除しない（下書き勝手消失を止血）★★★
+    if (draftShapes.length === 0 && draftScope !== 'new' && draftScope !== 'edit') {
       // 既にこのキーで削除済みなら何もしない（ループ防止）
       if (lastDeletedKeyRef.current === targetKey) {
         return;
       }
-      console.log('[P0-FIX] Deleting empty draft to prevent ghost shapes:', { targetKey, hydratedKey: hydratedKeyRef.current?.substring(0, 30) || 'null' });
+      console.log('[P0-FIX] Deleting empty draft to prevent ghost shapes:', { targetKey, draftScope, hydratedKey: hydratedKeyRef.current?.substring(0, 30) || 'null' });
       deleteDraft(targetKey);
       draftCacheRef.current.delete(targetKey);
       lastDeletedKeyRef.current = targetKey; // 削除したキーを記録
