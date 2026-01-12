@@ -214,16 +214,18 @@ function ShareViewContent() {
     }
     setGuestId(storedGuestId);
     
-    // ★★★ P2: ログイン中はアカウント名を優先 ★★★
+    // ★★★ P1: ログイン中はアカウント名を優先（ダイアログ不要）★★★
     base44.auth.me()
       .then(user => {
-        if (user?.full_name) {
-          setGuestName(user.full_name);
-          localStorage.setItem(`guestName_${token}`, user.full_name);
+        if (user) {
+          // ログインしている場合はダイアログを出さない
+          const name = user.full_name || user.email || 'ログインユーザー';
+          setGuestName(name);
+          localStorage.setItem(`guestName_${token}`, name);
           return;
         }
         
-        // 未ログインまたは名前無しの場合、従来通り
+        // user=null の場合、従来通り
         const storedName = localStorage.getItem(`guestName_${token}`);
         if (storedName) {
           setGuestName(storedName);
