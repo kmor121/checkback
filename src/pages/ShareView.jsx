@@ -609,6 +609,7 @@ function ShareViewContent() {
       setDraftShapes([]);
       draftShapesRef.current = [];
       draftCacheRef.current.set(targetKey, []);
+      // ★★★ P0 FIX: 0件/legacyでもhydrate完了を通知し、gateを開ける ★★★
       hydratedKeyRef.current = targetKey;
       setHydratedKeyState(targetKey);
       return;
@@ -620,6 +621,7 @@ function ShareViewContent() {
       setDraftShapes([]);
       draftShapesRef.current = [];
       draftCacheRef.current.set(targetKey, []);
+      // ★★★ P0 FIX: 0件/legacyでもhydrate完了を通知し、gateを開ける ★★★
       hydratedKeyRef.current = targetKey;
       setHydratedKeyState(targetKey);
       return;
