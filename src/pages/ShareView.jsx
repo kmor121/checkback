@@ -527,8 +527,24 @@ function ShareViewContent() {
       draftScope,
     }));
     
-    // ★★★ P1: localStorage読み込み → 正規化 → キャッシュ更新 ★★★
+    // ★★★ P1: localStorage読み込み → 本人チェック → 正規化 → キャッシュ更新 ★★★
     const draft = loadDraft(targetKey);
+    
+    // ★★★ P0: 本人の下書きのみ復元（混線防止）★★★
+    if (draft?.authorKey && draft.authorKey !== guestId) {
+      console.warn('[draft] Ignoring draft from different author:', {
+        targetKey,
+        draftAuthor: draft.authorKey?.substring(0, 12),
+        currentGuestId: guestId?.substring(0, 12),
+      });
+      setDraftShapes([]);
+      draftShapesRef.current = [];
+      draftCacheRef.current.set(targetKey, []);
+      hydratedKeyRef.current = targetKey;
+      setHydratedKeyState(targetKey);
+      return;
+    }
+    
     const shapes = draft?.shapes || [];
     
     // ★★★ CRITICAL: edit時はtempCommentIdを使わず、paintContextIdで正規化 ★★★
@@ -1900,8 +1916,8 @@ function ShareViewContent() {
   // ★★★ P0: localStorage直接スキャンで下書き検出（comments不要、初回から安定）★★★
   const [draftCountByCommentId, setDraftCountByCommentId] = useState({});
   
-  // ヘルパー: fileId単位でedit下書きをスキャン
-  const scanEditDraftsForFile = React.useCallback((fileId) => {
+  // ヘルパー: fileId単位でedit下書きをスキャン（P0: 本人の下書きのみ）
+  const scanEditDraftsForFile = React.useCallback((fileId, currentGuestId) => {
     if (!fileId) return {};
     
     const map = {};
@@ -1912,6 +1928,12 @@ function ShareViewContent() {
       if (key && key.startsWith(prefix)) {
         try {
           const draft = loadDraft(key);
+          
+          // ★★★ P0: 本人の下書きのみカウント（混線防止）★★★
+          if (draft?.authorKey && draft.authorKey !== currentGuestId) {
+            continue;
+          }
+          
           const count = draft?.shapes?.length || 0;
           if (count > 0) {
             const commentId = key.substring(prefix.length);
@@ -1927,21 +1949,27 @@ function ShareViewContent() {
   }, []);
   
   useEffect(() => {
-    if (!shareLink?.file_id) {
+    if (!shareLink?.file_id || !guestId) {
       setDraftCountByCommentId({});
       return;
     }
     
-    // ★ まずlocalStorageをスキャン（comments不要、初回から動く）
-    const scanned = scanEditDraftsForFile(shareLink.file_id);
+    // ★ まずlocalStorageをスキャン（P0: 本人の下書きのみ、comments不要）
+    const scanned = scanEditDraftsForFile(shareLink.file_id, guestId);
     
-    // ★ commentsが揃ったら追加補正（あれば）
+    // ★ commentsが揃ったら追加補正（本人チェック付き）
     if (comments && comments.length > 0) {
       comments.forEach((comment) => {
         if (!scanned[comment.id]) {
           const editDraftKey = getDraftKey(shareLink.file_id, comment.id, null, 'edit');
           try {
             const draft = loadDraft(editDraftKey);
+            
+            // ★★★ P0: 本人の下書きのみカウント ★★★
+            if (draft?.authorKey && draft.authorKey !== guestId) {
+              return;
+            }
+            
             const count = draft?.shapes?.length || 0;
             if (count > 0) {
               scanned[comment.id] = count;
@@ -1954,7 +1982,7 @@ function ShareViewContent() {
     }
     
     setDraftCountByCommentId(scanned);
-  }, [shareLink?.file_id, comments, scanEditDraftsForFile]);
+  }, [shareLink?.file_id, guestId, comments, scanEditDraftsForFile]);
 
   const handleSaveName = () => {
     if (!guestName.trim()) return;
@@ -2682,10 +2710,21 @@ function ShareViewContent() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => handleStartEditComment(comment)}>
-                                  <Edit className="w-4 h-4 mr-2" />
-                                  編集
-                                </DropdownMenuItem>
+                                {comment.author_key === guestId && (
+                                  <>
+                                    <DropdownMenuItem onClick={() => handleStartEditComment(comment)}>
+                                      <Edit className="w-4 h-4 mr-2" />
+                                      編集
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem 
+                                      onClick={() => handleDeleteComment(comment)}
+                                      className="text-red-600"
+                                    >
+                                      <Trash className="w-4 h-4 mr-2" />
+                                      削除
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
                                 <DropdownMenuItem onClick={() => handleStartReply(comment)}>
                                   <MessageSquare className="w-4 h-4 mr-2" />
                                   返信
@@ -2694,15 +2733,8 @@ function ShareViewContent() {
                                   <LinkIcon className="w-4 h-4 mr-2" />
                                   URLをコピー
                                 </DropdownMenuItem>
-                                <DropdownMenuItem 
-                                  onClick={() => handleDeleteComment(comment)}
-                                  className="text-red-600"
-                                >
-                                  <Trash className="w-4 h-4 mr-2" />
-                                  削除
-                                </DropdownMenuItem>
                               </DropdownMenuContent>
-                            </DropdownMenu>
+                              </DropdownMenu>
                           </div>
                         </CardContent>
                       </Card>
