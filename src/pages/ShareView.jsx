@@ -1392,17 +1392,25 @@ function ShareViewContent() {
     setIsDockOpen(true);
     addDebugLog(`[A] enterEdit: targetId=${comment.id.substring(0, 12)} → mode=edit`);
 
-    // ★★★ P1-seed FIX: 編集開始時に対象コメントのDB shapesをドラフトにseed ★★★
-    // DBからフェッチ済みの全シェイプから、このコメントのシェイプのみを抽出
-    // resolveCommentId を使用して型ブレを考慮した比較を行う
-    const shapesToSeed = allShapes.filter(s => resolveCommentId(s) === String(comment.id));
+    // ★★★ P1-seed FIX: 編集開始時に localStorage の下書き優先、無ければDB shapes ★★★
+    const editDraftKey = getDraftKey(shareLink.file_id, comment.id, null, 'edit');
+    const existingDraft = loadDraft(editDraftKey);
+
+    let shapesToSeed = [];
+    if (existingDraft?.shapes?.length > 0) {
+      shapesToSeed = existingDraft.shapes;
+      addDebugLog(`[P1-seed] Loaded ${shapesToSeed.length} draft shapes for comment ${comment.id.substring(0, 12)}`);
+      showToast('下書きを復元しました', 'info');
+    } else {
+      shapesToSeed = allShapes.filter(s => resolveCommentId(s) === String(comment.id));
+      addDebugLog(`[P1-seed] Seeded ${shapesToSeed.length} DB shapes for comment ${comment.id.substring(0, 12)}`);
+    }
     
     // draftShapes にコピーし、既存ドラフトとして扱う
     setDraftShapes(shapesToSeed);
     draftShapesRef.current = shapesToSeed;
     
-    // キャッシュにも即座に反映 (targetKey は composerTargetCommentId に確定済み)
-    const editDraftKey = getDraftKey(shareLink.file_id, comment.id, null, 'edit');
+    // キャッシュにも即座に反映
     draftCacheRef.current.set(editDraftKey, shapesToSeed);
 
     addDebugLog(`[P1-seed] Seeded ${shapesToSeed.length} shapes to draft for comment ${comment.id.substring(0, 12)}`);
