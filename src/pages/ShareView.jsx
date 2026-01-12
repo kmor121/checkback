@@ -527,15 +527,31 @@ function ShareViewContent() {
       draftScope,
     }));
     
-    // ★★★ P1: localStorage読み込み → 本人チェック → 正規化 → キャッシュ更新 ★★★
+    // ★★★ P1: localStorage読み込み → 本人チェック → commentId照合 → 正規化 ★★★
     const draft = loadDraft(targetKey);
     
-    // ★★★ P0: 本人の下書きのみ復元（混線防止）★★★
+    // ★★★ P0-A: 本人の下書きのみ復元（混線防止）★★★
     if (draft?.authorKey && draft.authorKey !== guestId) {
       console.warn('[draft] Ignoring draft from different author:', {
         targetKey,
         draftAuthor: draft.authorKey?.substring(0, 12),
         currentGuestId: guestId?.substring(0, 12),
+      });
+      setDraftShapes([]);
+      draftShapesRef.current = [];
+      draftCacheRef.current.set(targetKey, []);
+      hydratedKeyRef.current = targetKey;
+      setHydratedKeyState(targetKey);
+      return;
+    }
+    
+    // ★★★ P0-B: commentId照合（キー由来とdraft内部で一致確認、混線レース防止）★★★
+    const expectedCommentId = draftScope === 'edit' ? paintContextId : (draftScope === 'new' ? tempCommentId : null);
+    if (draft?.commentId && expectedCommentId && String(draft.commentId) !== String(expectedCommentId)) {
+      console.warn('[draft] Ignoring draft with mismatched commentId:', {
+        targetKey,
+        draftCommentId: draft.commentId?.substring(0, 12),
+        expectedCommentId: expectedCommentId?.substring(0, 12),
       });
       setDraftShapes([]);
       draftShapesRef.current = [];
@@ -627,12 +643,16 @@ function ShareViewContent() {
     }
     
     saveDraftTimeoutRef.current = setTimeout(() => {
+      // ★★★ P0-B: commentIdも保存（混線検証用）★★★
+      const commentIdForSave = draftScope === 'edit' ? composerTargetCommentId : (draftScope === 'new' ? tempCommentId : null);
+      
       saveDraft(targetKey, draftShapes, { 
         pageNo: currentPage,
         authorKey: guestId,
-        authorName: guestName
+        authorName: guestName,
+        commentId: commentIdForSave,
       });
-      console.log('[draft] autosave fired:', { targetKey, shapesCount: draftShapes.length });
+      console.log('[draft] autosave fired:', { targetKey, shapesCount: draftShapes.length, commentId: commentIdForSave?.substring(0, 12) || 'null' });
       
       // ★★★ P1: バッジのリアルタイム更新（edit時のみ）★★★
       if (draftScope === 'edit' && composerTargetCommentId) {
@@ -1916,7 +1936,7 @@ function ShareViewContent() {
   // ★★★ P0: localStorage直接スキャンで下書き検出（comments不要、初回から安定）★★★
   const [draftCountByCommentId, setDraftCountByCommentId] = useState({});
   
-  // ヘルパー: fileId単位でedit下書きをスキャン（P0: 本人の下書きのみ）
+  // ヘルパー: fileId単位でedit下書きをスキャン（P0: 本人＋commentId照合）
   const scanEditDraftsForFile = React.useCallback((fileId, currentGuestId) => {
     if (!fileId) return {};
     
@@ -1929,15 +1949,25 @@ function ShareViewContent() {
         try {
           const draft = loadDraft(key);
           
-          // ★★★ P0: 本人の下書きのみカウント（混線防止）★★★
+          // ★★★ P0-A: 本人の下書きのみカウント（混線防止）★★★
           if (draft?.authorKey && draft.authorKey !== currentGuestId) {
+            continue;
+          }
+          
+          // ★★★ P0-B: commentId照合（キー由来とdraft内部で一致確認）★★★
+          const commentIdFromKey = key.substring(prefix.length);
+          if (draft?.commentId && String(draft.commentId) !== String(commentIdFromKey)) {
+            console.warn('[scanEditDrafts] commentId mismatch, skipping:', {
+              key: key.substring(0, 40),
+              keyCommentId: commentIdFromKey.substring(0, 12),
+              draftCommentId: draft.commentId?.substring(0, 12),
+            });
             continue;
           }
           
           const count = draft?.shapes?.length || 0;
           if (count > 0) {
-            const commentId = key.substring(prefix.length);
-            map[commentId] = count;
+            map[commentIdFromKey] = count;
           }
         } catch (e) {
           console.warn('[scanEditDrafts] parse error:', key, e);
@@ -1965,8 +1995,17 @@ function ShareViewContent() {
           try {
             const draft = loadDraft(editDraftKey);
             
-            // ★★★ P0: 本人の下書きのみカウント ★★★
+            // ★★★ P0-A: 本人の下書きのみカウント ★★★
             if (draft?.authorKey && draft.authorKey !== guestId) {
+              return;
+            }
+            
+            // ★★★ P0-B: commentId照合（混線防止）★★★
+            if (draft?.commentId && String(draft.commentId) !== String(comment.id)) {
+              console.warn('[draftCountByCommentId] commentId mismatch, skipping:', {
+                commentId: comment.id.substring(0, 12),
+                draftCommentId: draft.commentId?.substring(0, 12),
+              });
               return;
             }
             

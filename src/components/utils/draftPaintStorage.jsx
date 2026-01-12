@@ -49,12 +49,13 @@ export function generateTempCommentId() {
  * 下書きを保存
  * @param {string} key - getDraftKeyで生成したキー
  * @param {Array} shapes - 描画データの配列
- * @param {object} metadata - 追加メタデータ（pageNo, authorKey, authorName等）
+ * @param {object} metadata - 追加メタデータ（pageNo, authorKey, authorName, commentId等）
  */
 export function saveDraft(key, shapes, metadata = {}) {
   if (!key || !shapes) return false;
   
   try {
+    // ★★★ P0-B: commentIdをdraft内に保存（混線検証用）★★★
     const draft = {
       version: DRAFT_VERSION,
       updatedAt: new Date().toISOString(),
@@ -62,7 +63,7 @@ export function saveDraft(key, shapes, metadata = {}) {
       ...metadata,
     };
     localStorage.setItem(key, JSON.stringify(draft));
-    console.log('[draftPaintStorage] Saved draft:', key, 'shapes:', shapes.length, 'author:', metadata.authorKey?.substring(0, 12) || 'none');
+    console.log('[draftPaintStorage] Saved draft:', key, 'shapes:', shapes.length, 'author:', metadata.authorKey?.substring(0, 12) || 'none', 'commentId:', metadata.commentId?.substring(0, 12) || 'none');
     return true;
   } catch (e) {
     console.error('[draftPaintStorage] Failed to save draft:', e);
