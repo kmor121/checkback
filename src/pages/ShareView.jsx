@@ -1989,13 +1989,27 @@ function ShareViewContent() {
     // ★★★ FIX-2: DB shapes を常にベースにする（DB優先、merged≥dbを保証）★★★
     // ★★★ P1 FIX: edit/new 中はDB shapesを混ぜない（ドラフト単一ソース）★★★
     // ★★★ FIX-v6: view + activeCommentId=null なら必ず [] （選択解除で描画消失）★★★
-    const dbShapesForView = (isEditMode || isNewMode)
-      ? []
-      : (composerMode === 'view' && !activeCommentId
-        ? []  // FIX-v6: 選択解除時は完全クリア
-        : (showAllPaint
-          ? allShapesNormalized
-          : (paintContextId && activeCommentId ? allShapesNormalized.filter(s => resolveCommentId(s) === paintContextId) : [])));
+    const dbShapesForView = (() => {
+      // Hunk A: 表示コンテキストを安全に決定
+      const viewCtxId = paintContextId ||
+                        (isEditMode ? composerTargetCommentId : null) ||
+                        (isNewMode ? tempCommentId : null) ||
+                        activeCommentId;
+
+      if (composerMode === 'view' && !activeCommentId) {
+        return []; // viewモードでコメント未選択時は完全クリア（既存仕様維持）
+      }
+
+      if (showAllPaint) {
+        return allShapesNormalized;
+      }
+      
+      if (!viewCtxId) {
+        return []; // コンテキストがなければ何も表示しない
+      }
+
+      return allShapesNormalized.filter(s => resolveCommentId(s) === String(viewCtxId));
+    })();
     
     // ★★★ FIX-DELETE: 削除済みshapeを除外（復活防止）★★★
     const dbShapesFiltered = dbShapesForView.filter(s => !deletedShapeIdsRef.current.has(s.id));
