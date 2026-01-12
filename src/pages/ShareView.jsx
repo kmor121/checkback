@@ -1719,8 +1719,8 @@ function ShareViewContent() {
 
   // コメント削除（関連PaintShapeも削除）
   const handleDeleteComment = async (comment) => {
-    // ★★★ P1: 本人のみ削除可能（関数レベルガード）★★★
-    if (comment.author_key !== guestId) {
+    // ★★★ P1: 権限判定（admin/manager/本人のみ）★★★
+    if (!canEditDeleteComment(comment)) {
       showToast('他のユーザーのコメントは削除できません', 'error');
       return;
     }
