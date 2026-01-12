@@ -1656,6 +1656,12 @@ function ShareViewContent() {
 
   // コメント削除（関連PaintShapeも削除）
   const handleDeleteComment = async (comment) => {
+    // ★★★ P1: 本人のみ削除可能（関数レベルガード）★★★
+    if (comment.author_key !== guestId) {
+      showToast('他のユーザーのコメントは削除できません', 'error');
+      return;
+    }
+    
     if (typeof window !== 'undefined' && !window.confirm('このコメントと関連する描画を削除しますか？')) {
       return;
     }
