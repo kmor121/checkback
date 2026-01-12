@@ -2713,7 +2713,7 @@ function ShareViewContent() {
                             <div 
                               className="flex-1 cursor-pointer" 
                               onClick={() => selectComment(comment)}
-                              onDoubleClick={() => !comment.resolved && enterEdit(comment)}
+                              onDoubleClick={() => !comment.resolved && handleStartEditComment(comment)}
                             >
                               <div className="flex items-center gap-2 mb-1">
                                 <span className="text-sm font-medium">{comment.author_name}</span>
