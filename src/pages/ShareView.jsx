@@ -2475,10 +2475,9 @@ function ShareViewContent() {
                                   const commentAttachments = attachmentsByComment.get(comment.id) || [];
                                   const isThreadOpen = replyingThreadId === comment.id;
                                   
-                                  // ★★★ P5: 下書きカウント（cache含む）★★★
-                                  const editDraftKey = shareLink?.file_id ? getDraftKey(shareLink.file_id, comment.id, null, 'edit') : null;
-                                  const hasDraft = editDraftKey && draftCacheRef.current.has(editDraftKey);
-                                  const draftCount = hasDraft ? (draftCacheRef.current.get(editDraftKey)?.length || 0) : 0;
+                                  // ★★★ P0: state辞書から参照（確実な再描画）★★★
+                                  const draftCount = draftCountByCommentId[comment.id] || 0;
+                                  const hasDraft = draftCount > 0;
 
                   return (
                     <div key={comment.id} className="space-y-2">
