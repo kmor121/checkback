@@ -216,56 +216,52 @@ function ShareViewContent() {
     }
     setGuestId(storedGuestId);
     
-    // ★★★ P0: 2段階の名前取得（token単位 → global → auth.me）★★★
     const tokenName = localStorage.getItem(`guestName_${token}`);
     const globalName = localStorage.getItem('guestName_global');
-    
-    if (tokenName) {
-      setGuestName(tokenName);
-    } else if (globalName) {
-      setGuestName(globalName);
-      localStorage.setItem(`guestName_${token}`, globalName);
-    } else {
-      // どちらも無い場合のみ auth.me を試す
-      base44.auth.me()
-        .then(user => {
-          if (user) {
-            const name = user.full_name || user.email || 'ログインユーザー';
-            setGuestName(name);
-            localStorage.setItem(`guestName_${token}`, name);
-            localStorage.setItem('guestName_global', name);
-            setAuthUser(user);
-          } else {
-            setShowNameDialog(true);
-          }
-        })
-        .catch(() => {
-          // 401は想定内（ShareViewは未認証でアクセスされることが多い）
-          setShowNameDialog(true);
-        });
-    }
-    
-    // ★★★ P1: 認証ユーザー情報とアプリ権限を取得（名前取得とは独立）★★★
+
     base44.auth.me()
       .then(user => {
         if (user) {
+          // ログイン済み：ログイン名を強制適用
+          const displayName = user.full_name || 'ログインユーザー';
+          setGuestName(displayName);
+          localStorage.setItem(`guestName_${token}`, displayName);
+          localStorage.setItem('guestName_global', displayName);
+          setShowNameDialog(false);
           setAuthUser(user);
-          // UserRoleエンティティから権限を取得
+          
+          // UserRoleを取得
           base44.entities.UserRole.filter({ user_id: user.id })
             .then(roles => {
-              if (roles && roles.length > 0) {
-                setUserAppRole(roles[0].app_role);
-              } else {
-                setUserAppRole('member');
-              }
+              setUserAppRole(roles?.[0]?.app_role || 'member');
             })
             .catch(() => {
-              setUserAppRole('member');
+              setUserAppRole('member'); // 失敗時もmember
             });
+
+        } else {
+          // 未ログイン：localStorageを確認
+          if (tokenName) {
+            setGuestName(tokenName);
+          } else if (globalName) {
+            setGuestName(globalName);
+            localStorage.setItem(`guestName_${token}`, globalName);
+          } else {
+            setShowNameDialog(true); // localStorageにも無ければダイアログ表示
+          }
+          setAuthUser(null);
+          setUserAppRole(null);
         }
       })
       .catch(() => {
-        // 401の場合は権限なし（本人のみ編集可能）
+        // auth.me自体がネットワークエラー等で失敗した場合
+        if (tokenName) {
+          setGuestName(tokenName);
+        } else if (globalName) {
+          setGuestName(globalName);
+        } else {
+          setShowNameDialog(true);
+        }
         setAuthUser(null);
         setUserAppRole(null);
       });
