@@ -611,7 +611,11 @@ function ShareViewContent() {
     }
     
     saveDraftTimeoutRef.current = setTimeout(() => {
-      saveDraft(targetKey, draftShapes, { pageNo: currentPage });
+      saveDraft(targetKey, draftShapes, { 
+        pageNo: currentPage,
+        authorKey: guestId,
+        authorName: guestName
+      });
       console.log('[draft] autosave fired:', { targetKey, shapesCount: draftShapes.length });
       
       // ★★★ P1: バッジのリアルタイム更新（edit時のみ）★★★
