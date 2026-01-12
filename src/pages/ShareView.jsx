@@ -640,6 +640,7 @@ function ShareViewContent() {
       setDraftShapes([]);
       draftShapesRef.current = [];
       draftCacheRef.current.set(targetKey, []);
+      // ★★★ P0 FIX: 0件/legacyでもhydrate完了を通知し、gateを開ける ★★★
       hydratedKeyRef.current = targetKey;
       setHydratedKeyState(targetKey);
       return;
@@ -2217,7 +2218,14 @@ function ShareViewContent() {
       Object.keys(scanned).some(key => scanned[key] !== draftCountByCommentId[key]);
 
     if (hasChanged) {
+      // ★★★ P1 FIX: 差分がある場合のみ更新して無限ループを防止 ★★★
+    const hasChanged = 
+      Object.keys(scanned).length !== Object.keys(draftCountByCommentId).length ||
+      Object.keys(scanned).some(key => scanned[key] !== draftCountByCommentId[key]);
+
+    if (hasChanged) {
       setDraftCountByCommentId(scanned);
+    }
     }
     }
     }
