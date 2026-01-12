@@ -583,6 +583,11 @@ function ShareViewContent() {
       draftScope,
     }));
     
+    // ★★★ P0 FIX: ここで hydratedKeyState をセットせず、非同期のloadDraft完了後に移動 ★★★
+    // hydratedKeyRef.current = targetKey;
+    // setHydratedKeyState(targetKey);
+
+    
     // ★★★ P0: localStorage読み込み → authorKey＋commentId照合 → 正規化 ★★★
     const draft = loadDraft(targetKey);
     
@@ -2170,7 +2175,14 @@ function ShareViewContent() {
       });
     }
     
-    setDraftCountByCommentId(scanned);
+    // ★★★ P1 FIX: 差分がある場合のみ更新して無限ループを防止 ★★★
+    const hasChanged = 
+      Object.keys(scanned).length !== Object.keys(draftCountByCommentId).length ||
+      Object.keys(scanned).some(key => scanned[key] !== draftCountByCommentId[key]);
+
+    if (hasChanged) {
+      setDraftCountByCommentId(scanned);
+    }
   }, [shareLink?.file_id, guestId, comments, scanEditDraftsForFile]);
 
   const handleSaveName = () => {
