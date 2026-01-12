@@ -1550,11 +1550,19 @@ function ShareViewContent() {
     const existingDraft = loadDraft(editDraftKey);
 
     let shapesToSeed = [];
-    if (existingDraft?.shapes?.length > 0) {
+    // ★★★ P0: authorKey検証（自分の下書きだけ復元）★★★
+    const currentAuthorKey = authUser?.id || guestId;
+    const draftAuthorKey = existingDraft?.authorKey;
+    const isDraftMine = draftAuthorKey && currentAuthorKey && String(draftAuthorKey) === String(currentAuthorKey);
+    
+    if (existingDraft?.shapes?.length > 0 && isDraftMine) {
       shapesToSeed = existingDraft.shapes;
-      addDebugLog(`[P1-seed] Loaded ${shapesToSeed.length} draft shapes for comment ${comment.id.substring(0, 12)}`);
+      addDebugLog(`[P0] Loaded own draft shapes for comment ${comment.id.substring(0, 12)} (authorKey matched)`);
       showToast('下書きを復元しました', 'info');
     } else {
+      if (existingDraft?.shapes?.length > 0 && !isDraftMine) {
+        addDebugLog(`[P0] Ignoring draft from different author: expected=${currentAuthorKey}, draft=${draftAuthorKey}`);
+      }
       shapesToSeed = allShapes.filter(s => resolveCommentId(s) === String(comment.id));
       addDebugLog(`[P1-seed] Seeded ${shapesToSeed.length} DB shapes for comment ${comment.id.substring(0, 12)}`);
     }
