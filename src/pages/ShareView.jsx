@@ -1962,7 +1962,7 @@ function ShareViewContent() {
   // ★★★ P0: localStorage直接スキャンで下書き検出（comments不要、初回から安定）★★★
   const [draftCountByCommentId, setDraftCountByCommentId] = useState({});
   
-  // ヘルパー: fileId単位でedit下書きをスキャン（P0: 本人＋commentId照合）
+  // ヘルパー: fileId単位でedit下書きをスキャン（P0: 本人＋commentId照合＋古い下書き除外）
   const scanEditDraftsForFile = React.useCallback((fileId, currentGuestId) => {
     if (!fileId) return {};
     
@@ -1975,14 +1975,26 @@ function ShareViewContent() {
         try {
           const draft = loadDraft(key);
           
+          // ★★★ P0-A: authorKey必須チェック（古い下書き除外）★★★
+          if (!draft?.authorKey) {
+            console.warn('[scanEditDrafts] skipping draft without authorKey (legacy):', key.substring(0, 40));
+            continue;
+          }
+          
           // ★★★ P0-A: 本人の下書きのみカウント（混線防止）★★★
-          if (draft?.authorKey && draft.authorKey !== currentGuestId) {
+          if (draft.authorKey !== currentGuestId) {
+            continue;
+          }
+          
+          // ★★★ P0-B: commentId必須チェック（古い下書き除外）★★★
+          if (!draft?.commentId) {
+            console.warn('[scanEditDrafts] skipping draft without commentId (legacy):', key.substring(0, 40));
             continue;
           }
           
           // ★★★ P0-B: commentId照合（キー由来とdraft内部で一致確認）★★★
           const commentIdFromKey = key.substring(prefix.length);
-          if (draft?.commentId && String(draft.commentId) !== String(commentIdFromKey)) {
+          if (String(draft.commentId) !== String(commentIdFromKey)) {
             console.warn('[scanEditDrafts] commentId mismatch, skipping:', {
               key: key.substring(0, 40),
               keyCommentId: commentIdFromKey.substring(0, 12),
