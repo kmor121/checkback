@@ -690,6 +690,10 @@ function ShareViewContent() {
     // ★★★ P0 FIX: loadDraft完了後にhydratedStateをセット ★★★
     hydratedKeyRef.current = targetKey;
     setHydratedKeyState(targetKey);
+
+    // ★★★ P0 FIX: loadDraft完了後にhydratedStateをセット ★★★
+    hydratedKeyRef.current = targetKey;
+    setHydratedKeyState(targetKey);
   }, [targetKey, shareLink?.file_id, tempCommentId, draftScope, composerMode, paintContextId]);
 
   // ★★★ P3: draftShapes 変更時に自動保存（debounce付き）★★★
@@ -2188,7 +2192,14 @@ function ShareViewContent() {
       Object.keys(scanned).some(key => scanned[key] !== draftCountByCommentId[key]);
 
     if (hasChanged) {
+      // ★★★ P1 FIX: 差分がある場合のみ更新して無限ループを防止 ★★★
+    const hasChanged = 
+      Object.keys(scanned).length !== Object.keys(draftCountByCommentId).length ||
+      Object.keys(scanned).some(key => scanned[key] !== draftCountByCommentId[key]);
+
+    if (hasChanged) {
       setDraftCountByCommentId(scanned);
+    }
     }
     }
   }, [shareLink?.file_id, guestId, comments, scanEditDraftsForFile]);

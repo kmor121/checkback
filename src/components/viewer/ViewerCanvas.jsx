@@ -605,7 +605,7 @@ const ViewerCanvas = forwardRef(({
       // P1 FIX: 描画がないコメントを選択した場合（renderTargetCommentId があり、existingShapes が空）、
       // 遷移中であっても即座にCanvasをクリアする。これが描画混入の根本対策。
       // ★★★ FIX-v6: view時かつrenderTargetCommentIdが null のときも即座にクリア ★★★
-      // Hunk 4: paintMode中（new/edit中）は安易にクリアしない
+      // ★★★ P0 FIX: paintMode中は絶対にクリアしない ★★★
       if (!paintMode && (renderTargetCommentId || renderTargetCommentId === null)) {
               console.log('[P1 FIX] Empty shapes for a specific comment confirmed. Clearing map.', { ctx, prevMapSize, renderTargetCommentId: renderTargetCommentId?.substring(0,12) || 'null' });
               shapesMapRef.current = new Map();
