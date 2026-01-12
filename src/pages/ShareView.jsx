@@ -132,6 +132,7 @@ function ShareViewContent() {
   const [draftShapes, setDraftShapes] = useState([]);
   const draftShapesRef = useRef([]);
   const draftCacheRef = useRef(new Map()); // ★★★ P1: targetKey -> shapes[] のキャッシュ ★★★
+  const seededFromDBRef = useRef(false); // ★★★ Hunk1: DB seed直後の autosave スキップ用フラグ ★★★
   const [canvasSessionNonce, setCanvasSessionNonce] = useState(0);
   
   // ★★★ P2: 明示クリア用トークン（全削除/送信成功後のみインクリメント）★★★
@@ -743,6 +744,20 @@ function ShareViewContent() {
     }
     
     saveDraftTimeoutRef.current = setTimeout(() => {
+      // ★★★ Hunk1: DB seed直後で_dirtyが無ければ保存スキップ ★★★
+      if (draftScope === 'edit' && seededFromDBRef.current) {
+        const hasUserChange = draftShapes.some(s => s?._dirty);
+        if (!hasUserChange) {
+          console.log('[Hunk1] autosave SKIPPED (DB seed, no user change yet):', {
+            targetKey: targetKey?.substring(0, 30),
+            shapesCount: draftShapes.length,
+          });
+          return;
+        }
+        // dirty が出た＝ユーザーが触った。以降は通常autosaveでOK
+        seededFromDBRef.current = false;
+      }
+      
       // ★★★ P0-B: commentIdをtargetKeyから抽出（レース根絶）★★★
       const prefix = draftScope === 'edit' 
         ? `draftPaint:${shareLink.file_id}:edit:`
@@ -1589,6 +1604,7 @@ function ShareViewContent() {
     
     if (existingDraft?.shapes?.length > 0 && isDraftMine) {
       shapesToSeed = existingDraft.shapes;
+      seededFromDBRef.current = false; // ★★★ Hunk1: 自分の下書き復元はスキップ不要 ★★★
       addDebugLog(`[P0] Loaded own draft shapes for comment ${comment.id.substring(0, 12)} (authorKey matched)`);
       showToast('下書きを復元しました', 'info');
     } else {
@@ -1596,6 +1612,7 @@ function ShareViewContent() {
         addDebugLog(`[P0] Ignoring draft from different author: expected=${currentAuthorKey}, draft=${draftAuthorKey}`);
       }
       shapesToSeed = allShapes.filter(s => resolveCommentId(s) === String(comment.id));
+      seededFromDBRef.current = true; // ★★★ Hunk1: DB seed は「まだ下書き扱いにしない」★★★
       addDebugLog(`[P1-seed] Seeded ${shapesToSeed.length} DB shapes for comment ${comment.id.substring(0, 12)}`);
     }
     
