@@ -100,6 +100,8 @@ function ShareViewContent() {
   const [guestName, setGuestName] = useState('');
   const [guestId, setGuestId] = useState('');
   const [showNameDialog, setShowNameDialog] = useState(false);
+  const [authUser, setAuthUser] = useState(null);
+  const [userAppRole, setUserAppRole] = useState(null);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
