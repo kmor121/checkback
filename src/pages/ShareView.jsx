@@ -2197,35 +2197,6 @@ function ShareViewContent() {
       Object.keys(scanned).some(key => scanned[key] !== draftCountByCommentId[key]);
 
     if (hasChanged) {
-      const hasChanged = 
-      Object.keys(scanned).length !== Object.keys(draftCountByCommentId).length ||
-      Object.keys(scanned).some(key => scanned[key] !== draftCountByCommentId[key]);
-
-    if (hasChanged) {
-      // ★★★ P1 FIX: 差分がある場合のみ更新して無限ループを防止 ★★★
-    const hasChanged = 
-      Object.keys(scanned).length !== Object.keys(draftCountByCommentId).length ||
-      Object.keys(scanned).some(key => scanned[key] !== draftCountByCommentId[key]);
-
-    if (hasChanged) {
-      // ★★★ P1 FIX: 差分がある場合のみ更新して無限ループを防止 ★★★
-    const hasChanged = 
-      Object.keys(scanned).length !== Object.keys(draftCountByCommentId).length ||
-      Object.keys(scanned).some(key => scanned[key] !== draftCountByCommentId[key]);
-
-    if (hasChanged) {
-      // ★★★ P1 FIX: 差分がある場合のみ更新して無限ループを防止 ★★★
-    const hasChanged = 
-      Object.keys(scanned).length !== Object.keys(draftCountByCommentId).length ||
-      Object.keys(scanned).some(key => scanned[key] !== draftCountByCommentId[key]);
-
-    if (hasChanged) {
-      // ★★★ P1 FIX: 差分がある場合のみ更新して無限ループを防止 ★★★
-    const hasChanged = 
-      Object.keys(scanned).length !== Object.keys(draftCountByCommentId).length ||
-      Object.keys(scanned).some(key => scanned[key] !== draftCountByCommentId[key]);
-
-    if (hasChanged) {
       setDraftCountByCommentId(scanned);
     }
   }, [shareLink?.file_id, guestId, comments, scanEditDraftsForFile]);
