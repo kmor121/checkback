@@ -1496,6 +1496,7 @@ function ShareViewContent() {
       setComposerText('');
       setPendingFiles([]);
       setReplyingThreadId(null);
+      setForceClearToken(prev => prev + 1);
       return;
     }
 
