@@ -574,6 +574,8 @@ function ShareViewContent() {
     const cached = draftCacheRef.current.get(targetKey) || [];
     draftShapesRef.current = cached;
     setDraftShapes(cached);
+    hydratedKeyRef.current = targetKey;
+    setHydratedKeyState(targetKey);
     console.log('[DRAFT_DEBUG] cache restored:', JSON.stringify({
       targetKey: targetKey.substring(0, 30),
       cachedCount: cached.length,
