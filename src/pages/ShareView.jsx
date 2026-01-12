@@ -1850,6 +1850,27 @@ function ShareViewContent() {
     });
   }, [topLevelComments, commentSort]);
 
+  // ★★★ P0: 下書きカウントMap（localStorage直接チェック、レンダー中1回のみ）★★★
+  const draftCountMap = React.useMemo(() => {
+    if (!shareLink?.file_id) return new Map();
+    
+    const map = new Map();
+    topLevelComments.forEach((comment) => {
+      const editDraftKey = getDraftKey(shareLink.file_id, comment.id, null, 'edit');
+      try {
+        const draft = loadDraft(editDraftKey);
+        const count = draft?.shapes?.length || 0;
+        if (count > 0) {
+          map.set(comment.id, count);
+        }
+      } catch (e) {
+        console.warn('[draftCountMap] Failed to load draft for comment:', comment.id, e);
+      }
+    });
+    
+    return map;
+  }, [shareLink?.file_id, topLevelComments]);
+
   const handleSaveName = () => {
     if (!guestName.trim()) return;
     localStorage.setItem(`guestName_${token}`, guestName);
