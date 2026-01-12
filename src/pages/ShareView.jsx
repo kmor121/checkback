@@ -2108,6 +2108,7 @@ function ShareViewContent() {
   const handleSaveName = () => {
     if (!guestName.trim()) return;
     localStorage.setItem(`guestName_${token}`, guestName);
+    localStorage.setItem('guestName_global', guestName);
     setShowNameDialog(false);
   };
 
