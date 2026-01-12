@@ -2872,7 +2872,7 @@ function ShareViewContent() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                {comment.author_key === guestId && (
+                                {canEditDeleteComment(comment) && (
                                   <>
                                     <DropdownMenuItem onClick={() => handleStartEditComment(comment)}>
                                       <Edit className="w-4 h-4 mr-2" />
