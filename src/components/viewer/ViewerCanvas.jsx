@@ -54,19 +54,30 @@ const sameId = (a, b) => String(a ?? '') === String(b ?? '');
 
 // 背景画像コンポーネント（チラつき防止：前の画像を保持）
 function BackgroundImage({ src, onLoad }) {
-  const [image] = useImage(src);
+  const [image, status] = useImage(src);
   const lastImageRef = useRef(null);
   
   useEffect(() => {
+    console.log('[BackgroundImage] Load status:', { src: src?.substring(0, 50), status, hasImage: !!image });
+    
+    if (status === 'failed') {
+      console.error('[BackgroundImage] Failed to load image:', src);
+    }
+    
     if (image) {
       lastImageRef.current = image;
+      console.log('[BackgroundImage] Image loaded successfully:', { width: image.width, height: image.height });
       if (onLoad) {
         onLoad({ width: image.width, height: image.height });
       }
     }
-  }, [image, onLoad]);
+  }, [image, status, onLoad, src]);
   
   const imgToRender = image || lastImageRef.current;
+  
+  if (status === 'loading') {
+    console.log('[BackgroundImage] Loading...', src?.substring(0, 50));
+  }
   
   return imgToRender ? (
     <KonvaImage 
