@@ -102,6 +102,7 @@ function ShareViewContent() {
   const [showNameDialog, setShowNameDialog] = useState(false);
   const [authUser, setAuthUser] = useState(null);
   const [userAppRole, setUserAppRole] = useState(null);
+  const [authStatus, setAuthStatus] = useState('pending');
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
@@ -229,6 +230,7 @@ function ShareViewContent() {
           localStorage.setItem('guestName_global', displayName);
           setShowNameDialog(false);
           setAuthUser(user);
+          setAuthStatus('authed');
           
           // UserRoleを取得
           base44.entities.UserRole.filter({ user_id: user.id })
@@ -241,6 +243,7 @@ function ShareViewContent() {
 
         } else {
           // 未ログイン：localStorageを確認
+          setAuthStatus('guest');
           if (tokenName) {
             setGuestName(tokenName);
           } else if (globalName) {
@@ -255,6 +258,7 @@ function ShareViewContent() {
       })
       .catch(() => {
         // auth.me自体がネットワークエラー等で失敗した場合
+        setAuthStatus('guest');
         if (tokenName) {
           setGuestName(tokenName);
         } else if (globalName) {
