@@ -723,6 +723,12 @@ function ShareViewContent() {
         : `draftPaint:${shareLink.file_id}:new:`;
       const commentIdFromKey = targetKey.substring(prefix.length);
       
+      // ★★★ P0.5: authorKey/commentIdが空なら保存しない (防御) ★★★
+      if (!guestId || !commentIdFromKey) {
+        console.warn('[draft] autosave skipped: missing guestId or commentIdFromKey', { guestId, commentIdFromKey });
+        return;
+      }
+
       saveDraft(targetKey, draftShapes, { 
         pageNo: currentPage,
         authorKey: guestId,
@@ -745,7 +751,7 @@ function ShareViewContent() {
         clearTimeout(saveDraftTimeoutRef.current);
       }
     };
-  }, [targetKey, draftShapes, currentPage]);
+  }, [targetKey, draftShapes, currentPage, guestId, guestName, draftScope, shareLink?.file_id]);
 
   // ★★★ デバッグHUD用の情報 ★★★
   const [draftDebugInfo, setDraftDebugInfo] = useState({ targetKey: null, loadedCount: 0, renderedCount: 0, savedAt: null, loadDraftFound: false });
