@@ -1709,19 +1709,31 @@ function ShareViewContent() {
     const currentAuthorKey = authUser?.id || guestId;
     const draftAuthorKey = existingDraft?.authorKey;
     const isDraftMine = draftAuthorKey && currentAuthorKey && String(draftAuthorKey) === String(currentAuthorKey);
-    
+
+    // ★★★ Hunk W (P0): seed誤発火防止 - storage/cache/ref のいずれかにdraftあれば seed をスキップ ★★★
+    const storedDraftCount = existingDraft?.shapes?.length || 0;
+    const cachedDraftCount = editDraftKey ? (draftCacheRef.current.get(editDraftKey)?.length || 0) : 0;
+    const refDraftCount = draftShapesRef.current?.length || 0;
+    const hasAnyDraft = storedDraftCount > 0 || cachedDraftCount > 0 || refDraftCount > 0;
+
     if (existingDraft?.shapes?.length > 0 && isDraftMine) {
       shapesToSeed = existingDraft.shapes;
-      seededFromDBRef.current = false; // ★★★ Hunk1: 自分の下書き復元はスキップ不要 ★★★
+      seededFromDBRef.current = false; // ★★★ Hunk1: 自分の下書き復存復元はスキップ不要 ★★★
       addDebugLog(`[P0] Loaded own draft shapes for comment ${comment.id.substring(0, 12)} (authorKey matched)`);
       showToast('下書きを復元しました', 'info');
     } else {
       if (existingDraft?.shapes?.length > 0 && !isDraftMine) {
         addDebugLog(`[P0] Ignoring draft from different author: expected=${currentAuthorKey}, draft=${draftAuthorKey}`);
       }
-      shapesToSeed = allShapes.filter(s => resolveCommentId(s) === String(comment.id));
-      seededFromDBRef.current = true; // ★★★ Hunk1: DB seed は「まだ下書き扱いにしない」★★★
-      addDebugLog(`[P1-seed] Seeded ${shapesToSeed.length} DB shapes for comment ${comment.id.substring(0, 12)}`);
+      // ★★★ Hunk W: draft既存ならDB seed をスキップ（state反映前の瞬間に誤seed防止）★★★
+      if (hasAnyDraft) {
+        addDebugLog(`[Hunk W] seed skipped: existing draft detected`, {storedDraftCount, cachedDraftCount, refDraftCount});
+        shapesToSeed = [];
+      } else {
+        shapesToSeed = allShapes.filter(s => resolveCommentId(s) === String(comment.id));
+        seededFromDBRef.current = true; // ★★★ Hunk1: DB seed は「まだ下書き扱いにしない」★★★
+        addDebugLog(`[P1-seed] Seeded ${shapesToSeed.length} DB shapes for comment ${comment.id.substring(0, 12)}`);
+      }
     }
     
     // Hunk K: seed時のtransient除去（DB由来shape→draftShapesでdirty混入防止）
