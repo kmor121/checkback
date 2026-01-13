@@ -843,6 +843,15 @@ function ShareViewContent() {
     }
     
     saveDraftTimeoutRef.current = setTimeout(() => {
+      // ★★★ P0-A: autosave未解禁なら保存しない（編集突入直後のsync対策）★★★
+      if (!autosaveArmedRef.current) {
+        console.log('[P0-A] autosave SKIPPED (not armed yet):', {
+          targetKey: targetKey?.substring(0, 30),
+          shapesCount: draftShapes.length,
+        });
+        return;
+      }
+      
       // ★★★ P0: baseline比較ガード（DBと同一内容なら保存しない）★★★
       if (seedBaselineArmedRef.current && targetKey === seedBaselineKeyRef.current) {
         const curSig = stableSig(draftShapes);
