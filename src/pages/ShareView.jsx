@@ -1970,14 +1970,24 @@ function ShareViewContent() {
   const handleDiscard = () => {
     console.log('[EXIT_DEBUG] handleDiscard called (破棄 button)');
     
+    // ★★★ P0-4: scopeId退避（state変更前に必ず取得）★★★
+    const discardTargetKey = targetKey;
+    const discardTargetCommentId = composerTargetCommentId;
+    const discardDraftScope = draftScope;
+    
+    // ★★★ P0-4: キーが曖昧なら何も消さない（他コメント巻き込み防止）★★★
+    if (!discardTargetKey || !discardTargetCommentId) {
+      console.warn('[P0-4] handleDiscard aborted: missing targetKey or commentId', {
+        discardTargetKey: discardTargetKey?.substring(0, 30) || 'null',
+        discardTargetCommentId: discardTargetCommentId?.substring(0, 12) || 'null',
+      });
+      return;
+    }
+    
     // 確認ダイアログ
     if (typeof window !== 'undefined' && !window.confirm('下書きを破棄しますか？この操作は元に戻せません。')) {
       return;
     }
-    
-    // Hunk N-Pre: commentId退避（exitEditMode内のstate変更前に取得）
-    const discardTargetCommentId = composerTargetCommentId;
-    const discardDraftScope = draftScope;
     
     // 明示的破棄
     exitEditMode('discard_explicitly');
@@ -1990,6 +2000,13 @@ function ShareViewContent() {
         console.log('[Hunk N-Post] Badge force-cleared after discard:', discardTargetCommentId.substring(0, 12));
         return next;
       });
+    }
+    
+    // ★★★ P0-4: 破棄後にバッジ再計算（scan）★★★
+    if (shareLink?.file_id && guestId) {
+      const refreshed = scanEditDraftsForFile(shareLink.file_id, guestId);
+      setDraftCountByCommentId(refreshed);
+      console.log('[P0-4] Badge refreshed after discard:', Object.keys(refreshed).length, 'drafts');
     }
   };
 
