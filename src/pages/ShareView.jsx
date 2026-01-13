@@ -1981,43 +1981,63 @@ function ShareViewContent() {
   const handleDiscard = () => {
     console.log('[EXIT_DEBUG] handleDiscard called (破棄 button)');
     
-    // ★★★ P0-4: scopeId退避（state変更前に必ず取得）★★★
-    const discardTargetKey = targetKey;
-    const discardTargetCommentId = composerTargetCommentId;
+    // ★★★ P0-6: scopeId退避（state変更前に必ず取得、完全一致キー生成用）★★★
+    const discardTargetCommentId = composerTargetCommentId || activeCommentId;
     const discardDraftScope = draftScope;
+    const discardFileId = shareLink?.file_id;
     
-    // ★★★ P0-4: キーが曖昧なら何も消さない（他コメント巻き込み防止）★★★
-    if (!discardTargetKey || !discardTargetCommentId) {
-      console.warn('[P0-4] handleDiscard aborted: missing targetKey or commentId', {
-        discardTargetKey: discardTargetKey?.substring(0, 30) || 'null',
+    // ★★★ P0-6: 完全一致キーを手動生成（曖昧キー防止）★★★
+    let discardTargetKey = null;
+    if (discardFileId && discardTargetCommentId && discardDraftScope === 'edit') {
+      discardTargetKey = `draftPaint:${discardFileId}:edit:${discardTargetCommentId}`;
+    } else if (discardFileId && tempCommentId && discardDraftScope === 'new') {
+      discardTargetKey = `draftPaint:${discardFileId}:new:${tempCommentId}`;
+    }
+    
+    // ★★★ P0-6: キーが曖昧なら何も消さない（他コメント巻き込み防止）★★★
+    if (!discardTargetKey) {
+      console.warn('[P0-6] handleDiscard aborted: cannot build exact key', {
+        discardFileId: discardFileId?.substring(0, 12) || 'null',
         discardTargetCommentId: discardTargetCommentId?.substring(0, 12) || 'null',
+        discardDraftScope,
+        tempCommentId: tempCommentId?.substring(0, 12) || 'null',
       });
       return;
     }
+    
+    console.log('[P0-6] handleDiscard: exact key to delete:', discardTargetKey.substring(0, 50));
     
     // 確認ダイアログ
     if (typeof window !== 'undefined' && !window.confirm('下書きを破棄しますか？この操作は元に戻せません。')) {
       return;
     }
     
-    // 明示的破棄
-    exitEditMode('discard_explicitly');
+    // ★★★ P0-6: 先に完全一致キーのみを削除（exitEditModeより先に実行）★★★
+    deleteDraft(discardTargetKey);
+    draftCacheRef.current.delete(discardTargetKey);
+    console.log('[P0-6] Deleted exact draft key:', discardTargetKey.substring(0, 50));
     
-    // Hunk N-Post: 破棄直後にバッジを強制クリア（exitEditMode内のクリアを補強）
+    // ★★★ P0-6: バッジを即時更新（新しい参照で強制再描画）★★★
     if (discardDraftScope === 'edit' && discardTargetCommentId) {
       setDraftCountByCommentId(prev => {
         const next = { ...prev };
         delete next[discardTargetCommentId];
-        console.log('[Hunk N-Post] Badge force-cleared after discard:', discardTargetCommentId.substring(0, 12));
+        console.log('[P0-6] Badge cleared for:', discardTargetCommentId.substring(0, 12));
         return next;
       });
     }
     
-    // ★★★ P0-4: 破棄後にバッジ再計算（scan）★★★
-    if (shareLink?.file_id && guestId) {
-      const refreshed = scanEditDraftsForFile(shareLink.file_id, guestId);
-      setDraftCountByCommentId(refreshed);
-      console.log('[P0-4] Badge refreshed after discard:', Object.keys(refreshed).length, 'drafts');
+    // 明示的破棄（exitEditModeはUI状態クリアのみ、削除は上で完了済み）
+    exitEditMode('discard_explicitly');
+    
+    // ★★★ P0-6: 破棄後にバッジ再計算（scan）して新しい参照で更新 ★★★
+    if (discardFileId && guestId) {
+      // 少し遅らせてlocalStorage削除が確実に反映されてからスキャン
+      setTimeout(() => {
+        const refreshed = scanEditDraftsForFile(discardFileId, guestId);
+        setDraftCountByCommentId({ ...refreshed }); // 新しい参照で強制更新
+        console.log('[P0-6] Badge refreshed after discard:', Object.keys(refreshed).length, 'drafts remaining');
+      }, 50);
     }
   };
 
