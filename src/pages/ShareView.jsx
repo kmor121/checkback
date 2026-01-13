@@ -2412,9 +2412,19 @@ function ShareViewContent() {
     prevPaintContextIdForMergedRef.current = paintContextId;
     if (merged.length > 0) {
       lastMergedShapesRef.current = merged;
+      lastStableShapesRef.current = merged; // P0-REGRESS: 非空なら保存
     }
     return merged;
   }, [allShapes, draftShapes, showAllPaint, paintContextId, shouldShowDraft, storageDraftReady, composerMode, tempCommentId, canvasReady, activeCommentId]);
+  
+  // ★★★ P0-REGRESS: 送信中に shapesForCanvas が空になったら lastStable を使う ★★★
+  const shapesForCanvasSafe = React.useMemo(() => {
+    if (isSubmitting && shapesForCanvas.length === 0 && lastStableShapesRef.current.length > 0) {
+      console.log('[P0-REGRESS] Preserving lastStableShapes during submit:', lastStableShapesRef.current.length);
+      return lastStableShapesRef.current;
+    }
+    return shapesForCanvas;
+  }, [isSubmitting, shapesForCanvas]);
   
   // ★★★ Hunk 0: useEffect でデバッグログを分離（レンダー中のaddDebugLog呼び出し廃止）★★★
   const lastResultLogRef = useRef(null);
