@@ -141,6 +141,22 @@ function ShareViewContent() {
   const draftCacheRef = useRef(new Map()); // ★★★ P1: targetKey -> shapes[] のキャッシュ ★★★
   const seededFromDBRef = useRef(false); // ★★★ Hunk1: DB seed直後の autosave スキップ用フラグ ★★★
   const justEnteredEditRef = useRef({ key: null, active: false }); // ★★★ P0: 編集突入直後のdirty化防止 ★★★
+  
+  // ★★★ P0: baseline比較でautosaveスキップ（dirty誤付与に頼らない確実なガード）★★★
+  const seedBaselineSigRef = useRef(null);
+  const seedBaselineKeyRef = useRef(null);
+  const seedBaselineArmedRef = useRef(false);
+  
+  // シグネチャ計算（ローカルメタを除外してJSON化）
+  const stableSig = (shapes) => {
+    const cleaned = (shapes || [])
+      .map(s => {
+        const { _dirty, _localTs, _lastEditedBy, ...rest } = s;
+        return rest;
+      })
+      .sort((a, b) => String(a.id || '').localeCompare(String(b.id || '')));
+    return JSON.stringify(cleaned);
+  };
   const [canvasSessionNonce, setCanvasSessionNonce] = useState(0);
   
   // ★★★ P2: 明示クリア用トークン（全削除/送信成功後のみインクリメント）★★★
