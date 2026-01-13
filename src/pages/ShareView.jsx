@@ -1892,39 +1892,20 @@ function ShareViewContent() {
   const exitEditMode = (reason = 'unknown') => {
     addDebugLog(`[exitEditMode] reason=${reason} mode=${composerMode}`);
 
-    // ★★★ FIX: 明示的な破棄のみ下書き削除 ★★★
+    // ★★★ P0-6 FIX: 明示的破棄はhandleDiscardで完了済み、ここではUI状態のみクリア ★★★
     const shouldDeleteDraft = reason === 'discard_explicitly';
     
     // ★★★ 破棄処理（破棄時のみ実行）★★★
     if (shouldDeleteDraft) {
-      // targetKeyを退避（async処理中の状態変更対策）
-      const currentTargetKey = targetKey;
+      // ★★★ P0-6: localStorage削除はhandleDiscardで完了済み、ここではメモリのみクリア ★★★
       const currentDraftScope = draftScope;
-      const currentTargetCommentId = composerTargetCommentId; // Hunk N: commentId退避
-
-      // localStorage削除
-      if (currentTargetKey) {
-        deleteDraft(currentTargetKey);
-        draftCacheRef.current.delete(currentTargetKey);
-        addDebugLog(`[exitEditMode] draft deleted: ${currentTargetKey.substring(0, 30)} reason=${reason}`);
-      }
-
-      // Hunk N: バッジ即時クリア（破棄時）
-      if (currentDraftScope === 'edit' && currentTargetCommentId) {
-        setDraftCountByCommentId(prev => {
-          const next = { ...prev };
-          delete next[currentTargetCommentId];
-          return next;
-        });
-        addDebugLog(`[Hunk N] Badge cleared for comment ${currentTargetCommentId.substring(0, 12)}`);
-      }
-
+      
       // メモリクリア
       setDraftShapes([]);
       draftShapesRef.current = [];
       
-      // キャッシュ全クリア
-      draftCacheRef.current.clear();
+      // ★★★ P0-6: キャッシュは該当キーのみ削除済み（全クリアしない）★★★
+      // draftCacheRef.current.clear(); // 削除: 他コメントのキャッシュを壊さない
       
       // 新規の場合のみtempCommentIdクリア
       if (currentDraftScope === 'new' && shareLink?.file_id) {
