@@ -604,14 +604,22 @@ function ShareViewContent() {
     // ★★★ P0: localStorage読み込み → authorKey＋commentId照合 → 正規化 ★★★
     const draft = loadDraft(targetKey);
     
+    // ★★★ P0-CHECK: draft が null なら早期return ★★★
+    if (!draft) {
+      console.log('[draft] No draft loaded (null):', { targetKey });
+      hydratedKeyRef.current = targetKey;
+      setHydratedKeyState(targetKey);
+      return;
+    }
+    
     // ★★★ Hunk S (P0): authorKey無しドラフトを救済（upgrade） ★★★
-    if (!draft?.authorKey) {
+    if (!draft.authorKey) {
       // legacy下書きをupgrade（authorKeyを補充）
       const currentAuthorKey = authUser?.id || guestId;
       console.log('[draft] Legacy draft upgraded (missing authorKey):', { 
         targetKey,
         upgradeAuthorKey: currentAuthorKey?.substring(0, 12) || 'unknown',
-        shapesCount: draft?.shapes?.length || 0
+        shapesCount: draft.shapes?.length || 0
       });
       
       // 読み込んだ下書きに authorKey を補う
