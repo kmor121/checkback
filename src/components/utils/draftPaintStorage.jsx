@@ -109,7 +109,22 @@ export function loadDraft(key) {
  * @param {string} key - getDraftKeyで生成したキー
  */
 export function deleteDraft(key) {
-  if (!key) return;
+  // ★★★ P0-4: キーが無効なら何もしない（他コメント巻き込み防止）★★★
+  if (!key) {
+    console.warn('[draftPaintStorage] deleteDraft aborted: key is null/undefined');
+    return;
+  }
+  
+  // ★★★ P0-4: 正しいキー形式かチェック（広域削除防止）★★★
+  // 有効な形式: draftPaint:{fileId}:edit:{commentId} or draftPaint:{fileId}:new:{tempId}
+  const isValidEditKey = key.includes(':edit:') && key.startsWith('draftPaint:');
+  const isValidNewKey = key.includes(':new:') && key.startsWith('draftPaint:');
+  const isLegacyKey = key.startsWith('draftPaint:') && !key.includes(':edit:') && !key.includes(':new:');
+  
+  if (!isValidEditKey && !isValidNewKey && !isLegacyKey) {
+    console.warn('[draftPaintStorage] deleteDraft aborted: invalid key format', { key });
+    return;
+  }
   
   try {
     localStorage.removeItem(key);
