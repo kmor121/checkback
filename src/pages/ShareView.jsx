@@ -1715,7 +1715,8 @@ function ShareViewContent() {
       // targetKeyを退避（async処理中の状態変更対策）
       const currentTargetKey = targetKey;
       const currentDraftScope = draftScope;
-      
+      const currentTargetCommentId = composerTargetCommentId; // Hunk N: commentId退避
+
       // localStorage削除
       if (currentTargetKey) {
         deleteDraft(currentTargetKey);
@@ -1724,12 +1725,13 @@ function ShareViewContent() {
       }
 
       // Hunk N: バッジ即時クリア（破棄時）
-      if (currentDraftScope === 'edit' && composerTargetCommentId) {
+      if (currentDraftScope === 'edit' && currentTargetCommentId) {
         setDraftCountByCommentId(prev => {
           const next = { ...prev };
-          delete next[composerTargetCommentId];
+          delete next[currentTargetCommentId];
           return next;
         });
+        addDebugLog(`[Hunk N] Badge cleared for comment ${currentTargetCommentId.substring(0, 12)}`);
       }
 
       // メモリクリア
