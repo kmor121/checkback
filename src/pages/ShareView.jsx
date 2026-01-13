@@ -2550,14 +2550,34 @@ function ShareViewContent() {
                 }}
                 onShapesChange={(updated) => {
                   // ★★★ CRITICAL: ViewerCanvasからの同期コールバック ★★★
-                  // ★★★ CRITICAL FIX: この targetKey を hydrate 済みの時だけ同期 ★★★
-                  if (!targetKey || hydratedKeyRef.current !== targetKey) {
-                    console.log('[ShareView] onShapesChange IGNORED (not hydrated for this key yet):', {
+                  
+                  // Hunk F: targetKey未確定なら即reject
+                  if (!targetKey) {
+                    console.log('[ShareView] onShapesChange IGNORED (no targetKey):', {
                       updatedCount: updated.length,
                       targetKey: targetKey?.substring(0, 30) || 'null',
                       hydratedKey: hydratedKeyRef.current?.substring(0, 30) || 'null',
                     });
                     return;
+                  }
+                  
+                  // Hunk F: まだhydrate未完了だが、updatedが空でない最初の描画なら「早期hydrate完了」として受け入れる
+                  if (hydratedKeyRef.current !== targetKey) {
+                    if (updated.length > 0) {
+                      console.log('[Hunk F] Early hydrate: first draw accepted as hydrate complete:', {
+                        updatedCount: updated.length,
+                        targetKey: targetKey.substring(0, 30),
+                      });
+                      hydratedKeyRef.current = targetKey;
+                      setHydratedKeyState(targetKey);
+                      // 以降の処理（キャッシュ更新・draftShapes更新）に進む
+                    } else {
+                      console.log('[ShareView] onShapesChange IGNORED (not hydrated, empty update):', {
+                        updatedCount: updated.length,
+                        targetKey: targetKey.substring(0, 30),
+                      });
+                      return;
+                    }
                   }
                   
                   // ★★★ P2 FIX: 空配列が来てもdraftが残っていれば上書きしない ★★★
