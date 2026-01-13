@@ -636,20 +636,29 @@ function ShareViewContent() {
       // 以降の処理を続行（draft は now authorKey を持つ）
     }
     
+    // ★★★ Hunk U: backward-compat — authorKey 無い場合は author を試す ★★★
+    if (!draft.authorKey && draft.author) {
+     draft.authorKey = draft.author;
+     console.log('[draft] Backward-compat: adopted author as authorKey:', {
+       targetKey,
+       authorKey: draft.authorKey?.substring(0, 12) || 'unknown',
+     });
+    }
+
     // ★★★ P0-A: 本人の下書きのみ復元（混線防止）★★★
     if (draft.authorKey !== guestId) {
-      console.warn('[draft] Ignoring draft from different author:', {
-        targetKey,
-        draftAuthor: draft.authorKey?.substring(0, 12),
-        currentGuestId: guestId?.substring(0, 12),
-      });
-      setDraftShapes([]);
-      draftShapesRef.current = [];
-      draftCacheRef.current.set(targetKey, []);
-      // ★★★ P0 FIX: 0件/legacyでもhydrate完了を通知し、gateを開ける ★★★
-      hydratedKeyRef.current = targetKey;
-      setHydratedKeyState(targetKey);
-      return;
+     console.warn('[draft] Ignoring draft from different author:', {
+       targetKey,
+       draftAuthor: draft.authorKey?.substring(0, 12),
+       currentGuestId: guestId?.substring(0, 12),
+     });
+     setDraftShapes([]);
+     draftShapesRef.current = [];
+     draftCacheRef.current.set(targetKey, []);
+     // ★★★ P0 FIX: 0件/legacyでもhydrate完了を通知し、gateを開ける ★★★
+     hydratedKeyRef.current = targetKey;
+     setHydratedKeyState(targetKey);
+     return;
     }
     
     // ★★★ P0-B: commentId必須チェック（古い下書き除外、安全優先）★★★
