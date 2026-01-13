@@ -1826,6 +1826,10 @@ function ShareViewContent() {
     seedBaselineSigRef.current = stableSig(shapesToSeed);
     seedBaselineArmedRef.current = true;
     addDebugLog(`[P0] baseline armed for key=${editDraftKey.substring(0, 30)}, shapes=${shapesToSeed.length}`);
+    
+    // ★★★ P0-A: 編集突入時はautosaveを無効化（ユーザー操作まで保存しない）★★★
+    autosaveArmedRef.current = false;
+    addDebugLog(`[P0-A] autosave disarmed on enterEdit`);
   };
 
   // ★★★ P1: コメント編集/削除権限判定（admin=オーナー、manager=管理者、member=本人のみ）★★★
