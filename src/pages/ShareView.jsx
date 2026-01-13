@@ -1782,6 +1782,10 @@ function ShareViewContent() {
     // これにより、hydrate useEffect が再度 loadDraft() しても、hydratedKey が一致したスキップされる
     hydratedKeyRef.current = editDraftKey;
     setHydratedKeyState(editDraftKey);
+    
+    // ★★★ P0: 編集突入フラグを立てる（onShapesChangeでの誤dirty化を防止）★★★
+    justEnteredEditRef.current = { key: editDraftKey, active: true };
+    addDebugLog(`[P0] justEnteredEdit set active for key=${editDraftKey.substring(0, 30)}`);
   };
 
   // ★★★ P1: コメント編集/削除権限判定（admin=オーナー、manager=管理者、member=本人のみ）★★★
