@@ -843,6 +843,15 @@ function ShareViewContent() {
     }
     
     saveDraftTimeoutRef.current = setTimeout(() => {
+      // ★★★ P0-2: 空の下書き（shapesCount=0）は保存しない ★★★
+      if (draftShapes.length === 0) {
+        console.log('[P0-2] autosave SKIPPED (empty draft, shapesCount=0):', {
+          targetKey: targetKey?.substring(0, 30),
+          draftScope,
+        });
+        return;
+      }
+      
       // ★★★ P0-A: autosave未解禁なら保存しない（編集突入直後のsync対策）★★★
       if (!autosaveArmedRef.current) {
         console.log('[P0-A] autosave SKIPPED (not armed yet):', {
