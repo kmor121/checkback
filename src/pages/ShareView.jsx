@@ -189,6 +189,7 @@ function ShareViewContent() {
   const handoffRef = useRef(null); // P0-FLICKER: 送信直後のハンドオフバッファ { key, snapshot, pendingIds }
   const freezeRef = useRef(null); // P0.5-FREEZE: 送信中の表示固定用スナップショット
   const freezeActiveRef = useRef(false); // P0.5-FREEZE: freeze有効フラグ
+  const lastStableShapesRef = useRef([]); // P0-REGRESS: 送信中のちらつき防止用
   
   
   // ★★★ FIX-4: addDebugLog を最優先定義（TDZ根絶）★★★
