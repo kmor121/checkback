@@ -167,6 +167,7 @@ const ViewerCanvas = forwardRef(({
   // ★★★ CRITICAL: 描画コンテキスト変化検知用（Map残留根絶）★★★
   const prevCanvasContextKeyRef = useRef(null);
   const pendingCtxRef = useRef(null); // ★ FIX-PENDING: 新ctx待機用（Map即クリア禁止）
+  const prevEmptyCountRef = useRef(0); // Hunk E: empty連続カウント（2回連続でクリア）
   
   // デバッグHUD用ログ履歴
   const [debugHudLogs, setDebugHudLogs] = useState([]);
@@ -609,6 +610,7 @@ const ViewerCanvas = forwardRef(({
       if (!paintMode && (renderTargetCommentId || renderTargetCommentId === null)) {
               console.log('[P1 FIX] Empty shapes for a specific comment confirmed. Clearing map.', { ctx, prevMapSize, renderTargetCommentId: renderTargetCommentId?.substring(0,12) || 'null' });
               shapesMapRef.current = new Map();
+              prevEmptyCountRef.current = 0; // Hunk E: クリア後はカウンターリセット
               bump();
               return;
           }
@@ -617,18 +619,30 @@ const ViewerCanvas = forwardRef(({
       // 遷移中はMapを保持してちらつきを防ぐ
       if (isCanvasTransitioning) {
           console.log('[FIX-3] SYNC SKIP: transitioning (same ctx), Map preserved', { ctx, prevMapSize });
+          prevEmptyCountRef.current += 1; // Hunk E: transition中のemptyをカウント
           return;
       }
     
-      // ★★★ FIX-4: transition完了後の空配列は常にMapをクリア ★★★
+      // Hunk E: empty連続カウントが2回未満なら保持（一瞬のemptyでクリアしない）
+      prevEmptyCountRef.current += 1;
+      if (prevEmptyCountRef.current < 2 && prevMapSize > 0) {
+        console.log('[Hunk E] SYNC SKIP: first empty, Map preserved (waiting for 2nd)', { ctx, prevMapSize, emptyCount: prevEmptyCountRef.current });
+        return;
+      }
+      
+      // 2回連続empty（または初回から空）なら確定クリア
       if (prevMapSize > 0) {
-        console.log('[P1-FIX] SYNC: empty confirmed (same ctx), Map cleared', { ctx, prevMapSize });
+        console.log('[Hunk E] SYNC: 2nd empty confirmed, Map cleared', { ctx, prevMapSize, emptyCount: prevEmptyCountRef.current });
         shapesMapRef.current = new Map();
         bump();
       }
+      prevEmptyCountRef.current = 0; // クリア後はリセット
       return;
     }
 
+    // Hunk E: 非empty時はカウンターリセット
+    prevEmptyCountRef.current = 0;
+    
     // ★★★ DEBUG: FULL SYNC開始 ★★★
     console.log('[ViewerCanvas] FULL SYNC START:', {
       ctx,

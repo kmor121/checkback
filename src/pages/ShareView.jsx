@@ -207,8 +207,14 @@ function ShareViewContent() {
     }
   }, [debugParam]);
 
+  const authCheckAttemptedRef = useRef(false); // Hunk C: 認証トライ記録
+
   useEffect(() => {
     if (!token) return;
+    
+    // Hunk C: 同一セッションでの認証チェックは1回のみ（無限ループ防止）
+    if (authCheckAttemptedRef.current) return;
+    authCheckAttemptedRef.current = true;
     
     // guestId生成または復元
     let storedGuestId = localStorage.getItem(`guestId_${token}`);
@@ -226,49 +232,50 @@ function ShareViewContent() {
         if (user) {
           // ログイン済み：ログイン名を強制適用
           const displayName = user.full_name || 'ログインユーザー';
-          setGuestName(displayName);
+          setGuestName(prev => prev === displayName ? prev : displayName);
           localStorage.setItem(`guestName_${token}`, displayName);
           localStorage.setItem('guestName_global', displayName);
-          setShowNameDialog(false);
-          setAuthUser(user);
-          setAuthStatus('authed');
+          setShowNameDialog(prev => prev ? false : prev);
+          setAuthUser(prev => prev?.id === user.id ? prev : user);
+          setAuthStatus(prev => prev === 'authed' ? prev : 'authed');
           
           // UserRoleを取得
           base44.entities.UserRole.filter({ user_id: user.id })
             .then(roles => {
-              setUserAppRole(roles?.[0]?.app_role || 'member');
+              const newRole = roles?.[0]?.app_role || 'member';
+              setUserAppRole(prev => prev === newRole ? prev : newRole);
             })
             .catch(() => {
-              setUserAppRole('member'); // 失敗時もmember
+              setUserAppRole(prev => prev === 'member' ? prev : 'member');
             });
 
         } else {
           // 未ログイン：localStorageを確認
-          setAuthStatus('guest');
+          setAuthStatus(prev => prev === 'guest' ? prev : 'guest');
           if (tokenName) {
-            setGuestName(tokenName);
+            setGuestName(prev => prev === tokenName ? prev : tokenName);
           } else if (globalName) {
-            setGuestName(globalName);
+            setGuestName(prev => prev === globalName ? prev : globalName);
             localStorage.setItem(`guestName_${token}`, globalName);
           } else {
-            setShowNameDialog(true); // localStorageにも無ければダイアログ表示
+            setShowNameDialog(prev => prev ? prev : true);
           }
-          setAuthUser(null);
-          setUserAppRole(null);
+          setAuthUser(prev => prev === null ? prev : null);
+          setUserAppRole(prev => prev === null ? prev : null);
         }
       })
       .catch(() => {
         // auth.me自体がネットワークエラー等で失敗した場合
-        setAuthStatus('guest');
+        setAuthStatus(prev => prev === 'guest' ? prev : 'guest');
         if (tokenName) {
-          setGuestName(tokenName);
+          setGuestName(prev => prev === tokenName ? prev : tokenName);
         } else if (globalName) {
-          setGuestName(globalName);
+          setGuestName(prev => prev === globalName ? prev : globalName);
         } else {
-          setShowNameDialog(true);
+          setShowNameDialog(prev => prev ? prev : true);
         }
-        setAuthUser(null);
-        setUserAppRole(null);
+        setAuthUser(prev => prev === null ? prev : null);
+        setUserAppRole(prev => prev === null ? prev : null);
       });
 
     // パスワード検証済みフラグを確認
@@ -800,12 +807,24 @@ function ShareViewContent() {
   useEffect(() => {
     const draft = targetKey ? loadDraft(targetKey) : null;
     
-    setDraftDebugInfo({
+    const newInfo = {
       targetKey: targetKey,
       loadedCount: draft?.shapes?.length || 0,
       renderedCount: draftShapes.length,
       savedAt: draft?.updatedAt || null,
       loadDraftFound: !!draft,
+    };
+    
+    // Hunk D: 差分がある場合のみ更新（無限ループ防止）
+    setDraftDebugInfo(prev => {
+      if (prev.targetKey === newInfo.targetKey &&
+          prev.loadedCount === newInfo.loadedCount &&
+          prev.renderedCount === newInfo.renderedCount &&
+          prev.savedAt === newInfo.savedAt &&
+          prev.loadDraftFound === newInfo.loadDraftFound) {
+        return prev;
+      }
+      return newInfo;
     });
   }, [targetKey, draftShapes.length]);
 
@@ -1699,6 +1718,7 @@ function ShareViewContent() {
     setComposerParentCommentId(null);
     
     // ペイント関連
+    seededFromDBRef.current = false; // Hunk B: 編集終了時にseedフラグをリセット（次回edit時の📝防止）
     setPaintMode(false);
     setTool('select');
     setPaintSessionCommentId(null);
