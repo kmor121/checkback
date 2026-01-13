@@ -2671,7 +2671,13 @@ function ShareViewContent() {
                   const prevMap = new Map(prev.map(s => [s.id, s]));
                   const updatedWithTransient = updated.map(s => {
                     const p = prevMap.get(s.id);
-                    return p ? { ...s, _dirty: s._dirty ?? p._dirty, _localTs: s._localTs ?? p._localTs } : s;
+                    if (p) {
+                      // 既存shape: transient保持
+                      return { ...s, _dirty: s._dirty ?? p._dirty, _localTs: s._localTs ?? p._localTs };
+                    } else {
+                      // Hunk M' (P0): 新規shape（prevMapに無い）には_dirtyを付与（初回描画救済）
+                      return { ...s, _dirty: s._dirty ?? true, _localTs: s._localTs ?? Date.now() };
+                    }
                   });
                   
                   // ★★★ P1: キャッシュ更新 ★★★
