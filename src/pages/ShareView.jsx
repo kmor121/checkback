@@ -1074,6 +1074,16 @@ function ShareViewContent() {
       return;
     }
     
+    // Hunk H2: targetKey未hydrated時に early-hydrate 実行（保険として onShapesChange前でも受理）
+    if (targetKey && hydratedKeyRef.current !== targetKey) {
+      console.log('[Hunk H2] Early hydrate in handleSaveShape:', {
+        targetKey: targetKey.substring(0, 30),
+        shapeId: shape.id?.substring(0, 8),
+      });
+      hydratedKeyRef.current = targetKey;
+      setHydratedKeyState(prev => prev === targetKey ? prev : targetKey);
+    }
+    
     // ★★★ P2 FIX: 必ずユニークIDを確保（functional update で追記）★★★
     const shapeWithId = {
       ...shape,
