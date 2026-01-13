@@ -20,11 +20,19 @@ const DRAFT_EXPIRY_DAYS = 7;
 export function getDraftKey(fileId, commentId, tempId = null, scope = null) {
   if (!fileId) return null;
   
-  // ★★★ P2: scope指定時は必ずscopeプレフィックスを入れる ★★★
-  if (scope === 'edit' && commentId) {
+  // ★★★ P0-5: scope指定時はID必須（無効キー生成防止）★★★
+  if (scope === 'edit') {
+    if (!commentId || commentId === '' || commentId === 'null' || commentId === 'undefined') {
+      console.warn('[getDraftKey] edit scope but commentId is invalid:', { fileId, commentId });
+      return null;
+    }
     return `${DRAFT_PREFIX}${fileId}:edit:${commentId}`;
   }
-  if (scope === 'new' && tempId) {
+  if (scope === 'new') {
+    if (!tempId || tempId === '' || tempId === 'null' || tempId === 'undefined') {
+      console.warn('[getDraftKey] new scope but tempId is invalid:', { fileId, tempId });
+      return null;
+    }
     return `${DRAFT_PREFIX}${fileId}:new:${tempId}`;
   }
   
