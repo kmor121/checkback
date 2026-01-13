@@ -1504,6 +1504,15 @@ function ShareViewContent() {
         showToast('コメントを送信しました', 'success');
       }
 
+      // Hunk O: 新規投稿成功時にtempCommentIdを完全クリア（newの残骸根絶）
+      if (composerMode === 'new' || sendDraftScope === 'new') {
+        setTempCommentId(null);
+        if (shareLink?.file_id) {
+          localStorage.removeItem(`tempCommentId:${shareLink.file_id}`);
+        }
+        console.log('[Hunk O] tempCommentId cleared after new comment submit');
+      }
+
       // ★★★ CRITICAL: 描画クリアを最優先で実行（明示クリアトークンをインクリメント）★★★
       setForceClearToken(prev => prev + 1);
       viewerCanvasRef.current?.afterSubmitClear();
@@ -1519,15 +1528,11 @@ function ShareViewContent() {
       setComposerText('');
       
       if (sendDraftScope === 'new') {
-        // 新規送信時のみ：tempCommentId/新規draftをクリア
+        // 新規送信時のみ：新規draftをクリア（tempCommentIdはHunk Oで既にクリア済み）
         setDraftShapes([]);
         draftShapesRef.current = [];
         if (sendTargetKey) {
           draftCacheRef.current.delete(sendTargetKey);
-        }
-        setTempCommentId(null);
-        if (shareLink?.file_id) {
-          localStorage.removeItem(`tempCommentId:${shareLink.file_id}`);
         }
       } else if (sendDraftScope === 'edit') {
         // 編集送信時：編集対象のdraftのみクリア（新規下書きは保持）
@@ -1630,6 +1635,13 @@ function ShareViewContent() {
       setPaintMode(false);
       setTool('select');
     }
+
+    // Hunk P: 編集開始時にtempCommentIdを強制無効化（newの残骸リーク防止）
+    setTempCommentId(null);
+    if (shareLink?.file_id) {
+      localStorage.removeItem(`tempCommentId:${shareLink.file_id}`);
+    }
+    console.log('[Hunk P] tempCommentId cleared before entering edit mode');
 
     // ★★★ FIX-2/A: ID確定→mode切替の順序保証★★★
     setCurrentPage(comment.page_no);
