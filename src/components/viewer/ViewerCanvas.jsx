@@ -613,6 +613,21 @@ const ViewerCanvas = forwardRef(({
 
     // ★★★ 同一ctx（!isPending）での処理 ★★★
     if (incomingEmpty) {
+      // ★★★ P0-FLICKER: emptyストリークをカウント ★★★
+      emptyStreakCountRef.current += 1;
+
+      // ★★★ P0-FLICKER: paintMode中かつ前回非空があれば、3回連続emptyまで保持 ★★★
+      // これにより送信→refetch→空→DB取得完了の瞬間的なemptyでちらつかない
+      if (paintMode && lastNonEmptyShapesRef.current && emptyStreakCountRef.current < 3) {
+        console.log('[P0-FLICKER] SYNC SKIP: paintMode + transient empty, preserving last shapes', {
+          ctx,
+          prevMapSize,
+          emptyStreak: emptyStreakCountRef.current,
+          lastNonEmptyCount: lastNonEmptyShapesRef.current.length,
+        });
+        return;
+      }
+
       // P1 FIX: 描画がないコメントを選択した場合（renderTargetCommentId があり、existingShapes が空）、
       // 遷移中であっても即座にCanvasをクリアする。これが描画混入の根本対策。
       // ★★★ FIX-v6: view時かつrenderTargetCommentIdが null のときも即座にクリア ★★★
@@ -621,6 +636,7 @@ const ViewerCanvas = forwardRef(({
               console.log('[P1 FIX] Empty shapes for a specific comment confirmed. Clearing map.', { ctx, prevMapSize, renderTargetCommentId: renderTargetCommentId?.substring(0,12) || 'null' });
               shapesMapRef.current = new Map();
               prevEmptyCountRef.current = 0; // Hunk E: クリア後はカウンターリセット
+              emptyStreakCountRef.current = 0; // P0-FLICKER: リセット
               bump();
               return;
           }
@@ -632,14 +648,14 @@ const ViewerCanvas = forwardRef(({
           prevEmptyCountRef.current += 1; // Hunk E: transition中のemptyをカウント
           return;
       }
-    
+
       // Hunk E: empty連続カウントが2回未満なら保持（一瞬のemptyでクリアしない）
       prevEmptyCountRef.current += 1;
       if (prevEmptyCountRef.current < 2 && prevMapSize > 0) {
         console.log('[Hunk E] SYNC SKIP: first empty, Map preserved (waiting for 2nd)', { ctx, prevMapSize, emptyCount: prevEmptyCountRef.current });
         return;
       }
-      
+
       // 2回連続empty（または初回から空）なら確定クリア
       if (prevMapSize > 0) {
         console.log('[Hunk E] SYNC: 2nd empty confirmed, Map cleared', { ctx, prevMapSize, emptyCount: prevEmptyCountRef.current });
@@ -647,8 +663,12 @@ const ViewerCanvas = forwardRef(({
         bump();
       }
       prevEmptyCountRef.current = 0; // クリア後はリセット
+      emptyStreakCountRef.current = 0; // P0-FLICKER: リセット
       return;
     }
+
+    // ★★★ P0-FLICKER: 非空が来たのでストリークリセット ★★★
+    emptyStreakCountRef.current = 0;
 
     // Hunk E: 非empty時はカウンターリセット
     prevEmptyCountRef.current = 0;
