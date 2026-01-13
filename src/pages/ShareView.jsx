@@ -970,20 +970,34 @@ function ShareViewContent() {
       setPaintSessionCommentId(composerTargetCommentId);
       setActiveCommentId(composerTargetCommentId);
       
-      // ★★★ FIX: comment → editingComment （未定義参照を修正）★★★
-      const shapesToSeed = allShapes.filter(s => resolveCommentId(s) === String(editingComment.id));
-
-      // draftShapes にコピーし、既存ドラフトとして扱う
-      setDraftShapes(shapesToSeed);
-      draftShapesRef.current = shapesToSeed;
-
-      // キャッシュにも即座に反映 (targetKey は composerTargetCommentId に確定済み)
+      // ★★★ P0-1: 既存draft優先ガード（DB seedで上書きしない）★★★
       const editDraftKey = getDraftKey(shareLink.file_id, editingComment.id, null, 'edit');
-      draftCacheRef.current.set(editDraftKey, shapesToSeed);
-
-      console.log(`[C-FIX] Seeded ${shapesToSeed.length} shapes to draft for comment ${editingComment.id.substring(0, 12)}`);
-
-      setPaintSessionCommentId(null);
+      const cached = draftCacheRef.current.get(editDraftKey);
+      const existingDraft = (cached && cached.length > 0)
+        ? { shapes: cached }
+        : loadDraft(editDraftKey);
+      
+      if (existingDraft?.shapes?.length > 0) {
+        console.log('[P0-1] Seed skipped in handlePaintModeChange: existing draft present', { 
+          editDraftKey: editDraftKey.substring(0, 40), 
+          shapes: existingDraft.shapes.length 
+        });
+        seededFromDBRef.current = false;
+        // state/ref/cacheを既存draftで揃える（破壊しない）
+        draftCacheRef.current.set(editDraftKey, existingDraft.shapes);
+        draftShapesRef.current = existingDraft.shapes;
+        setDraftShapes(existingDraft.shapes);
+        setPaintSessionCommentId(null);
+        // seed処理をスキップして下書きを保持
+      } else {
+        // ★★★ 既存draftがない場合のみDB seed ★★★
+        const shapesToSeed = allShapes.filter(s => resolveCommentId(s) === String(editingComment.id));
+        setDraftShapes(shapesToSeed);
+        draftShapesRef.current = shapesToSeed;
+        draftCacheRef.current.set(editDraftKey, shapesToSeed);
+        console.log(`[C-FIX] Seeded ${shapesToSeed.length} shapes to draft for comment ${editingComment.id.substring(0, 12)}`);
+        setPaintSessionCommentId(null);
+      }
 
       // ★★★ 下書き復元はtargetKey変更時のuseEffectで自動実行される ★★★
       // （composerMode='edit' & composerTargetCommentId設定 → targetKey変更 → 自動復元）
