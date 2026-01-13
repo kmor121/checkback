@@ -1728,8 +1728,10 @@ function ShareViewContent() {
 
     setPaintSessionCommentId(null);
     
-    hydratedKeyRef.current = null;
-    setHydratedKeyState(null);
+    // ★★★ P0-1 FIX: seed完了後は hydratedKey を editDraftKey に確定（下書き上書き防止）★★★
+    // これにより、hydrate useEffect が再度 loadDraft() しても、hydratedKey が一致したスキップされる
+    hydratedKeyRef.current = editDraftKey;
+    setHydratedKeyState(editDraftKey);
   };
 
   // ★★★ P1: コメント編集/削除権限判定（admin=オーナー、manager=管理者、member=本人のみ）★★★
