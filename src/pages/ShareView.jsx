@@ -1430,6 +1430,19 @@ function ShareViewContent() {
     setIsSubmitting(true);
     console.log("[ShareView submit] === LOCK ACQUIRED ===", new Date().toISOString());
 
+    // ★★★ P0.5-FREEZE: 送信中の表示を固定（ちらつき防止）★★★
+    freezeRef.current = {
+      comments: [...comments],
+      shapesForCanvas: [...shapesForCanvas],
+      draftCountByCommentId: { ...draftCountByCommentId },
+      activeCommentId,
+    };
+    freezeActiveRef.current = true;
+    console.log('[P0.5-FREEZE] Freeze activated:', {
+      commentsCount: comments.length,
+      shapesCount: shapesForCanvas.length,
+    });
+
     const shapesToCommit = draftShapesRef.current || [];
     const hasDraftShapes = shapesToCommit.length > 0;
     const hasFiles = pendingFiles.length > 0;
