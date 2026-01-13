@@ -719,13 +719,23 @@ function ShareViewContent() {
   useEffect(() => {
     if (!targetKey) return;
     
-    // ★★★ CRITICAL FIX: この targetKey を hydrate 済みの時だけ autosave ★★★
+    // Hunk G2: hydrate未完了でも、draftShapes.length > 0 なら早期hydrate完了として保存継続
     if (hydratedKeyRef.current !== targetKey) {
-      console.log('[draft] autosave SKIPPED (not hydrated for this key yet):', { 
-        targetKey: targetKey.substring(0, 30),
-        hydratedKey: hydratedKeyRef.current?.substring(0, 30) || 'null',
-      });
-      return;
+      if (draftShapes.length > 0) {
+        console.log('[Hunk G2] Early hydrate in autosave: accepting first draft save:', {
+          targetKey: targetKey.substring(0, 30),
+          draftShapesLength: draftShapes.length,
+        });
+        hydratedKeyRef.current = targetKey;
+        setHydratedKeyState(prev => prev === targetKey ? prev : targetKey);
+        // 以降の保存処理に進む
+      } else {
+        console.log('[draft] autosave SKIPPED (not hydrated, empty draft):', { 
+          targetKey: targetKey.substring(0, 30),
+          hydratedKey: hydratedKeyRef.current?.substring(0, 30) || 'null',
+        });
+        return;
+      }
     }
     
     // ★★★ P0-FIX: 空の下書きは即座に削除して復活を防止 ★★★
