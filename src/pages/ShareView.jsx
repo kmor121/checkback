@@ -2859,7 +2859,7 @@ function ShareViewContent() {
               </div>
             ) : (
               <ViewerCanvas
-                key={canvasContextKey}
+                /* P0-FLICKER: key削除でremount防止、内部リセットはcanvasContextKeyで制御 */
                 ref={viewerCanvasRef}
                 fileUrl={file?.file_url}
                 mimeType={file?.mime_type}
