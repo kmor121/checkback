@@ -759,18 +759,34 @@ function ShareViewContent() {
       }
     }
     
-    // ★★★ P0-FIX: 空の下書きは即座に削除して復活を防止 ★★★
-    // ★★★ FIX-v6: new/edit 中は削除しない（下書き勝手消失を止血）★★★
+    // ★★★ Hunk T (P0): 「本当に空」のときだけ削除（loadDraftが null だけでは削除しない） ★★★
+    // new/edit 中は削除しない（下書き勝手消失を止血）
     if (draftShapes.length === 0 && draftScope !== 'new' && draftScope !== 'edit') {
-      // 既にこのキーで削除済みなら何もしない（ループ防止）
-      if (lastDeletedKeyRef.current === targetKey) {
+      // ★★★ P0 FIX: loadDraft が実際に返したデータが空かどうかで判定（不整合状態での削除を防止） ★★★
+      const loadedDraft = loadDraft(targetKey);
+      const isActuallyEmpty = !loadedDraft || (loadedDraft?.shapes?.length === 0);
+      
+      if (!isActuallyEmpty) {
+        // loadDraft が何か返した（shapes がある）のに draftShapes=0 なのは一時的な不整合
+        // 削除せずに続行（ユーザーの下書きを失わない）
+        console.log('[Hunk T] Skip delete: loadedDraft has shapes but draftShapes=0 (temporary mismatch):', { 
+          targetKey, 
+          loadedCount: loadedDraft?.shapes?.length || 0,
+          draftCount: draftShapes.length 
+        });
+        // continue to save (if there are shapes to save)
+        // fall through to autosave section
+      } else {
+        // 本当に空の下書き（loadedDraft が null または shapes=0）のみ削除
+        if (lastDeletedKeyRef.current === targetKey) {
+          return;
+        }
+        console.log('[P0-FIX] Deleting truly empty draft to prevent ghost shapes:', { targetKey, draftScope });
+        deleteDraft(targetKey);
+        draftCacheRef.current.delete(targetKey);
+        lastDeletedKeyRef.current = targetKey;
         return;
       }
-      console.log('[P0-FIX] Deleting empty draft to prevent ghost shapes:', { targetKey, draftScope, hydratedKey: hydratedKeyRef.current?.substring(0, 30) || 'null' });
-      deleteDraft(targetKey);
-      draftCacheRef.current.delete(targetKey);
-      lastDeletedKeyRef.current = targetKey; // 削除したキーを記録
-      return;
     }
 
     // 空でなければ削除記録をリセット
