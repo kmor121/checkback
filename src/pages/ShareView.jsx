@@ -2774,6 +2774,16 @@ function ShareViewContent() {
                   // Hunk M: 既存draftShapes側の_dirty/_localTsを保持（上書きで消えないように）
                   const prev = draftShapesRef.current || [];
                   const prevMap = new Map(prev.map(s => [s.id, s]));
+                  
+                  // ★★★ P0: 編集突入直後は新規shapeへのdirty付与をスキップ ★★★
+                  const skipMarkNewAsDirty = justEnteredEditRef.current.active;
+                  if (skipMarkNewAsDirty) {
+                    console.log('[P0] justEnteredEdit active -> skip mark-new-as-dirty');
+                    // 一度処理したらフラグを解除
+                    justEnteredEditRef.current = { key: null, active: false };
+                    addDebugLog(`[P0] justEnteredEdit cleared`);
+                  }
+                  
                   const updatedWithTransient = updated.map(s => {
                     const p = prevMap.get(s.id);
                     if (p) {
@@ -2781,6 +2791,10 @@ function ShareViewContent() {
                       return { ...s, _dirty: s._dirty ?? p._dirty, _localTs: s._localTs ?? p._localTs };
                     } else {
                       // Hunk M' (P0): 新規shape（prevMapに無い）には_dirtyを付与（初回描画救済）
+                      // ★★★ P0: ただし編集突入直後はスキップ（DB shapesを誤dirty化しない）★★★
+                      if (skipMarkNewAsDirty) {
+                        return s; // dirty付与しない
+                      }
                       return { ...s, _dirty: s._dirty ?? true, _localTs: s._localTs ?? Date.now() };
                     }
                   });
