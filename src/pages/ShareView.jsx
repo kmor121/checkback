@@ -840,6 +840,21 @@ function ShareViewContent() {
     }
     
     saveDraftTimeoutRef.current = setTimeout(() => {
+      // ★★★ P0: baseline比較ガード（DBと同一内容なら保存しない）★★★
+      if (seedBaselineArmedRef.current && targetKey === seedBaselineKeyRef.current) {
+        const curSig = stableSig(draftShapes);
+        if (curSig === seedBaselineSigRef.current) {
+          console.log('[P0] autosave SKIPPED (baseline same as DB on enterEdit):', {
+            targetKey: targetKey?.substring(0, 30),
+            shapesCount: draftShapes.length,
+          });
+          return; // ★ここで止める
+        }
+        // 1回でもユーザー変更が入ったら以後は通常運用へ
+        seedBaselineArmedRef.current = false;
+        addDebugLog(`[P0] baseline disarmed (content changed)`);
+      }
+      
       // ★★★ Hunk1: DB seed直後で_dirtyが無ければ保存スキップ ★★★
       if (draftScope === 'edit' && seededFromDBRef.current) {
         const hasUserChange = draftShapes.some(s => s?._dirty);
