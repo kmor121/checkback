@@ -186,6 +186,7 @@ function ShareViewContent() {
   const lastNonNullPaintContextIdRef = useRef(null); // FIX-NO-BLANK: null落ち防止用
   const deletedShapeIdsRef = useRef(new Set()); // FIX-DELETE: 削除復活防止用
   const lastDeletedKeyRef = useRef(null); // P0-FIX: 空ドラフトの無限削除防止
+  const handoffRef = useRef(null); // P0-FLICKER: 送信直後のハンドオフバッファ { key, snapshot, pendingIds }
   
   
   // ★★★ FIX-4: addDebugLog を最優先定義（TDZ根絶）★★★
