@@ -2344,7 +2344,35 @@ function ShareViewContent() {
     const shapeMap = new Map();
     dbShapesFiltered.forEach(s => shapeMap.set(s.id, s));
     draftShapesFiltered.forEach(s => shapeMap.set(s.id, s));
-    const merged = Array.from(shapeMap.values());
+    let merged = Array.from(shapeMap.values());
+    
+    // ★★★ P0-FLICKER: handoffバッファからの補完（送信直後のちらつき防止）★★★
+    // edit/new終了直後（composerMode='view'）でhandoffが有効、かつDBにまだ全て反映されていない場合
+    const handoffNow = handoffRef.current;
+    if (handoffNow && handoffNow.snapshot?.length > 0) {
+      const existingIds = new Set(merged.map(s => String(s.id)));
+      const allIncluded = [...handoffNow.pendingIds].every(id => existingIds.has(id));
+      
+      if (!allIncluded) {
+        // DBにまだ反映されていないshapeをhandoffから補完
+        const supplemented = [...merged];
+        handoffNow.snapshot.forEach(s => {
+          if (!existingIds.has(String(s.id))) {
+            supplemented.push(s);
+          }
+        });
+        console.log('[P0-FLICKER] handoff补完:', {
+          mergedBefore: merged.length,
+          supplementedAfter: supplemented.length,
+          pendingCount: handoffNow.pendingIds.size,
+        });
+        merged = supplemented;
+      } else {
+        // 全て反映されたのでhandoffをクリア
+        console.log('[P0-FLICKER] handoff cleared (all shapes now in DB)');
+        handoffRef.current = null;
+      }
+    }
     
     // P1 FIX: 描画混入の直接原因であるため、このブロックを削除。
     // これにより、描画がないコメントを選択した際に、古い描画が返されることがなくなります。
