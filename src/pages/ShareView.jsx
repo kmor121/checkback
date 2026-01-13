@@ -104,6 +104,12 @@ const stripTransient = (shape) => {
 };
 
 function ShareViewContent() {
+  // ★★★ P0-DEBUG: mount/unmount検知 ★★★
+  useEffect(() => {
+    console.log("[MOUNT] ShareViewContent");
+    return () => console.log("[UNMOUNT] ShareViewContent");
+  }, []);
+
   const [guestName, setGuestName] = useState('');
   const [guestId, setGuestId] = useState('');
   const [showNameDialog, setShowNameDialog] = useState(false);
