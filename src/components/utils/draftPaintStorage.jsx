@@ -55,6 +55,11 @@ export function saveDraft(key, shapes, metadata = {}) {
   if (!key || !shapes) return false;
   
   try {
+    // Hunk S: authorKey がない場合に author からコピー
+    if (!metadata.authorKey && metadata.author) {
+      metadata.authorKey = metadata.author;
+    }
+    
     const draft = {
       version: DRAFT_VERSION,
       updatedAt: new Date().toISOString(),
@@ -62,7 +67,7 @@ export function saveDraft(key, shapes, metadata = {}) {
       ...metadata,
     };
     localStorage.setItem(key, JSON.stringify(draft));
-    console.log('[draftPaintStorage] Saved draft:', key, 'shapes:', shapes.length, 'author:', metadata.authorKey?.substring(0, 12) || 'none', 'commentId:', metadata.commentId?.substring(0, 12) || 'none');
+    console.log('[draftPaintStorage] Saved draft:', key, 'shapes:', shapes.length, 'authorKey:', metadata.authorKey?.substring(0, 12) || 'none', 'commentId:', metadata.commentId?.substring(0, 12) || 'none');
     return true;
   } catch (e) {
     console.error('[draftPaintStorage] Failed to save draft:', e);
@@ -82,7 +87,7 @@ export function loadDraft(key) {
     const raw = localStorage.getItem(key);
     if (!raw) return null;
     
-    const draft = JSON.parse(raw);
+    let draft = JSON.parse(raw);
     
     // 期限切れチェック（7日）
     if (draft.updatedAt) {
@@ -95,8 +100,16 @@ export function loadDraft(key) {
         return null;
       }
     }
+
+    // Hunk T: authorKey がない legacy draft を救済
+    if (draft && !draft.authorKey && draft.author) {
+      console.log(`[draftPaintStorage] Migrating legacy draft: ${key}`);
+      draft.authorKey = draft.author;
+      // マイグレーションしたデータを再保存
+      saveDraft(key, draft.shapes, draft);
+    }
     
-    console.log('[draftPaintStorage] Loaded draft:', key, 'shapes:', draft.shapes?.length || 0);
+    console.log('[draftPaintStorage] Loaded draft:', key, 'shapes:', draft.shapes?.length || 0, 'authorKey:', draft.authorKey?.substring(0,12) || 'none');
     return draft;
   } catch (e) {
     console.error('[draftPaintStorage] Failed to load draft:', e);
