@@ -504,6 +504,10 @@ const ViewerCanvas = forwardRef(({
   }, [forceClearToken]);
 
   // ★★★ FIX-PENDING: existingShapes FULL SYNC（pendingCtx対応版）★★★
+  // ★★★ P0-FLICKER: 送信後のrefetch瞬間emptyを無視（ちらつき防止）★★★
+  const lastNonEmptyShapesRef = useRef(null); // 最後の非空shapesを保持
+  const emptyStreakCountRef = useRef(0); // 連続empty回数
+
   useLayoutEffect(() => {
     // ★ 操作中は更新を保留し、pending に保存
     if (isInteractingRef.current) {
@@ -511,7 +515,7 @@ const ViewerCanvas = forwardRef(({
       pendingIncomingShapesRef.current = existingShapes;
       return;
     }
-    
+
     // ★ 保留されていた shapes を優先的に使用
     const shapesToSync = pendingIncomingShapesRef.current || existingShapes;
     pendingIncomingShapesRef.current = null; // 処理後にクリア
@@ -519,6 +523,12 @@ const ViewerCanvas = forwardRef(({
     if (!shapesToSync) return;
 
     const incomingEmpty = shapesToSync.length === 0;
+
+    // ★★★ P0-FLICKER: 非空shapesを記録 ★★★
+    if (!incomingEmpty) {
+      lastNonEmptyShapesRef.current = shapesToSync;
+      emptyStreakCountRef.current = 0;
+    }
 
     
 
