@@ -96,6 +96,13 @@ const normalizeShape = (s, defaultCommentId = null) => {
   };
 };
 
+// Hunk J: transientフィールド除去関数（DB由来shape用）
+const stripTransient = (shape) => {
+  if (!shape) return shape;
+  const { _dirty, _localTs, ...clean } = shape;
+  return clean;
+};
+
 function ShareViewContent() {
   const [guestName, setGuestName] = useState('');
   const [guestId, setGuestId] = useState('');
@@ -1301,14 +1308,15 @@ function ShareViewContent() {
         if (shapesToCommit.length > 0) {
           console.log(`[P0] Re-creating ${shapesToCommit.length} shapes for comment ${composerTargetCommentId.substring(0,12)}`);
           for (const shape of shapesToCommit) {
+            const cleanShape = stripTransient(shape);  // Hunk L: DB保存前transient除去
             await base44.entities.PaintShape.create({
               file_id: shareLink.file_id,
               share_token: token,
               comment_id: composerTargetCommentId,
               page_no: currentPage,
-              client_shape_id: shape.id,
-              shape_type: shape.tool,
-              data_json: JSON.stringify(shape),
+              client_shape_id: cleanShape.id,
+              shape_type: cleanShape.tool,
+              data_json: JSON.stringify(cleanShape),
               author_key: guestId,
               author_name: guestName,
             });
@@ -1450,14 +1458,15 @@ function ShareViewContent() {
         if (shapesToCommit.length > 0) {
           console.log('[ShareView] Saving draft shapes to DB:', shapesToCommit.length);
           for (const shape of shapesToCommit) {
+            const cleanShape = stripTransient(shape);  // Hunk L2: DB保存前transient除去
             await base44.entities.PaintShape.create({
               file_id: shareLink.file_id,
               share_token: token,
               comment_id: comment.id,
               page_no: currentPage,
-              client_shape_id: shape.id,
-              shape_type: shape.tool,
-              data_json: JSON.stringify(shape),
+              client_shape_id: cleanShape.id,
+              shape_type: cleanShape.tool,
+              data_json: JSON.stringify(cleanShape),
               author_key: guestId,
               author_name: guestName,
             });
@@ -1654,6 +1663,9 @@ function ShareViewContent() {
       seededFromDBRef.current = true; // ★★★ Hunk1: DB seed は「まだ下書き扱いにしない」★★★
       addDebugLog(`[P1-seed] Seeded ${shapesToSeed.length} DB shapes for comment ${comment.id.substring(0, 12)}`);
     }
+    
+    // Hunk K: seed時のtransient除去（DB由来shape→draftShapesでdirty混入防止）
+    shapesToSeed = shapesToSeed.map(stripTransient);
     
     // draftShapes にコピーし、既存ドラフトとして扱う
     setDraftShapes(shapesToSeed);
@@ -1936,7 +1948,7 @@ function ShareViewContent() {
           return null;
         }
         
-        return normalized;
+        return stripTransient(normalized);  // Hunk J: DB由来shapeのtransient除去
       } catch (e) {
         console.error('[ShareView] Failed to parse shape:', e);
         return null;
