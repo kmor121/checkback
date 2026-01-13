@@ -616,17 +616,25 @@ const ViewerCanvas = forwardRef(({
       // ★★★ P0-FLICKER: emptyストリークをカウント ★★★
       emptyStreakCountRef.current += 1;
 
-      // ★★★ P0-FLICKER: 同一contextKeyかつ前回非空があれば、3回連続emptyまで保持 ★★★
+      // ★★★ P0-FLICKER: 同一contextKeyかつ前回非空があれば、5回連続emptyまで保持 ★★★
       // これにより送信→refetch→空→DB取得完了の瞬間的なemptyでちらつかない
       // paintMode不問（送信直後はpaintMode=falseになるため）
-      if (lastNonEmptyShapesRef.current && emptyStreakCountRef.current < 3 && prevMapSize > 0) {
-        console.log('[P0-FLICKER] SYNC SKIP: transient empty with prevMap, preserving shapes', {
+      // ★★★ P0-FLICKER-v2: prevMapSize不問（送信完了直後はMapが空でも保持）★★★
+      if (lastNonEmptyShapesRef.current && lastNonEmptyShapesRef.current.length > 0 && emptyStreakCountRef.current < 5) {
+        console.log('[P0-FLICKER] SYNC SKIP: transient empty, preserving lastNonEmpty shapes', {
           ctx,
           prevMapSize,
           emptyStreak: emptyStreakCountRef.current,
           lastNonEmptyCount: lastNonEmptyShapesRef.current.length,
           paintMode,
         });
+        // ★★★ P0-FLICKER-v2: lastNonEmptyをMapに復元（表示を維持）★★★
+        if (prevMapSize === 0) {
+          const restoreMap = new Map();
+          lastNonEmptyShapesRef.current.forEach(s => restoreMap.set(s.id, s));
+          shapesMapRef.current = restoreMap;
+          bump();
+        }
         return;
       }
 
