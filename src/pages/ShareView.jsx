@@ -1722,7 +1722,16 @@ function ShareViewContent() {
         draftCacheRef.current.delete(currentTargetKey);
         addDebugLog(`[exitEditMode] draft deleted: ${currentTargetKey.substring(0, 30)} reason=${reason}`);
       }
-      
+
+      // Hunk N: バッジ即時クリア（破棄時）
+      if (currentDraftScope === 'edit' && composerTargetCommentId) {
+        setDraftCountByCommentId(prev => {
+          const next = { ...prev };
+          delete next[composerTargetCommentId];
+          return next;
+        });
+      }
+
       // メモリクリア
       setDraftShapes([]);
       draftShapesRef.current = [];
