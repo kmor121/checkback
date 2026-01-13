@@ -1194,6 +1194,16 @@ const ViewerCanvas = forwardRef(({
       return;
     }
 
+    // ★★★ Hunk Q (P0): draft準備中は描画開始をブロック ★★★
+    if (paintMode && !draftReady && tool !== 'text') {
+      console.log('[Hunk Q] PointerDown blocked: draftReady=false (waiting for draft hydration)', { 
+        paintMode, 
+        draftReady, 
+        tool 
+      });
+      return;
+    }
+
     // ★★★ CRITICAL: 描画開始時に古いcurrentShapeを強制クリア（前コメントのdraft残り防止）★★★
     // currentShapeのcomment_idがactiveCommentIdと異なる場合は古いdraftなので破棄
     if (currentShape && activeCommentId != null) {
@@ -1704,7 +1714,7 @@ const ViewerCanvas = forwardRef(({
       delete normalizedShape.height;
       delete normalizedShape.radius;
 
-      // ★★★ CRITICAL: 新規shape確定は canCommitNew でOK（draftReady不要）★★★
+      // ★★★ Hunk Q (P0): 新規shape確定は canCommitNew && draftReady で判定 ★★★
       console.log('[DRAW_DEBUG] commit check:', {
         canCommitNew,
         paintMode,
@@ -1712,8 +1722,12 @@ const ViewerCanvas = forwardRef(({
         normalizedShapeCommentId: normalizedShape.comment_id?.substring(0, 12) || 'null',
       });
 
-      if (!canCommitNew) {
-        console.warn('[DRAW_DEBUG] COMMIT blocked: canCommitNew=false', { paintMode, draftReady });
+      if (!canCommitNew || !draftReady) {
+        console.warn('[Hunk Q] COMMIT blocked: canCommitNew=false or draftReady=false', { 
+          paintMode, 
+          draftReady, 
+          canCommitNew 
+        });
         setCurrentShape(null);
         setIsDrawing(false);
         drawViewRef.current = null;
