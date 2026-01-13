@@ -1801,8 +1801,22 @@ function ShareViewContent() {
       return;
     }
     
+    // Hunk N-Pre: commentId退避（exitEditMode内のstate変更前に取得）
+    const discardTargetCommentId = composerTargetCommentId;
+    const discardDraftScope = draftScope;
+    
     // 明示的破棄
     exitEditMode('discard_explicitly');
+    
+    // Hunk N-Post: 破棄直後にバッジを強制クリア（exitEditMode内のクリアを補強）
+    if (discardDraftScope === 'edit' && discardTargetCommentId) {
+      setDraftCountByCommentId(prev => {
+        const next = { ...prev };
+        delete next[discardTargetCommentId];
+        console.log('[Hunk N-Post] Badge force-cleared after discard:', discardTargetCommentId.substring(0, 12));
+        return next;
+      });
+    }
   };
 
   const handleStartReply = (parentComment) => {
