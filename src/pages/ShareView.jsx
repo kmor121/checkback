@@ -1174,6 +1174,12 @@ function ShareViewContent() {
       draftShapesLength: draftShapesRef.current.length,
       cacheSize: draftCacheRef.current.size,
     });
+    
+    // ★★★ P0-A: ユーザー操作でautosaveを解禁 ★★★
+    if (!autosaveArmedRef.current) {
+      autosaveArmedRef.current = true;
+      addDebugLog(`[P0-A] autosave armed by handleSaveShape (mode=${mode})`);
+    }
 
     if (!isReady) {
       console.warn('[DRAW_DEBUG] ShareView.handleSaveShape aborted: not ready');
