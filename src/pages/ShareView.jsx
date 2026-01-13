@@ -2276,6 +2276,17 @@ function ShareViewContent() {
   const shapesForCanvas = React.useMemo(() => {
     // ★★★ Hunk 0: console.logのみ許可、addDebugLog呼び出し禁止（レンダー中setState防止）★★★
     
+    // ★★★ P0-FLICKER: handoffバッファ有効チェック（送信直後のちらつき防止）★★★
+    const handoff = handoffRef.current;
+    const handoffActive = !!(handoff && handoff.snapshot?.length > 0);
+    const handoffKeyMatch = handoffActive && (handoff.key === paintContextId || handoff.key === targetKey);
+    
+    // ★★★ P0-FLICKER: handoff期限切れチェック（5秒でタイムアウト）★★★
+    if (handoffActive && handoff.createdAt && Date.now() - handoff.createdAt > 5000) {
+      console.log('[P0-FLICKER] handoff expired, clearing');
+      handoffRef.current = null;
+    }
+    
     // ★★★ CRITICAL: allShapes は既に正規化済み（defaultCommentId=null で DB値保持）★★★
     const allShapesNormalized = allShapes;
     
