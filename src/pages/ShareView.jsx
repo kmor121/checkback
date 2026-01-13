@@ -1432,6 +1432,21 @@ function ShareViewContent() {
     const hasDraftShapes = shapesToCommit.length > 0;
     const hasFiles = pendingFiles.length > 0;
 
+    // ★★★ P0-FLICKER: 送信直前にhandoffバッファを作成（ちらつき防止）★★★
+    if (shapesToCommit.length > 0) {
+      handoffRef.current = {
+        key: paintContextId || targetKey,
+        snapshot: [...shapesToCommit],
+        pendingIds: new Set(shapesToCommit.map(s => String(s.id))),
+        createdAt: Date.now(),
+      };
+      console.log('[P0-FLICKER] handoff buffer created:', {
+        key: handoffRef.current.key?.substring(0, 20) || 'null',
+        snapshotCount: shapesToCommit.length,
+        pendingIdsCount: handoffRef.current.pendingIds.size,
+      });
+    }
+
     try {
       if (composerMode === 'edit' && composerTargetCommentId) {
         // 編集モード: 既存コメントを更新
