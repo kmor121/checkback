@@ -535,13 +535,24 @@ function ShareViewContent() {
   const draftFilterId = isEditMode ? String(composerTargetCommentId) : (isNewMode ? String(tempCommentId) : null);
 
   // ★★★ CRITICAL: targetKey（scope分離版、view時はnullで表示しない）★★★
+  // ★★★ P0-5: commentId/tempId が無ければ null を返す（無効キー生成防止）★★★
   const targetKey = React.useMemo(() => {
     if (!shareLink?.file_id || !paintContextId || !draftScope) return null;
     
     if (draftScope === 'edit') {
+      // ★★★ P0-5: paintContextIdが空文字や無効値ならnull ★★★
+      if (!paintContextId || paintContextId === '' || paintContextId === 'null' || paintContextId === 'undefined') {
+        console.warn('[P0-5] targetKey: edit mode but paintContextId invalid, returning null');
+        return null;
+      }
       return getDraftKey(shareLink.file_id, paintContextId, null, 'edit');
     }
     if (draftScope === 'new') {
+      // ★★★ P0-5: paintContextIdが空文字や無効値ならnull ★★★
+      if (!paintContextId || paintContextId === '' || paintContextId === 'null' || paintContextId === 'undefined') {
+        console.warn('[P0-5] targetKey: new mode but paintContextId invalid, returning null');
+        return null;
+      }
       return getDraftKey(shareLink.file_id, null, paintContextId, 'new');
     }
     
