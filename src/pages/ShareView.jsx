@@ -604,14 +604,28 @@ function ShareViewContent() {
     // ★★★ P0: localStorage読み込み → authorKey＋commentId照合 → 正規化 ★★★
     const draft = loadDraft(targetKey);
     
-    // ★★★ P0-A: authorKey必須チェック（古い下書き除外、安全優先）★★★
+    // ★★★ Hunk S (P0): authorKey無しドラフトを救済（upgrade） ★★★
     if (!draft?.authorKey) {
-      console.warn('[draft] Ignoring draft without authorKey (legacy), not loading or deleting:', { targetKey });
-      // レガシー下書きは完全に無視する（stateを更新しないことで、autosaveによる削除も防止）
-      // ★★★ P0 FIX: 0件/legacyでもhydrate完了を通知し、gateを開ける ★★★
-      hydratedKeyRef.current = targetKey;
-      setHydratedKeyState(targetKey);
-      return;
+      // legacy下書きをupgrade（authorKeyを補充）
+      const currentAuthorKey = authUser?.id || guestId;
+      console.log('[draft] Legacy draft upgraded (missing authorKey):', { 
+        targetKey,
+        upgradeAuthorKey: currentAuthorKey?.substring(0, 12) || 'unknown',
+        shapesCount: draft?.shapes?.length || 0
+      });
+      
+      // 読み込んだ下書きに authorKey を補う
+      draft.authorKey = currentAuthorKey;
+      
+      // localStorage に upgrade を保存（重要：削除ルートに入らないようにするため）
+      saveDraft(targetKey, draft.shapes || [], {
+        pageNo: draft.pageNo,
+        authorKey: currentAuthorKey,
+        authorName: draft.authorName || guestName,
+        commentId: draft.commentId,
+      });
+      
+      // 以降の処理を続行（draft は now authorKey を持つ）
     }
     
     // ★★★ P0-A: 本人の下書きのみ復元（混線防止）★★★
