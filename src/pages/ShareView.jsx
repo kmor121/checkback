@@ -140,6 +140,7 @@ function ShareViewContent() {
   const draftShapesRef = useRef([]);
   const draftCacheRef = useRef(new Map()); // ★★★ P1: targetKey -> shapes[] のキャッシュ ★★★
   const seededFromDBRef = useRef(false); // ★★★ Hunk1: DB seed直後の autosave スキップ用フラグ ★★★
+  const justEnteredEditRef = useRef({ key: null, active: false }); // ★★★ P0: 編集突入直後のdirty化防止 ★★★
   const [canvasSessionNonce, setCanvasSessionNonce] = useState(0);
   
   // ★★★ P2: 明示クリア用トークン（全削除/送信成功後のみインクリメント）★★★
