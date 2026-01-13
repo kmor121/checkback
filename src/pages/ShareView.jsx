@@ -2629,14 +2629,22 @@ function ShareViewContent() {
                     paintContextId: paintContextId?.substring(0, 12) || 'null',
                   });
                   
+                  // Hunk M: 既存draftShapes側の_dirty/_localTsを保持（上書きで消えないように）
+                  const prev = draftShapesRef.current || [];
+                  const prevMap = new Map(prev.map(s => [s.id, s]));
+                  const updatedWithTransient = updated.map(s => {
+                    const p = prevMap.get(s.id);
+                    return p ? { ...s, _dirty: s._dirty ?? p._dirty, _localTs: s._localTs ?? p._localTs } : s;
+                  });
+                  
                   // ★★★ P1: キャッシュ更新 ★★★
                   if (targetKey) {
-                    draftCacheRef.current.set(targetKey, updated);
+                    draftCacheRef.current.set(targetKey, updatedWithTransient);
                   }
                   
                   // メモリに保存（useEffectでlocalStorage自動保存される）
-                  draftShapesRef.current = updated;
-                  setDraftShapes(updated);
+                  draftShapesRef.current = updatedWithTransient;
+                  setDraftShapes(updatedWithTransient);
                 }}
                 onBeginPaint={handleBeginPaint}
                 onSaveShape={handleSaveShape}
