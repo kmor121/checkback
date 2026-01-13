@@ -147,6 +147,9 @@ function ShareViewContent() {
   const seedBaselineKeyRef = useRef(null);
   const seedBaselineArmedRef = useRef(false);
   
+  // ★★★ P0-A: autosave解禁フラグ（ユーザー操作で初めてtrueにする）★★★
+  const autosaveArmedRef = useRef(false);
+  
   // シグネチャ計算（ローカルメタを除外してJSON化）
   const stableSig = (shapes) => {
     const cleaned = (shapes || [])
