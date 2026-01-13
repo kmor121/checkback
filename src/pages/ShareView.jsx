@@ -2886,7 +2886,7 @@ function ShareViewContent() {
                 fileUrl={file?.file_url}
                 mimeType={file?.mime_type}
                 pageNumber={currentPage}
-                existingShapes={shapesForCanvas}
+                existingShapes={freezeActiveRef.current && freezeRef.current?.shapesForCanvas ? freezeRef.current.shapesForCanvas : shapesForCanvas}
                 comments={comments.filter(c => c.page_no === currentPage)}
                 activeCommentId={activeCommentId}
                 canvasContextKey={canvasInternalResetKey}
