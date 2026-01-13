@@ -842,10 +842,11 @@ function ShareViewContent() {
       }
 
       saveDraft(targetKey, draftShapes, { 
-        pageNo: currentPage,
-        authorKey: guestId,
-        authorName: guestName,
-        commentId: commentIdFromKey,
+       pageNo: currentPage,
+       author: guestId, // for backward-compatibility
+       authorKey: guestId,
+       authorName: guestName,
+       commentId: commentIdFromKey,
       });
       console.log('[draft] autosave fired:', { targetKey, shapesCount: draftShapes.length, commentId: commentIdFromKey?.substring(0, 12) || 'null' });
       
