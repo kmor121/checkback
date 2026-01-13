@@ -3221,7 +3221,13 @@ function ShareViewContent() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {sortedComments.length === 0 ? (
+              {/* P0.5-FREEZE: freeze中は固定データを使用 */}
+              {(() => {
+                const displayComments = freezeActiveRef.current && freezeRef.current?.comments 
+                  ? freezeRef.current.comments.filter(c => !c.parent_comment_id)
+                  : sortedComments;
+                return displayComments;
+              })().length === 0 ? (
                 <div className="text-center text-gray-500 py-8">
                   コメントはありません
                 </div>
