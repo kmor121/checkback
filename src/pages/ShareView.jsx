@@ -1740,6 +1740,13 @@ function ShareViewContent() {
       console.log("[ShareView submit] === LOCK RELEASED ===", new Date().toISOString());
       submitLockRef.current = false;
       setIsSubmitting(false);
+      
+      // ★★★ P0.5-FREEZE: freeze解除は少し遅らせてデータ反映を待つ ★★★
+      setTimeout(() => {
+        freezeActiveRef.current = false;
+        freezeRef.current = null;
+        console.log('[P0.5-FREEZE] Freeze released');
+      }, 300);
     }
   };
 
