@@ -3232,7 +3232,16 @@ function ShareViewContent() {
                   コメントはありません
                 </div>
               ) : (
-                sortedComments.map((comment) => {
+                /* P0.5-FREEZE: freeze中は固定データを使用 */
+                (freezeActiveRef.current && freezeRef.current?.comments 
+                  ? freezeRef.current.comments.filter(c => !c.parent_comment_id).sort((a, b) => {
+                      if (commentSort === 'page') return a.page_no - b.page_no || a.seq_no - b.seq_no;
+                      if (commentSort === 'oldest') return new Date(a.created_date) - new Date(b.created_date);
+                      if (commentSort === 'newest') return new Date(b.created_date) - new Date(a.created_date);
+                      return 0;
+                    })
+                  : sortedComments
+                ).map((comment) => {
                                   const shapesCount = paintShapes.filter(s => s.comment_id === comment.id).length;
                                   const isSelected = activeCommentId === comment.id;
                                   const isEditing = composerMode === 'edit' && composerTargetCommentId === comment.id;
