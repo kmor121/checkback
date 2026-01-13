@@ -187,6 +187,8 @@ function ShareViewContent() {
   const deletedShapeIdsRef = useRef(new Set()); // FIX-DELETE: 削除復活防止用
   const lastDeletedKeyRef = useRef(null); // P0-FIX: 空ドラフトの無限削除防止
   const handoffRef = useRef(null); // P0-FLICKER: 送信直後のハンドオフバッファ { key, snapshot, pendingIds }
+  const freezeRef = useRef(null); // P0.5-FREEZE: 送信中の表示固定用スナップショット
+  const freezeActiveRef = useRef(false); // P0.5-FREEZE: freeze有効フラグ
   
   
   // ★★★ FIX-4: addDebugLog を最優先定義（TDZ根絶）★★★
