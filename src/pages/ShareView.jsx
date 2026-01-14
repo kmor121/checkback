@@ -1703,24 +1703,38 @@ function ShareViewContent() {
           });
         }
 
-        // ★★★ P0-FIX: freeze生成（リライト後のhandoffを使用、実ID確定後に生成）★★★
-        const safeShapesForFreeze = shapesForCanvasSafe.length > 0 ? shapesForCanvasSafe : (lastStableShapesRef.current || []);
-        const freezeShapes = handoffRef.current?.snapshot?.length > 0 
-          ? handoffRef.current.snapshot  // handoffリライト済みなら実IDになっている
-          : safeShapesForFreeze;
-        
-        freezeRef.current = {
-          shapesForCanvas: [...freezeShapes],
-          draftCountByCommentId: { ...draftCountByCommentId },
-          activeCommentId,
-          key: submittedCommentId,
-          toId: submittedCommentId,
-        };
-        freezeActiveRef.current = true;
-        console.log('[P0-FIX] Freeze activated with real ID:', {
-          shapesCount: freezeShapes.length,
-          submittedCommentId: submittedCommentId.substring(0, 12),
-        });
+        // ★★★ P0-FIX: freeze生成は「handoff snapshotがあり、keyがsubmittedCommentIdと一致」する時のみ ★★★
+        // コメントのみ送信（shapesなし）では freeze を張らない（前コメントの描画を freeze しない）
+        const handoffNow = handoffRef.current;
+        const freezeShapes =
+          handoffNow &&
+          String(handoffNow.key) === String(submittedCommentId) &&
+          Array.isArray(handoffNow.snapshot)
+            ? handoffNow.snapshot
+            : [];
+
+        if (freezeShapes.length > 0) {
+          freezeActiveRef.current = true;
+          freezeRef.current = {
+            key: submittedCommentId,
+            shapesForCanvas: [...freezeShapes],
+            draftCountByCommentId: { ...draftCountByCommentId },
+            activeCommentId,
+            toId: submittedCommentId,
+            createdAt: Date.now(),
+          };
+          console.log('[P0-FIX] Freeze activated with real ID:', {
+            shapesCount: freezeShapes.length,
+            submittedCommentId: submittedCommentId.substring(0, 12),
+          });
+        } else {
+          // ★ comment-only submit 対策：前コメントの shapes を freeze しない
+          freezeActiveRef.current = false;
+          freezeRef.current = null;
+          console.log('[P0-FIX] Freeze skipped (no shapes):', {
+            submittedCommentId: submittedCommentId.substring(0, 12),
+          });
+        }
 
         // ★★★ CRITICAL: 送信時にのみDraftShapesをDBに保存 ★★★
         if (shapesToCommit.length > 0) {
