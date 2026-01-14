@@ -1946,12 +1946,20 @@ function ShareViewContent() {
       setTool('select');
     }
 
-    // Hunk P: 編集開始時にtempCommentIdを強制無効化（newの残骸リーク防止）
-    setTempCommentId(null);
-    if (shareLink?.file_id) {
-      localStorage.removeItem(`tempCommentId:${shareLink.file_id}`);
+    // ★★★ Hunk2 (P1): 新規下書きがある場合は tempCommentId を保持（下書き消失防止）★★★
+    const hasNewDraft = tempCommentId && draftCountByCommentId[tempCommentId] > 0;
+    if (!hasNewDraft) {
+      setTempCommentId(null);
+      if (shareLink?.file_id) {
+        localStorage.removeItem(`tempCommentId:${shareLink.file_id}`);
+      }
+      console.log('[Hunk2] tempCommentId cleared (no new draft)');
+    } else {
+      console.log('[Hunk2] tempCommentId preserved (new draft exists):', {
+        tempCommentId: tempCommentId?.substring(0, 12),
+        draftCount: draftCountByCommentId[tempCommentId],
+      });
     }
-    console.log('[Hunk P] tempCommentId cleared before entering edit mode');
 
     // ★★★ FIX-2/A: ID確定→mode切替の順序保証★★★
     setCurrentPage(comment.page_no);
