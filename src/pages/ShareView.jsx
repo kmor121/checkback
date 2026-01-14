@@ -509,23 +509,10 @@ function ShareViewContent() {
     const prev = stablePaintContextIdRef.current?.id || null;
     const computed = computedPaintContextId;
     
-    // ★★★ P0-DEBUG: stablePaintContextId計算開始 ★★★
-    console.log('[ShareView] stablePaintContextId UMEMO IN:', {
-      fileId: fileId?.substring(0, 12) || 'null',
-      prevFileIdRef: prevFileIdRef?.substring(0, 12) || 'null',
-      prevStableId: prev?.substring(0, 12) || 'null',
-      computed: computed?.substring(0, 12) || 'null',
-      lastNonNullRef: lastNonNullPaintContextIdRef.current?.substring(0, 12) || 'null',
-      lockRef: lockPaintContextIdRef.current?.substring(0, 12) || 'null',
-      activeCommentId: activeCommentId?.substring(0, 12) || 'null',
-      composerMode,
-    });
-    
     // ファイル変更時は強制クリア
     if (fileId && fileId !== prevFileIdRef) {
       stablePaintContextIdRef.current = { fileId, id: null };
       lastNonNullPaintContextIdRef.current = null; // FIX-NO-BLANK: ファイル変更時にrefもクリア
-      console.log('[ShareView] stablePaintContextId UMEMO OUT: File changed, returning null');
       return null;
     }
     
@@ -533,25 +520,21 @@ function ShareViewContent() {
     if (computed) {
       stablePaintContextIdRef.current = { fileId, id: computed };
       lastNonNullPaintContextIdRef.current = computed; // FIX-NO-BLANK: 非nullを記録
-      console.log('[ShareView] stablePaintContextId UMEMO OUT: Using computed', { computed: computed?.substring(0, 12) });
       return computed;
     }
     
     // computed=nullでも前回値があれば保持（チラつき防止）
     if (prev && fileId === prevFileIdRef) {
-      console.log('[ShareView] stablePaintContextId UMEMO OUT: Using prev', { prev: prev?.substring(0, 12) });
       return prev;
     }
     
     // FIX-NO-BLANK: 最後の非nullを使う（完全null回避）
     if (lastNonNullPaintContextIdRef.current) {
-      console.log('[ShareView] stablePaintContextId UMEMO OUT: Using lastNonNull', { lastNonNull: lastNonNullPaintContextIdRef.current?.substring(0, 12) });
       return lastNonNullPaintContextIdRef.current;
     }
     
-    console.log('[ShareView] stablePaintContextId UMEMO OUT: Returning null (all fallbacks failed)');
     return null;
-  }, [computedPaintContextId, shareLink?.file_id, activeCommentId, composerMode]);
+  }, [computedPaintContextId, shareLink?.file_id]);
   
   const paintContextId = stablePaintContextId;
 
@@ -2494,19 +2477,6 @@ function ShareViewContent() {
       lastMergedShapesRef.current = merged;
       lastStableShapesRef.current = merged; // P0-REGRESS: 非空なら保存
     }
-    
-    // ★★★ P0-DEBUG: shapesForCanvas最終出力 ★★★
-    console.log('[ShareView] shapesForCanvas UMEMO OUT:', {
-      mergedCount: merged.length,
-      paintContextId: paintContextId?.substring(0, 12) || 'null',
-      shouldShowDraft,
-      composerMode,
-      allShapesCount: allShapesNormalized.length,
-      dbShapesCount: dbShapesFiltered.length,
-      draftShapesCount: draftShapesFiltered.length,
-      handoffActive: handoffNow?.snapshot?.length || 0,
-    });
-    
     return merged;
   }, [allShapes, draftShapes, showAllPaint, paintContextId, shouldShowDraft, storageDraftReady, composerMode, tempCommentId, canvasReady, activeCommentId]);
   

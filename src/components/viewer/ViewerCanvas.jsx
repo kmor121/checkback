@@ -298,17 +298,6 @@ const ViewerCanvas = forwardRef(({
 
     const targetId = renderTargetCommentId ? String(renderTargetCommentId) : '';
 
-    // ★★★ P0-DEBUG: renderedShapes計算開始 ★★★
-    console.log('[ViewerCanvas] renderedShapes UMEMO IN:', {
-      shapesVersion,
-      showAllPaint,
-      renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
-      targetId: targetId?.substring(0, 12) || 'null',
-      mapShapesCount: mapShapes.length,
-      sourceShapesCount: sourceShapes.length,
-      currentShapeId: currentShape?.id?.substring(0, 12) || 'null',
-    });
-
     // P1.2 FIX: targetIdが指定されている場合は、showAllPaintに関わらず常にフィルタリングを優先する
     if (targetId) {
       const filtered = sourceShapes.filter(s => resolveCommentId(s) === targetId);
@@ -320,19 +309,15 @@ const ViewerCanvas = forwardRef(({
           dedupedMap.set(shape.id, shape);
         }
       });
-      const result = Array.from(dedupedMap.values());
-      console.log('[ViewerCanvas] renderedShapes UMEMO OUT: Filtered by targetId', { targetId: targetId?.substring(0, 12), resultCount: result.length });
-      return result;
+      return Array.from(dedupedMap.values());
     }
 
     // P1.2 FIX: targetIdがない場合にのみ、showAllPaintを考慮する
     if (showAllPaint) {
-      console.log('[ViewerCanvas] renderedShapes UMEMO OUT: showAllPaint=true', { sourceShapesCount: sourceShapes.length });
       return sourceShapes;
     }
 
     // デフォルトは空配列
-    console.log('[ViewerCanvas] renderedShapes UMEMO OUT: Default empty array (no targetId, showAllPaint=false)');
     return [];
   }, [shapesVersion, showAllPaint, renderTargetCommentId, currentShape]);
   
@@ -783,13 +768,6 @@ const ViewerCanvas = forwardRef(({
     });
     shapesMapRef.current = newMap;
     bump();
-    
-    // ★★★ P0-DEBUG: FULL SYNC後の状態確認 ★★★
-    console.log('[ViewerCanvas] FULL SYNC completed:', {
-      mapSize: shapesMapRef.current.size,
-      shapesVersion: shapesVersion + 1,
-      renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
-    });
   }, [existingShapes, canvasContextKey, isCanvasTransitioning]); // A) shapesVersion は依存から外す（bump呼び出しで再実行防止）
 
   // ✅ 選択維持（Mapに存在するか確認）
