@@ -1487,18 +1487,6 @@ function ShareViewContent() {
       console.log('[P0-FINAL] paintContextId locked for edit submit:', lockPaintContextIdRef.current.substring(0, 12));
     }
 
-    // ★★★ P0-FINAL: freeze は shapesForCanvasSafe を使う（空防止）★★★
-    const safeShapesForFreeze = shapesForCanvasSafe.length > 0 ? shapesForCanvasSafe : (lastStableShapesRef.current || []);
-    freezeRef.current = {
-      shapesForCanvas: [...safeShapesForFreeze],
-      draftCountByCommentId: { ...draftCountByCommentId },
-      activeCommentId,
-    };
-    freezeActiveRef.current = true;
-    console.log('[P0-FINAL] Freeze activated (shapes only):', {
-      shapesCount: safeShapesForFreeze.length,
-    });
-
     const shapesToCommit = draftShapesRef.current || [];
     const hasDraftShapes = shapesToCommit.length > 0;
     const hasFiles = pendingFiles.length > 0;
@@ -1709,27 +1697,24 @@ function ShareViewContent() {
           });
         }
 
-        // ★★★ Hunk1 (P0): freezeRef も同時にリライト（temp_ID → 実ID）★★★
-        if (freezeActiveRef.current && freezeRef.current?.shapesForCanvas?.length > 0 && submittedCommentId) {
-          const freezeKey = String(freezeRef.current.toId || freezeRef.current.key || '');
-          if (isTempCid(freezeKey)) {
-            const rewrittenShapes = freezeRef.current.shapesForCanvas.map(s => ({
-              ...s,
-              comment_id: submittedCommentId,
-              commentId: submittedCommentId,
-            }));
-            freezeRef.current = {
-              ...freezeRef.current,
-              shapesForCanvas: rewrittenShapes,
-              toId: submittedCommentId,
-              key: submittedCommentId,
-            };
-            console.log('[P0-FIX] freezeRef rewritten from temp to real ID:', {
-              from: freezeKey.substring(0, 12),
-              to: submittedCommentId.substring(0, 12),
-            });
-          }
-        }
+        // ★★★ P0-FIX: freeze生成（リライト後のhandoffを使用、実ID確定後に生成）★★★
+        const safeShapesForFreeze = shapesForCanvasSafe.length > 0 ? shapesForCanvasSafe : (lastStableShapesRef.current || []);
+        const freezeShapes = handoffRef.current?.snapshot?.length > 0 
+          ? handoffRef.current.snapshot  // handoffリライト済みなら実IDになっている
+          : safeShapesForFreeze;
+        
+        freezeRef.current = {
+          shapesForCanvas: [...freezeShapes],
+          draftCountByCommentId: { ...draftCountByCommentId },
+          activeCommentId,
+          key: submittedCommentId,
+          toId: submittedCommentId,
+        };
+        freezeActiveRef.current = true;
+        console.log('[P0-FIX] Freeze activated with real ID:', {
+          shapesCount: freezeShapes.length,
+          submittedCommentId: submittedCommentId.substring(0, 12),
+        });
 
         // ★★★ CRITICAL: 送信時にのみDraftShapesをDBに保存 ★★★
         if (shapesToCommit.length > 0) {
