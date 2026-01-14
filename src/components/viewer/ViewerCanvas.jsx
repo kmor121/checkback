@@ -365,12 +365,21 @@ const ViewerCanvas = forwardRef(({
     }
   }, [fileUrl]);
 
-  // ★★★ 案B: hidePaintOverlay時は選択解除（誤操作防止）★★★
+  // ★★★ 案B: hidePaintOverlay時は選択解除 + Map/lastNonEmptyクリア（確実な空表示）★★★
   useEffect(() => {
-    if (hidePaintOverlay && selectedId) {
-      setSelectedId(null);
+    if (hidePaintOverlay) {
+      if (selectedId) {
+        setSelectedId(null);
+      }
+      // ★★★ Hunk2: hidePaintOverlay時はMap/lastNonEmpty/emptyStreakを全クリア（温存ガード無効化）★★★
+      console.log('[案B] hidePaintOverlay=true: clearing Map, lastNonEmpty, emptyStreak for guaranteed empty display');
+      shapesMapRef.current = new Map();
+      lastNonEmptyShapesRef.current = null;
+      emptyStreakCountRef.current = 0;
+      prevEmptyCountRef.current = 0;
+      bump();
     }
-  }, [hidePaintOverlay, selectedId]);
+  }, [hidePaintOverlay, selectedId, bump]);
 
   // CRITICAL: activeCommentId変化時の完全リセット
   // ★★★ FIX: コメント切替時は全ての編集状態を完全クリア（前コメントの描画残り防止）★★★
