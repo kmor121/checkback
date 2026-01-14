@@ -135,6 +135,7 @@ function ShareViewContent() {
   const [activeCommentId, setActiveCommentId] = useState(null);
   const [composerText, setComposerText] = useState('');
   const [showAllPaint, setShowAllPaint] = useState(false);
+  const [isNewCommentInputActive, setIsNewCommentInputActive] = useState(false); // 新規コメント入力中フラグ
   const [isDockOpen, setIsDockOpen] = useState(false);
 
   // ★★★ P1 FIX: activeCommentId がある場合は showAllPaint を強制的に false にする不変条件 ★★★
@@ -1041,6 +1042,11 @@ function ShareViewContent() {
       setPaintMode(false);
       setTool('select');
       return;
+    }
+    
+    // ★★★ 案B: ペイントモードON時は新規入力フラグを解除（描画表示に戻す）★★★
+    if (mode) {
+      setIsNewCommentInputActive(false);
     }
 
     if (authStatus === 'guest' && !guestName.trim()) {
@@ -3035,6 +3041,11 @@ function ShareViewContent() {
                       // ★★★ P0-FIX: existingShapes決定ロジックを統一 ★★★
                       // 原則: shapesForCanvasSafe を使用
                       // 例外: freeze中かつfreeze有効時のみfreezeを使用
+                      // ★★★ 案B: 新規コメント入力中（paintMode OFF）は空表示 ★★★
+                      if (isNewCommentInputActive && !paintMode && composerMode === 'new') {
+                        // 新規テキスト入力中は空表示（描画残りによる誤解防止）
+                        return null;
+                      }
                       let passedShapes = shapesForCanvasSafe;
 
                       // freeze は送信中のみ有効（短時間）
@@ -3085,6 +3096,10 @@ function ShareViewContent() {
                         mimeType={file?.mime_type}
                         pageNumber={currentPage}
                         existingShapes={(() => {
+                          // ★★★ 案B: 新規コメント入力中（paintMode OFF）は空表示 ★★★
+                          if (isNewCommentInputActive && !paintMode && composerMode === 'new') {
+                            return [];
+                          }
                           // ★★★ P0-FIX: existingShapes決定（上のログと同一ロジック）★★★
                           if (freezeActiveRef.current && freezeRef.current?.shapesForCanvas?.length > 0) {
                             return freezeRef.current.shapesForCanvas;
@@ -3262,7 +3277,19 @@ function ShareViewContent() {
                         placeholder={composerMode === 'edit' ? '編集中...' : composerMode === 'reply' ? '返信を入力...' : 'コメントを入力...'}
                         value={composerText}
                         onChange={(e) => setComposerText(e.target.value)}
-                        onFocus={() => setIsDockOpen(true)}
+                        onFocus={() => {
+                          setIsDockOpen(true);
+                          // 新規モード（paintMode OFF）で入力開始 → キャンバス空表示
+                          if (composerMode === 'new' && !paintMode) {
+                            setIsNewCommentInputActive(true);
+                          }
+                        }}
+                        onBlur={() => {
+                          // 入力欄を離れたら解除（ただしテキストがあれば維持）
+                          if (!composerText.trim()) {
+                            setIsNewCommentInputActive(false);
+                          }
+                        }}
                         rows={2}
                         className="text-sm resize-none"
                         disabled={isLocked}
