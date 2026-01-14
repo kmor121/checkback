@@ -474,20 +474,26 @@ const ViewerCanvas = forwardRef(({
   // ★★★ B) コンテキスト変更時は即座にMapをクリア（描画混在防止）★★★
   useLayoutEffect(() => {
     if (!canvasContextKey) return;
-    
+
     const prev = prevCanvasContextKeyRef.current;
     if (prev !== canvasContextKey) {
-      console.log('[B-FIX] CTX CHANGED -> Map/pending cleared', { prev, next: canvasContextKey });
-      
+      console.log('[B-FIX] CTX CHANGED -> Map/pending/lastNonEmpty cleared', { prev, next: canvasContextKey });
+
       // B) 描画混在対策: コンテキスト変更時は即座にMapをクリアし、古い描画の残留を根絶
       shapesMapRef.current = new Map();
       pendingCtxRef.current = null;
+      // ★★★ Hunk1: lastNonEmptyもクリア（跨ぎ温存防止）★★★
+      lastNonEmptyShapesRef.current = { key: null, shapes: null };
+      emptyStreakCountRef.current = 0;
+      prevEmptyCountRef.current = 0;
       bump(); // 画面を確実に更新
 
       setSelectedId(null);
       setCurrentShape(null);
       setIsDrawing(false);
       prevCanvasContextKeyRef.current = canvasContextKey;
+
+      console.log('[B-FIX] CTX CHANGED complete: shapesVersion bumped, Map size=0');
     }
   }, [canvasContextKey, bump]);
 
@@ -523,11 +529,12 @@ const ViewerCanvas = forwardRef(({
       canvasContextKey: canvasContextKey?.substring(0, 20) || 'null',
     });
 
-    // ★★★ Hunk2: 無条件でMapクリア + lastNonEmptyリセット ★★★
+    // ★★★ Hunk2: 無条件でMapクリア + lastNonEmptyリセット + emptyStreak ★★★
     shapesMapRef.current = new Map();
     pendingCtxRef.current = null;
     lastNonEmptyShapesRef.current = { key: null, shapes: null };
     emptyStreakCountRef.current = 0;
+    prevEmptyCountRef.current = 0;
     bump();
 
     // UI状態クリア
@@ -539,6 +546,8 @@ const ViewerCanvas = forwardRef(({
       transformerRef.current.nodes([]);
       transformerRef.current.getLayer()?.batchDraw();
     }
+
+    console.log('[Hunk2] forceClearToken complete: Map size=0, lastNonEmpty cleared');
   }, [forceClearToken]);
 
   // ★★★ FIX-PENDING: existingShapes FULL SYNC（pendingCtx対応版）★★★
@@ -752,8 +761,24 @@ const ViewerCanvas = forwardRef(({
       // → 追加の empty判定は不要（二重クリアで誤発火の温床）
 
       // 既存のロジック：描画がないコメント選択以外のケース（例：初回ロードなど）
-      // 遷移中はMapを保持してちらつきを防ぐ
+      // ★★★ Hunk2: 遷移中でも「空にしたい意図」があれば空にする ★★★
       if (isCanvasTransitioning) {
+          // hidePaintOverlay または allowIntentionalEmpty 時は空表示を優先
+          if (hidePaintOverlay || allowIntentionalEmpty) {
+            console.log('[Hunk2] transitioning but clear intent detected, clearing Map:', {
+              ctx,
+              prevMapSize,
+              hidePaintOverlay,
+              allowIntentionalEmpty,
+            });
+            shapesMapRef.current = new Map();
+            lastNonEmptyShapesRef.current = { key: null, shapes: null };
+            emptyStreakCountRef.current = 0;
+            prevEmptyCountRef.current = 0;
+            bump();
+            return;
+          }
+
           console.log('[FIX-3] SYNC SKIP: transitioning (same ctx), Map preserved', { ctx, prevMapSize });
           prevEmptyCountRef.current += 1; // Hunk E: transition中のemptyをカウント
           return;
