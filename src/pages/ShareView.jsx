@@ -196,7 +196,7 @@ function ShareViewContent() {
   const freezeRef = useRef(null); // P0.5-FREEZE: 送信中の表示固定用スナップショット
   const freezeActiveRef = useRef(false); // P0.5-FREEZE: freeze有効フラグ
   const lastStableShapesRef = useRef([]); // P0-REGRESS: 送信中のちらつき防止用
-  
+  const lockPaintContextIdRef = useRef(null); // P0-FINAL: 送信時のpaintContextId固定用ロック
   
   // ★★★ FIX-4: addDebugLog を最優先定義（TDZ根絶）★★★
   const addDebugLog = (msg) => {
@@ -479,6 +479,10 @@ function ShareViewContent() {
       return composerTargetCommentId ? String(composerTargetCommentId) : null;
     }
     if (composerMode === 'view') {
+      // ★★★ P0-FINAL: ロック中はロック値を返す（送信直後のnull防止）★★★
+      if (lockPaintContextIdRef.current) {
+        return lockPaintContextIdRef.current;
+      }
       // viewモードはactiveCommentId（選択解除でnullになり、描画が消える）
       return activeCommentId ? String(activeCommentId) : null;
     }
@@ -1436,6 +1440,12 @@ function ShareViewContent() {
     submitLockRef.current = true;
     setIsSubmitting(true);
     console.log("[ShareView submit] === LOCK ACQUIRED ===", new Date().toISOString());
+    
+    // ★★★ P0-FINAL: 編集送信時はpaintContextIdをロック（中間フレームでnull防止）★★★
+    if (composerMode === 'edit' && composerTargetCommentId) {
+      lockPaintContextIdRef.current = String(composerTargetCommentId);
+      console.log('[P0-FINAL] paintContextId locked for edit submit:', lockPaintContextIdRef.current.substring(0, 12));
+    }
 
     // ★★★ P0.5-FREEZE: 送信中の表示を固定（ちらつき防止）★★★
     freezeRef.current = {
@@ -1740,7 +1750,8 @@ function ShareViewContent() {
         setPaintSessionCommentId(null);
         setPaintMode(false);
         setReplyingThreadId(null);
-        setIsDockOpen(false);
+        // ★★★ P0-FINAL: 編集送信後はDockを維持（レイアウトリフロー防止）★★★
+        // setIsDockOpen(false); // コメント：閉じない（選択維持仕様に合う）
         console.log('[P0-FLICKER-FIX] Edit submit: selection maintained:', submittedCommentId.substring(0, 12));
       } else {
         // 新規送信：従来通り選択解除
@@ -1773,6 +1784,12 @@ function ShareViewContent() {
         freezeActiveRef.current = false;
         freezeRef.current = null;
         console.log('[P0.5-FREEZE] Freeze released');
+        
+        // ★★★ P0-FINAL: データ安定後にpaintContextIdロックを解除 ★★★
+        if (lockPaintContextIdRef.current) {
+          console.log('[P0-FINAL] paintContextId lock released:', lockPaintContextIdRef.current.substring(0, 12));
+          lockPaintContextIdRef.current = null;
+        }
       }, 300);
     }
   };
