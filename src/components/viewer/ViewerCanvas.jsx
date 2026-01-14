@@ -550,17 +550,25 @@ const ViewerCanvas = forwardRef(({
     }
 
     // ★ 保留されていた shapes を優先的に使用
-    const shapesToSync = pendingIncomingShapesRef.current || existingShapes;
+    const incomingRaw = pendingIncomingShapesRef.current || existingShapes;
     pendingIncomingShapesRef.current = null; // 処理後にクリア
 
-    if (!shapesToSync) return;
+    if (!incomingRaw) return;
+
+    // ★★★ Hunk1: renderTargetCommentIdでフィルタ（表示ターゲット以外を除外）★★★
+    const incoming = (!showAllPaint && renderTargetCommentId)
+      ? (Array.isArray(incomingRaw) ? incomingRaw : []).filter(s => String(resolveCommentId(s) || '') === String(renderTargetCommentId))
+      : (Array.isArray(incomingRaw) ? incomingRaw : []);
+    
+    const shapesToSync = incoming;
 
     // ★★★ P0-TDZ-FIX: prevMapSize を参照より前に必ず宣言 ★★★
     const prevMapSize = shapesMapRef.current.size;
     const ctx = canvasContextKey || 'no-ctx';
     const isPending = !!pendingCtxRef.current;
 
-    const incomingEmpty = shapesToSync.length === 0;
+    // ★★★ Hunk2: 空判定は filtered (incoming) 基準 ★★★
+    const incomingEmpty = incoming.length === 0;
 
     // ★★★ P0-FLICKER: 非空shapesを記録 ★★★
     if (!incomingEmpty) {
@@ -627,7 +635,8 @@ const ViewerCanvas = forwardRef(({
     if (isPending && !incomingEmpty) {
       console.log('[FIX-PENDING] SYNC: pending ctx, incoming arrived, replacing Map', {
         ctx,
-        incomingLength: existingShapes.length,
+        incomingRawLength: incomingRaw.length,
+        incomingFilteredLength: incoming.length,
         prevMapSize,
       });
       
@@ -739,7 +748,8 @@ const ViewerCanvas = forwardRef(({
     // ★★★ P0-DIAG: FULL SYNC入口ログ（常に出力） ★★★
     console.log('[ViewerCanvas] FULL SYNC IN', {
       renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
-      incomingLength: shapesToSync.length,
+      incomingRawLength: incomingRaw.length,
+      incomingFilteredLength: incoming.length,
       firstIncomingCommentId: shapesToSync[0] ? resolveCommentId(shapesToSync[0])?.substring(0, 12) : 'none',
       showAllPaint,
       ctx: ctx?.substring(0, 20) || 'null',
@@ -755,7 +765,8 @@ const ViewerCanvas = forwardRef(({
     }
 
     console.log('[ViewerCanvas] existingShapes useEffect (FULL SYNC):', {
-      incomingLength: existingShapes.length,
+      incomingRawLength: incomingRaw.length,
+      incomingFilteredLength: incoming.length,
       activeCommentId,
       prevMapSize,
       dirtyCount: dirtyShapes.size,
