@@ -1401,6 +1401,12 @@ function ShareViewContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSendComment = async () => {
+    // ★★★ P0-FINAL: submittedCommentId を try より前に必ず初期化（TDZ防止）★★★
+    let submittedCommentId = null;
+    if (composerMode === 'edit' && composerTargetCommentId) {
+      submittedCommentId = String(composerTargetCommentId);
+    }
+    
     // CRITICAL: 同期的なロックチェック（最優先）
     if (submitLockRef.current === true) {
       console.log("[ShareView submit] BLOCKED by submitLockRef");
@@ -1604,9 +1610,6 @@ function ShareViewContent() {
           share_token: token 
         });
         const maxSeqNo = existingComments.reduce((max, c) => Math.max(max, c.seq_no || 0), 0);
-        
-        // ★★★ P0-FINAL: 新規作成したコメントIDを外部スコープで参照可能に ★★★
-        let newlyCreatedCommentId = null;
 
         // アンカー位置の計算（shapesToCommitがあればその中心）
         let anchor_nx = 0.5;
@@ -1651,9 +1654,9 @@ function ShareViewContent() {
           has_paint: shapesToCommit.length > 0,
         });
         
-        // ★★★ P0-FINAL: 新規作成したコメントIDを保存 ★★★
-        newlyCreatedCommentId = comment.id;
+        // ★★★ P0-FINAL: 新規作成したコメントIDをsubmittedCommentIdに代入 ★★★
         submittedCommentId = String(comment.id);
+        console.log('[P0-FINAL] New comment created:', submittedCommentId.substring(0, 12));
 
         // ★★★ CRITICAL: 送信時にのみDraftShapesをDBに保存 ★★★
         if (shapesToCommit.length > 0) {
@@ -1703,18 +1706,6 @@ function ShareViewContent() {
         }
         
         showToast('コメントを送信しました', 'success');
-      }
-
-      // ★★★ P0-FINAL: 新規/編集両方で送信したコメントIDを取得 ★★★
-      // 新規送信時は comment 変数に作成結果が入っている（上のelse節で定義）
-      // 編集送信時は composerTargetCommentId を使用
-      let submittedCommentId = null;
-      if (composerMode === 'edit' && composerTargetCommentId) {
-        submittedCommentId = String(composerTargetCommentId);
-      } else if (composerMode === 'new' || composerMode === 'reply') {
-        // comment は新規作成時に定義される（上のelse節）
-        // この時点では comment がスコープ外なので、invalidate後に取得する方式に変更
-        // → 代わりに作成直後のcomment.idを使うため、try内で変数を外に出す
       }
 
       // Hunk O: 新規投稿成功時にtempCommentIdを完全クリア（newの残骸根絶）
