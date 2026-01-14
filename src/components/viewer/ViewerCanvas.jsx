@@ -662,18 +662,10 @@ const ViewerCanvas = forwardRef(({
         return;
       }
 
-      // P1 FIX: 描画がないコメントを選択した場合（renderTargetCommentId があり、existingShapes が空）、
-      // 遷移中であっても即座にCanvasをクリアする。これが描画混入の根本対策。
-      // ★★★ FIX-v6: view時かつrenderTargetCommentIdが null のときも即座にクリア ★★★
-      // ★★★ P0 FIX: paintMode中は絶対にクリアしない ★★★
-      if (!paintMode && (renderTargetCommentId || renderTargetCommentId === null)) {
-              console.log('[P1 FIX] Empty shapes for a specific comment confirmed. Clearing map.', { ctx, prevMapSize, renderTargetCommentId: renderTargetCommentId?.substring(0,12) || 'null' });
-              shapesMapRef.current = new Map();
-              prevEmptyCountRef.current = 0; // Hunk E: クリア後はカウンターリセット
-              emptyStreakCountRef.current = 0; // P0-FLICKER: リセット
-              bump();
-              return;
-          }
+      // ★★★ P0-FINAL: P1 FIX を削除（誤発火でdb>0でもMapクリア→描画消失の原因）★★★
+      // renderTargetCommentId だけでは「真に描画がないコメント」か判定できない
+      // → ctx変更（canvasContextKey変化）で既にMapクリア済み（L442-459）
+      // → 追加の empty判定は不要（二重クリアで誤発火の温床）
 
       // 既存のロジック：描画がないコメント選択以外のケース（例：初回ロードなど）
       // 遷移中はMapを保持してちらつきを防ぐ
