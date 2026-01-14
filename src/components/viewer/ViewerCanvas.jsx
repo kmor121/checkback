@@ -588,7 +588,8 @@ const ViewerCanvas = forwardRef(({
     // ★★★ P0-SYNC-GUARD: 送信直後の一瞬empty（refetch中）を無視 ★★★
     // 条件: incoming=0, prevMap>0, ctx同一, 遷移中でない → 保持
     // ★★★ 案B例外: allowIntentionalEmpty時は温存しない（新規コメント入力中は空表示が正しい）★★★
-    if (incomingEmpty && prevMapSize > 0 && !isPending && !allowIntentionalEmpty) {
+    // ★★★ Hunk2追加: hidePaintOverlay時も温存しない（確実な空表示）★★★
+    if (incomingEmpty && prevMapSize > 0 && !isPending && !allowIntentionalEmpty && !hidePaintOverlay) {
       // lastNonEmptyがあり、連続emptyが5回未満なら保持
       if (lastNonEmptyShapesRef.current && lastNonEmptyShapesRef.current.length > 0 && emptyStreakCountRef.current < 5) {
         emptyStreakCountRef.current += 1;
