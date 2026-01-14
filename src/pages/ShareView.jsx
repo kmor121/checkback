@@ -1447,16 +1447,14 @@ function ShareViewContent() {
       console.log('[P0-FINAL] paintContextId locked for edit submit:', lockPaintContextIdRef.current.substring(0, 12));
     }
 
-    // ★★★ P0.5-FREEZE: 送信中の表示を固定（ちらつき防止）★★★
+    // ★★★ P0-FINAL: freeze は shapes のみ（comments は freeze しない）★★★
     freezeRef.current = {
-      comments: [...comments],
       shapesForCanvas: [...shapesForCanvas],
       draftCountByCommentId: { ...draftCountByCommentId },
       activeCommentId,
     };
     freezeActiveRef.current = true;
-    console.log('[P0.5-FREEZE] Freeze activated:', {
-      commentsCount: comments.length,
+    console.log('[P0-FINAL] Freeze activated (shapes only):', {
       shapesCount: shapesForCanvas.length,
     });
 
@@ -3291,27 +3289,13 @@ function ShareViewContent() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {/* P0.5-FREEZE: freeze中は固定データを使用 */}
-              {(() => {
-                const displayComments = freezeActiveRef.current && freezeRef.current?.comments 
-                  ? freezeRef.current.comments.filter(c => !c.parent_comment_id)
-                  : sortedComments;
-                return displayComments;
-              })().length === 0 ? (
+              {/* P0-FINAL: comments は freeze しない（即時反映優先） */}
+              {sortedComments.length === 0 ? (
                 <div className="text-center text-gray-500 py-8">
                   コメントはありません
                 </div>
               ) : (
-                /* P0.5-FREEZE: freeze中は固定データを使用 */
-                (freezeActiveRef.current && freezeRef.current?.comments 
-                  ? freezeRef.current.comments.filter(c => !c.parent_comment_id).sort((a, b) => {
-                      if (commentSort === 'page') return a.page_no - b.page_no || a.seq_no - b.seq_no;
-                      if (commentSort === 'oldest') return new Date(a.created_date) - new Date(b.created_date);
-                      if (commentSort === 'newest') return new Date(b.created_date) - new Date(a.created_date);
-                      return 0;
-                    })
-                  : sortedComments
-                ).map((comment) => {
+                sortedComments.map((comment) => {
                                   const shapesCount = paintShapes.filter(s => s.comment_id === comment.id).length;
                                   const isSelected = activeCommentId === comment.id;
                                   const isEditing = composerMode === 'edit' && composerTargetCommentId === comment.id;
