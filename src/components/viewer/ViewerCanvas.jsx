@@ -503,41 +503,22 @@ const ViewerCanvas = forwardRef(({
     setPan(p => clampPan(p.x, p.y));
   }, [zoom]);
 
-  // ★★★ P0-FINAL: forceClearToken は同一contextなら Map clear しない（ちらつき根絶）★★★
+  // ★★★ Hunk2: forceClearToken は無条件でMap clear（案Bトリガー用）★★★
   const prevForceClearTokenRef = useRef(forceClearToken);
-  const prevCanvasContextKeyForClearRef = useRef(canvasContextKey);
   useEffect(() => {
     if (forceClearToken === prevForceClearTokenRef.current) return;
     prevForceClearTokenRef.current = forceClearToken;
 
-    // ★★★ P0-FINAL: contextKey同一なら Map clear しない（選択維持時の不要clear防止）★★★
-    if (canvasContextKey === prevCanvasContextKeyForClearRef.current) {
-      console.log('[P0-FINAL] forceClearToken changed but contextKey same, skipping Map clear:', {
-        forceClearToken,
-        contextKey: canvasContextKey?.substring(0, 20) || 'null',
-      });
-
-      // UI状態のみクリア（Map は保持）
-      setSelectedId(null);
-      setCurrentShape(null);
-      setIsDrawing(false);
-      setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
-      if (transformerRef.current) {
-        transformerRef.current.nodes([]);
-        transformerRef.current.getLayer()?.batchDraw();
-      }
-      return;
-    }
-
-    prevCanvasContextKeyForClearRef.current = canvasContextKey;
-    console.log('[ViewerCanvas] P2 FIX: forceClearToken changed AND contextKey changed, clearing Map:', {
+    console.log('[Hunk2] forceClearToken changed, unconditionally clearing Map:', {
       forceClearToken,
-      contextKey: canvasContextKey?.substring(0, 20) || 'null',
+      canvasContextKey: canvasContextKey?.substring(0, 20) || 'null',
     });
 
-    // ★★★ P2 FIX: contextKey変化時のみMapをクリア（全削除/切替時）★★★
+    // ★★★ Hunk2: 無条件でMapクリア + lastNonEmptyリセット ★★★
     shapesMapRef.current = new Map();
     pendingCtxRef.current = null;
+    lastNonEmptyShapesRef.current = null;
+    emptyStreakCountRef.current = 0;
     bump();
 
     // UI状態クリア
@@ -549,12 +530,16 @@ const ViewerCanvas = forwardRef(({
       transformerRef.current.nodes([]);
       transformerRef.current.getLayer()?.batchDraw();
     }
-  }, [forceClearToken, canvasContextKey]);
+  }, [forceClearToken]);
 
   // ★★★ FIX-PENDING: existingShapes FULL SYNC（pendingCtx対応版）★★★
   // ★★★ P0-FLICKER: 送信後のrefetch瞬間emptyを無視（ちらつき防止）★★★
   const lastNonEmptyShapesRef = useRef(null); // 最後の非空shapesを保持
   const emptyStreakCountRef = useRef(0); // 連続empty回数
+
+  // ★★★ 案B: temp_新規 × 非ペイント × showAllPaint=false → 空を意図的に許可 ★★★
+  const isTempCtx = String(renderTargetCommentId || '').startsWith('temp_');
+  const allowIntentionalEmpty = isTempCtx && !paintMode && !showAllPaint;
 
   useLayoutEffect(() => {
     // ★ 操作中は更新を保留し、pending に保存
@@ -585,7 +570,8 @@ const ViewerCanvas = forwardRef(({
 
     // ★★★ P0-SYNC-GUARD: 送信直後の一瞬empty（refetch中）を無視 ★★★
     // 条件: incoming=0, prevMap>0, ctx同一, 遷移中でない → 保持
-    if (incomingEmpty && prevMapSize > 0 && !isPending) {
+    // ★★★ 案B例外: allowIntentionalEmpty時は温存しない（新規コメント入力中は空表示が正しい）★★★
+    if (incomingEmpty && prevMapSize > 0 && !isPending && !allowIntentionalEmpty) {
       // lastNonEmptyがあり、連続emptyが5回未満なら保持
       if (lastNonEmptyShapesRef.current && lastNonEmptyShapesRef.current.length > 0 && emptyStreakCountRef.current < 5) {
         emptyStreakCountRef.current += 1;
@@ -597,6 +583,22 @@ const ViewerCanvas = forwardRef(({
         });
         return;
       }
+    }
+    
+    // ★★★ 案B: allowIntentionalEmpty時は即座にMapクリア（前コメント描画を消す）★★★
+    if (incomingEmpty && allowIntentionalEmpty) {
+      console.log('[案B] Intentional empty: clearing Map for temp_ new comment', {
+        ctx,
+        prevMapSize,
+        isTempCtx,
+        paintMode,
+        showAllPaint,
+      });
+      shapesMapRef.current = new Map();
+      lastNonEmptyShapesRef.current = null;
+      emptyStreakCountRef.current = 0;
+      bump();
+      return;
     }
 
     // ★★★ FIX-PENDING: pending中のincomingEmpty は何もしない（旧Map保持）★★★
@@ -678,7 +680,8 @@ const ViewerCanvas = forwardRef(({
       // これにより送信→refetch→空→DB取得完了の瞬間的なemptyでちらつかない
       // paintMode不問（送信直後はpaintMode=falseになるため）
       // ★★★ P0-FLICKER-v2: prevMapSize不問（送信完了直後はMapが空でも保持）★★★
-      if (lastNonEmptyShapesRef.current && lastNonEmptyShapesRef.current.length > 0 && emptyStreakCountRef.current < 5) {
+      // ★★★ 案B例外: allowIntentionalEmpty時は温存しない ★★★
+      if (!allowIntentionalEmpty && lastNonEmptyShapesRef.current && lastNonEmptyShapesRef.current.length > 0 && emptyStreakCountRef.current < 5) {
         console.log('[P0-FLICKER] SYNC SKIP: transient empty, preserving lastNonEmpty shapes', {
           ctx,
           prevMapSize,
