@@ -3223,8 +3223,8 @@ const ViewerCanvas = forwardRef(({
 
         {/* 注釈Layer（contentGroup内に配置） */}
         {/* P2 FIX: 背景ロード完了まで描画レイヤーを非表示 */}
-        {/* ★★★ Hunk1: canvasContextKeyでLayerを強制リマウント（残像根絶）★★★ */}
-        <Layer key={`paint:${canvasContextKey || 'none'}`} visible={bgReady}>
+        {/* ★★★ Hunk1: canvasContextKey + forceClearToken でLayerを強制リマウント（残像根絶）★★★ */}
+        <Layer key={`paint:${canvasContextKey || 'none'}:${forceClearToken}`} visible={bgReady}>
           <Group
             ref={contentGroupRef}
             x={viewX}
