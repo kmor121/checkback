@@ -1685,6 +1685,30 @@ function ShareViewContent() {
         submittedCommentId = String(comment.id);
         console.log('[P0-FINAL] New comment created:', submittedCommentId.substring(0, 12));
 
+        // ★★★ P0-FIX: handoffリライト（temp_ID → 実ID）★★★
+        const prevHandoff = handoffRef.current;
+        const oldKey = String(prevHandoff?.key || '');
+
+        if (prevHandoff && isTempCid(oldKey) && submittedCommentId) {
+          const newSnapshot = (prevHandoff.snapshot || []).map(s => ({
+            ...s,
+            comment_id: submittedCommentId,
+            commentId: submittedCommentId,
+          }));
+
+          // 既存フィールドを保持して最小差分にする（フィールド消失防止）
+          handoffRef.current = {
+            ...prevHandoff,
+            key: submittedCommentId,
+            snapshot: newSnapshot,
+          };
+
+          console.log('[P0-FIX] handoff rewritten from temp to real ID:', {
+            from: oldKey.substring(0, 12),
+            to: submittedCommentId.substring(0, 12),
+          });
+        }
+
         // ★★★ CRITICAL: 送信時にのみDraftShapesをDBに保存 ★★★
         if (shapesToCommit.length > 0) {
           console.log('[ShareView] Saving draft shapes to DB:', shapesToCommit.length);
