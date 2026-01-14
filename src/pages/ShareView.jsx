@@ -1782,18 +1782,27 @@ function ShareViewContent() {
       submitLockRef.current = false;
       setIsSubmitting(false);
       
-      // ★★★ P0.5-FREEZE: freeze解除は少し遅らせてデータ反映を待つ ★★★
-      setTimeout(() => {
-        freezeActiveRef.current = false;
-        freezeRef.current = null;
-        console.log('[P0.5-FREEZE] Freeze released');
-        
-        // ★★★ P0-FINAL: データ安定後にpaintContextIdロックを解除 ★★★
-        if (lockPaintContextIdRef.current) {
-          console.log('[P0-FINAL] paintContextId lock released:', lockPaintContextIdRef.current.substring(0, 12));
-          lockPaintContextIdRef.current = null;
+      // ★★★ P0-FINAL: freeze/lock解除はhandoffクリアと同期（DB追いつき条件）★★★
+      // handoffが自然に解除される（DB追いつき）まで待つ
+      const checkHandoffCleared = () => {
+        if (!handoffRef.current) {
+          // handoff解除済み → freeze/lock解除
+          freezeActiveRef.current = false;
+          freezeRef.current = null;
+          console.log('[P0-FINAL] Freeze released (handoff cleared)');
+          
+          if (lockPaintContextIdRef.current) {
+            console.log('[P0-FINAL] paintContextId lock released:', lockPaintContextIdRef.current.substring(0, 12));
+            lockPaintContextIdRef.current = null;
+          }
+        } else {
+          // まだhandoff有効 → 少し待って再チェック
+          setTimeout(checkHandoffCleared, 50);
         }
-      }, 300);
+      };
+      
+      // 初回チェックは100ms後（invalidateを待つ）
+      setTimeout(checkHandoffCleared, 100);
     }
   };
 
@@ -2350,11 +2359,8 @@ function ShareViewContent() {
     const handoffActive = !!(handoff && handoff.snapshot?.length > 0);
     const handoffKeyMatch = handoffActive && (handoff.key === paintContextId || handoff.key === targetKey);
     
-    // ★★★ P0-FLICKER: handoff期限切れチェック（5秒でタイムアウト）★★★
-    if (handoffActive && handoff.createdAt && Date.now() - handoff.createdAt > 5000) {
-      console.log('[P0-FLICKER] handoff expired, clearing');
-      handoffRef.current = null;
-    }
+    // ★★★ P0-FINAL: handoff解除は「DB追いつき条件」のみ（timeout削除）★★★
+    // タイムアウトは安全弁として30秒に延長（通常は下記の条件で解除される）
     
     // ★★★ CRITICAL: allShapes は既に正規化済み（defaultCommentId=null で DB値保持）★★★
     const allShapesNormalized = allShapes;
@@ -2422,7 +2428,10 @@ function ShareViewContent() {
       const existingIds = new Set(merged.map(s => String(s.id)));
       const allIncluded = [...handoffNow.pendingIds].every(id => existingIds.has(id));
       
-      if (!allIncluded) {
+      // ★★★ P0-FINAL: 安全弁タイムアウト（30秒）★★★
+      const isExpired = handoffNow.createdAt && Date.now() - handoffNow.createdAt > 30000;
+      
+      if (!allIncluded && !isExpired) {
         // DBにまだ反映されていないshapeをhandoffから補完
         const supplemented = [...merged];
         handoffNow.snapshot.forEach(s => {
@@ -2437,8 +2446,12 @@ function ShareViewContent() {
         });
         merged = supplemented;
       } else {
-        // 全て反映されたのでhandoffをクリア
-        console.log('[P0-FLICKER] handoff cleared (all shapes now in DB)');
+        // 全て反映された、または安全弁タイムアウト → handoffをクリア
+        console.log('[P0-FINAL] handoff cleared:', {
+          reason: allIncluded ? 'all shapes in DB' : 'timeout',
+          pendingCount: handoffNow.pendingIds.size,
+          dbCount: merged.length,
+        });
         handoffRef.current = null;
       }
     }
