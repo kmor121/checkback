@@ -197,6 +197,7 @@ function ShareViewContent() {
   const freezeRef = useRef(null); // P0.5-FREEZE: 送信中の表示固定用スナップショット
   const freezeActiveRef = useRef(false); // P0.5-FREEZE: freeze有効フラグ
   const lastStableShapesRef = useRef([]); // P0-REGRESS: 送信中のちらつき防止用
+  const lastStableShapesCtxRef = useRef(null); // P0-REGRESS: lastStableShapesのpaintContextId
   const lockPaintContextIdRef = useRef(null); // P0-FINAL: 送信時のpaintContextId固定用ロック
   
   // ★★★ FIX-4: addDebugLog を最優先定義（TDZ根絶）★★★
@@ -2561,6 +2562,7 @@ function ShareViewContent() {
     if (merged.length > 0) {
       lastMergedShapesRef.current = merged;
       lastStableShapesRef.current = merged; // P0-REGRESS: 非空なら保存
+      lastStableShapesCtxRef.current = paintContextId ? String(paintContextId) : null; // P0-REGRESS: コンテキストも保存
     }
     if (DEBUG_MODE) {
       console.log('[ShareView] shapesForCanvas OUT:', {
@@ -2576,13 +2578,24 @@ function ShareViewContent() {
   }, [allShapes, draftShapes, showAllPaint, paintContextId, shouldShowDraft, storageDraftReady, composerMode, tempCommentId, canvasReady, activeCommentId]);
   
   // ★★★ P0-REGRESS: 送信中に shapesForCanvas が空になったら lastStable を使う ★★★
+  // ★★★ P0-FIX: 同一paintContextIdの時のみpreserve（別コメントの描画混入防止）★★★
   const shapesForCanvasSafe = React.useMemo(() => {
-    if (isSubmitting && shapesForCanvas.length === 0 && lastStableShapesRef.current.length > 0) {
-      console.log('[P0-REGRESS] Preserving lastStableShapes during submit:', lastStableShapesRef.current.length);
+    const ctx = paintContextId ? String(paintContextId) : '';
+    const lastCtx = lastStableShapesCtxRef.current ? String(lastStableShapesCtxRef.current) : '';
+    const canPreserve =
+      !!ctx &&
+      ctx === lastCtx &&
+      lastStableShapesRef.current.length > 0;
+
+    if (isSubmitting && shapesForCanvas.length === 0 && canPreserve) {
+      console.log('[P0-REGRESS] Preserving lastStableShapes during submit:', {
+        len: lastStableShapesRef.current.length,
+        ctx: ctx.substring(0, 12),
+      });
       return lastStableShapesRef.current;
     }
     return shapesForCanvas;
-  }, [isSubmitting, shapesForCanvas]);
+  }, [isSubmitting, shapesForCanvas, paintContextId]);
   
   // ★★★ Hunk 0: useEffect でデバッグログを分離（レンダー中のaddDebugLog呼び出し廃止）★★★
   const lastResultLogRef = useRef(null);
