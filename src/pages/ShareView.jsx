@@ -3283,6 +3283,7 @@ function ShareViewContent() {
                           // 新規モード（paintMode OFF）で入力開始 → キャンバス空表示
                           if (composerMode === 'new' && !paintMode) {
                             setIsNewCommentInputActive(true);
+                            setForceClearToken(prev => prev + 1); // forceClearでMap即時クリア
                           }
                         }}
                         onBlur={() => {
