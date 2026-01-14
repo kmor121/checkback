@@ -509,10 +509,23 @@ function ShareViewContent() {
     const prev = stablePaintContextIdRef.current?.id || null;
     const computed = computedPaintContextId;
     
+    if (DEBUG_MODE) {
+      console.log('[ShareView] stablePaintContextId UMEMO IN:', {
+        fileId: fileId?.substring(0, 12) || 'null',
+        prevFileIdRef: prevFileIdRef?.substring(0, 12) || 'null',
+        prevStableId: prev?.substring(0, 12) || 'null',
+        computed: computed?.substring(0, 12) || 'null',
+        lastNonNullRef: lastNonNullPaintContextIdRef.current?.substring(0, 12) || 'null',
+        lockRef: lockPaintContextIdRef.current?.substring(0, 12) || 'null',
+        activeCommentId: activeCommentId?.substring(0, 12) || 'null',
+      });
+    }
+    
     // ファイル変更時は強制クリア
     if (fileId && fileId !== prevFileIdRef) {
       stablePaintContextIdRef.current = { fileId, id: null };
       lastNonNullPaintContextIdRef.current = null; // FIX-NO-BLANK: ファイル変更時にrefもクリア
+      if (DEBUG_MODE) console.log('[ShareView] stablePaintContextId OUT: null (file changed)');
       return null;
     }
     
@@ -520,19 +533,23 @@ function ShareViewContent() {
     if (computed) {
       stablePaintContextIdRef.current = { fileId, id: computed };
       lastNonNullPaintContextIdRef.current = computed; // FIX-NO-BLANK: 非nullを記録
+      if (DEBUG_MODE) console.log('[ShareView] stablePaintContextId OUT:', computed?.substring(0, 12));
       return computed;
     }
     
     // computed=nullでも前回値があれば保持（チラつき防止）
     if (prev && fileId === prevFileIdRef) {
+      if (DEBUG_MODE) console.log('[ShareView] stablePaintContextId OUT (prev):', prev?.substring(0, 12));
       return prev;
     }
     
     // FIX-NO-BLANK: 最後の非nullを使う（完全null回避）
     if (lastNonNullPaintContextIdRef.current) {
+      if (DEBUG_MODE) console.log('[ShareView] stablePaintContextId OUT (lastNonNull):', lastNonNullPaintContextIdRef.current?.substring(0, 12));
       return lastNonNullPaintContextIdRef.current;
     }
     
+    if (DEBUG_MODE) console.log('[ShareView] stablePaintContextId OUT: null (fallback)');
     return null;
   }, [computedPaintContextId, shareLink?.file_id]);
   
@@ -2476,6 +2493,16 @@ function ShareViewContent() {
     if (merged.length > 0) {
       lastMergedShapesRef.current = merged;
       lastStableShapesRef.current = merged; // P0-REGRESS: 非空なら保存
+    }
+    if (DEBUG_MODE) {
+      console.log('[ShareView] shapesForCanvas OUT:', {
+        mergedCount: merged.length,
+        paintContextId: paintContextId?.substring(0, 12) || 'null',
+        shouldShowDraft,
+        composerMode,
+        dbShapesFilteredCount: dbShapesFiltered.length,
+        draftShapesFilteredCount: draftShapesFiltered.length,
+      });
     }
     return merged;
   }, [allShapes, draftShapes, showAllPaint, paintContextId, shouldShowDraft, storageDraftReady, composerMode, tempCommentId, canvasReady, activeCommentId]);

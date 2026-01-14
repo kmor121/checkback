@@ -298,6 +298,18 @@ const ViewerCanvas = forwardRef(({
 
     const targetId = renderTargetCommentId ? String(renderTargetCommentId) : '';
 
+    if (DEBUG_MODE) {
+      console.log('[ViewerCanvas] renderedShapes UMEMO:', {
+        shapesVersion,
+        showAllPaint,
+        renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
+        targetId: targetId?.substring(0, 12) || 'null',
+        mapShapesCount: mapShapes.length,
+        sourceShapesCount: sourceShapes.length,
+        currentShapeId: currentShape?.id?.substring(0, 12) || 'null',
+      });
+    }
+
     // P1.2 FIX: targetIdが指定されている場合は、showAllPaintに関わらず常にフィルタリングを優先する
     if (targetId) {
       const filtered = sourceShapes.filter(s => resolveCommentId(s) === targetId);
@@ -309,15 +321,19 @@ const ViewerCanvas = forwardRef(({
           dedupedMap.set(shape.id, shape);
         }
       });
-      return Array.from(dedupedMap.values());
+      const result = Array.from(dedupedMap.values());
+      if (DEBUG_MODE) console.log('[ViewerCanvas] renderedShapes UMEMO: Filtered by targetId', { targetId, filteredCount: result.length });
+      return result;
     }
 
     // P1.2 FIX: targetIdがない場合にのみ、showAllPaintを考慮する
     if (showAllPaint) {
+      if (DEBUG_MODE) console.log('[ViewerCanvas] renderedShapes UMEMO: showAllPaint=TRUE, returning all sourceShapes', { count: sourceShapes.length });
       return sourceShapes;
     }
 
     // デフォルトは空配列
+    if (DEBUG_MODE) console.log('[ViewerCanvas] renderedShapes UMEMO: Default to empty (no targetId, showAllPaint=false)');
     return [];
   }, [shapesVersion, showAllPaint, renderTargetCommentId, currentShape]);
   
@@ -712,10 +728,17 @@ const ViewerCanvas = forwardRef(({
     // ★★★ DEBUG: FULL SYNC開始 ★★★
     console.log('[ViewerCanvas] FULL SYNC START:', {
       ctx,
-      incomingLength: existingShapes.length,
+      incomingLength: shapesToSync.length,
       prevMapSize,
       renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
     });
+    if (DEBUG_MODE && shapesToSync.length > 0) {
+      console.log('[ViewerCanvas] FULL SYNC: Incoming sample:', {
+        count: shapesToSync.length,
+        sample0: shapesToSync[0] ? { id: shapesToSync[0].id?.substring(0,8), comment_id: resolveCommentId(shapesToSync[0])?.substring(0,12) } : null,
+        sample1: shapesToSync[1] ? { id: shapesToSync[1].id?.substring(0,8), comment_id: resolveCommentId(shapesToSync[1])?.substring(0,12) } : null,
+      });
+    }
 
     // ★★★ CRITICAL: dirtyなローカルshapeを保持するために一時保存 ★★★
     const dirtyShapes = new Map();
@@ -768,6 +791,9 @@ const ViewerCanvas = forwardRef(({
     });
     shapesMapRef.current = newMap;
     bump();
+    if (DEBUG_MODE) {
+      console.log('[ViewerCanvas] FULL SYNC END: mapSize=', shapesMapRef.current.size);
+    }
   }, [existingShapes, canvasContextKey, isCanvasTransitioning]); // A) shapesVersion は依存から外す（bump呼び出しで再実行防止）
 
   // ✅ 選択維持（Mapに存在するか確認）
@@ -2877,6 +2903,17 @@ const ViewerCanvas = forwardRef(({
 
   // ★★★ FIX-3: pending中判定（ctx切替でMap空にしない間）★★★
   const isPending = !!pendingCtxRef.current;
+
+  if (DEBUG_MODE) {
+    console.log('[ViewerCanvas] Render:', {
+      renderedShapesCount: renderedShapes.length,
+      paintMode,
+      showAllPaint,
+      canvasContextKey: canvasContextKey?.substring(0, 20) || 'null',
+      renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
+      isPending,
+    });
+  }
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative', overflow: 'auto', background: '#e0e0e0' }}>
