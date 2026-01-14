@@ -2996,7 +2996,20 @@ function ShareViewContent() {
                 fileUrl={file?.file_url}
                 mimeType={file?.mime_type}
                 pageNumber={currentPage}
-                existingShapes={freezeActiveRef.current && freezeRef.current?.shapesForCanvas ? freezeRef.current.shapesForCanvas : shapesForCanvasSafe}
+                existingShapes={(() => {
+                  const passedShapes = freezeActiveRef.current && freezeRef.current?.shapesForCanvas ? freezeRef.current.shapesForCanvas : shapesForCanvasSafe;
+                  if (DEBUG_MODE) {
+                    console.log('[ShareView->ViewerCanvas] pass existingShapes', {
+                      paintContextId: paintContextId?.substring(0, 12) || 'null',
+                      activeCommentId: activeCommentId?.substring(0, 12) || 'null',
+                      shapesForCanvasLen: shapesForCanvas?.length,
+                      shapesForCanvasSafeLen: shapesForCanvasSafe?.length,
+                      passedLen: passedShapes?.length,
+                      freezeActive: freezeActiveRef.current,
+                    });
+                  }
+                  return passedShapes;
+                })()}
                 comments={comments.filter(c => c.page_no === currentPage)}
                 activeCommentId={activeCommentId}
                 canvasContextKey={canvasInternalResetKey}
