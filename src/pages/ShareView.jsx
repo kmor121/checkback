@@ -1682,6 +1682,10 @@ function ShareViewContent() {
         showToast('コメントを送信しました', 'success');
       }
 
+      // ★★★ P0-FLICKER-FIX: 編集送信時の submittedCommentId を先に確定 ★★★
+      const submittedCommentId = 
+        (composerMode === 'edit' && composerTargetCommentId) ? String(composerTargetCommentId) : null;
+
       // Hunk O: 新規投稿成功時にtempCommentIdを完全クリア（newの残骸根絶）
       if (composerMode === 'new' || sendDraftScope === 'new') {
         setTempCommentId(null);
@@ -1725,14 +1729,30 @@ function ShareViewContent() {
       }
       
       setPendingFiles([]);
-      setComposerMode('new');
-      setComposerTargetCommentId(null);
-      setComposerParentCommentId(null);
-      setPaintSessionCommentId(null);
-      setActiveCommentId(null);
-      setPaintMode(false);
-      setReplyingThreadId(null);
-      setIsDockOpen(false);
+      
+      // ★★★ P0-FLICKER-FIX: 編集送信後は選択維持でちらつき根絶 ★★★
+      if (submittedCommentId) {
+        // 編集送信：activeCommentIdを明示的に維持（idempotent）
+        setActiveCommentId(submittedCommentId);
+        setComposerMode('view');
+        setComposerTargetCommentId(null);
+        setComposerParentCommentId(null);
+        setPaintSessionCommentId(null);
+        setPaintMode(false);
+        setReplyingThreadId(null);
+        setIsDockOpen(false);
+        console.log('[P0-FLICKER-FIX] Edit submit: selection maintained:', submittedCommentId.substring(0, 12));
+      } else {
+        // 新規送信：従来通り選択解除
+        setComposerMode('new');
+        setComposerTargetCommentId(null);
+        setComposerParentCommentId(null);
+        setPaintSessionCommentId(null);
+        setActiveCommentId(null);
+        setPaintMode(false);
+        setReplyingThreadId(null);
+        setIsDockOpen(false);
+      }
       
       // invalidateは少し遅らせて描画クリアを確実に先に完了させる
       setTimeout(async () => {
