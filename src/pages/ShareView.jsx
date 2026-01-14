@@ -200,6 +200,10 @@ function ShareViewContent() {
   const lastStableShapesCtxRef = useRef(null); // P0-REGRESS: lastStableShapesのpaintContextId
   const lockPaintContextIdRef = useRef(null); // P0-FINAL: 送信時のpaintContextId固定用ロック
   
+  // ★★★ P0-FIX: 意図的空表示用remount nonce ★★★
+  const [canvasRemountNonce, setCanvasRemountNonce] = useState(0);
+  const lastRemountKeyRef = useRef('');
+  
   // ★★★ FIX-4: addDebugLog を最優先定義（TDZ根絶）★★★
   const addDebugLog = (msg) => {
     debugLogBufferRef.current.push(`[${new Date().toISOString().substring(11, 23)}] ${msg}`);
@@ -2608,6 +2612,27 @@ function ShareViewContent() {
     }
   }, [shapesForCanvas, paintContextId, composerMode, isCanvasTransitioning]);
 
+  // ★★★ P0-FIX: 意図的に空表示にしたい時にremount nonceを進める ★★★
+  const shouldForceEmptyCanvas =
+    !showAllPaint &&
+    !paintMode &&
+    composerMode === 'view' &&
+    (shapesForCanvasSafe?.length || 0) === 0;
+
+  useEffect(() => {
+    if (!shouldForceEmptyCanvas) return;
+
+    // 同じ条件で無限にremountしないガード
+    const k = `${String(paintContextId || '')}:${String(activeCommentId || '')}`;
+    if (lastRemountKeyRef.current === k) return;
+    lastRemountKeyRef.current = k;
+
+    console.log('[P0-FIX] forcing ViewerCanvas remount for intentional empty:', {
+      k: k.substring(0, 24),
+    });
+    setCanvasRemountNonce((n) => n + 1);
+  }, [shouldForceEmptyCanvas, paintContextId, activeCommentId]);
+
   // 親コメントと返信を分離（条件付きreturnの前に配置）
   const filteredComments = React.useMemo(() => {
     return comments.filter(c => {
@@ -3117,7 +3142,8 @@ function ShareViewContent() {
                       return null;
                     })()}
                     <ViewerCanvas
-                        /* P0-FLICKER: key削除でremount防止、内部リセットはcanvasContextKeyで制御 */
+                        /* P0-FIX: remount nonce で意図的空表示を確実化 */
+                        key={`vc:${shareLink?.file_id || 'nf'}:${currentPage}:${String(paintContextId || '')}:${canvasRemountNonce}`}
                         ref={viewerCanvasRef}
                         fileUrl={file?.file_url}
                         mimeType={file?.mime_type}
