@@ -169,6 +169,7 @@ const ViewerCanvas = forwardRef(({
   const prevCanvasContextKeyRef = useRef(null);
   const pendingCtxRef = useRef(null); // ★ FIX-PENDING: 新ctx待機用（Map即クリア禁止）
   const prevEmptyCountRef = useRef(0); // Hunk E: empty連続カウント（2回連続でクリア）
+  const lastEmptyAppliedCtxRef = useRef(null); // ★★★ P0-FIX: 意図的空表示の重複防止 ★★★
   
   // デバッグHUD用ログ履歴
   const [debugHudLogs, setDebugHudLogs] = useState([]);
@@ -643,6 +644,13 @@ const ViewerCanvas = forwardRef(({
     
     // ★★★ 案B: allowIntentionalEmpty時は即座にMapクリア（前コメント描画を消す）★★★
     if (incomingEmpty && allowIntentionalEmpty) {
+      // ★★★ P0-FIX: 同一ctxで連発しないガード ★★★
+      if (lastEmptyAppliedCtxRef.current === ctx) {
+        console.log('[案B] Intentional empty: already applied for this ctx, skipping', { ctx });
+        return;
+      }
+      lastEmptyAppliedCtxRef.current = ctx;
+
       console.log('[案B] Intentional empty: clearing Map for temp_ new comment', {
         ctx,
         prevMapSize,
@@ -654,6 +662,11 @@ const ViewerCanvas = forwardRef(({
       lastNonEmptyShapesRef.current = { key: null, shapes: null };
       emptyStreakCountRef.current = 0;
       bump();
+
+      // ★★★ P0-FIX: 確実に画面を更新 ★★★
+      requestAnimationFrame(() => {
+        stageRef.current?.batchDraw?.();
+      });
       return;
     }
 
@@ -780,6 +793,13 @@ const ViewerCanvas = forwardRef(({
       if (isCanvasTransitioning) {
           // hidePaintOverlay または allowIntentionalEmpty 時は空表示を優先
           if (hidePaintOverlay || allowIntentionalEmpty) {
+            // ★★★ P0-FIX: 同一ctxで連発しないガード ★★★
+            if (lastEmptyAppliedCtxRef.current === ctx) {
+              console.log('[Hunk2] transitioning clear intent: already applied for this ctx, skipping', { ctx });
+              return;
+            }
+            lastEmptyAppliedCtxRef.current = ctx;
+
             console.log('[Hunk2] transitioning but clear intent detected, clearing Map:', {
               ctx,
               prevMapSize,
@@ -791,12 +811,23 @@ const ViewerCanvas = forwardRef(({
             emptyStreakCountRef.current = 0;
             prevEmptyCountRef.current = 0;
             bump();
+
+            // ★★★ P0-FIX: 確実に画面を更新 ★★★
+            requestAnimationFrame(() => {
+              stageRef.current?.batchDraw?.();
+            });
             return;
           }
 
-          console.log('[FIX-3] SYNC SKIP: transitioning (same ctx), Map preserved', { ctx, prevMapSize });
-          prevEmptyCountRef.current += 1; // Hunk E: transition中のemptyをカウント
-          return;
+          // ★★★ P0-FIX: incoming=0かつprevMap=0のときはスキップしない（空同期を通す）★★★
+          if (prevMapSize === 0) {
+            console.log('[FIX-3] SYNC SKIP avoided: prevMapSize=0, allowing empty sync', { ctx });
+            // fall through to normal processing
+          } else {
+            console.log('[FIX-3] SYNC SKIP: transitioning (same ctx), Map preserved', { ctx, prevMapSize });
+            prevEmptyCountRef.current += 1; // Hunk E: transition中のemptyをカウント
+            return;
+          }
       }
 
       // Hunk E: empty連続カウントが2回未満なら保持（一瞬のemptyでクリアしない）
@@ -819,6 +850,9 @@ const ViewerCanvas = forwardRef(({
 
     // ★★★ P0-FLICKER: 非空が来たのでストリークリセット ★★★
     emptyStreakCountRef.current = 0;
+
+    // ★★★ P0-FIX: 非空が来たらlastEmptyAppliedCtxRefもリセット（次の空適用を許可）★★★
+    lastEmptyAppliedCtxRef.current = null;
 
     // Hunk E: 非empty時はカウンターリセット
     prevEmptyCountRef.current = 0;
