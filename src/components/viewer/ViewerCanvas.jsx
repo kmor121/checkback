@@ -365,6 +365,13 @@ const ViewerCanvas = forwardRef(({
     }
   }, [fileUrl]);
 
+  // ★★★ 案B: hidePaintOverlay時は選択解除（誤操作防止）★★★
+  useEffect(() => {
+    if (hidePaintOverlay && selectedId) {
+      setSelectedId(null);
+    }
+  }, [hidePaintOverlay, selectedId]);
+
   // CRITICAL: activeCommentId変化時の完全リセット
   // ★★★ FIX: コメント切替時は全ての編集状態を完全クリア（前コメントの描画残り防止）★★★
   useEffect(() => {
@@ -3132,11 +3139,16 @@ const ViewerCanvas = forwardRef(({
             scaleX={contentScale}
             scaleY={contentScale}
           >
-            {/* ★★★ CRITICAL: 確定済みshapeのみ描画（currentShapeとの重複は既に除外済み）★★★ */}
-            {renderedShapes.map(s => renderShape(s, true))}
-            
-            {/* ★★★ CRITICAL: 描画中のcurrentShapeは最後に独立して描画 ★★★ */}
-            {currentShape && renderShape(currentShape, false)}
+            {/* ★★★ 案B: hidePaintOverlay時は描画を非表示（Mapは保持） ★★★ */}
+            {!hidePaintOverlay && (
+              <>
+                {/* ★★★ CRITICAL: 確定済みshapeのみ描画（currentShapeとの重複は既に除外済み）★★★ */}
+                {renderedShapes.map(s => renderShape(s, true))}
+                
+                {/* ★★★ CRITICAL: 描画中のcurrentShapeは最後に独立して描画 ★★★ */}
+                {currentShape && renderShape(currentShape, false)}
+              </>
+            )}
             
             <Transformer ref={transformerRef} />
           </Group>
