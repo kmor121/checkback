@@ -479,20 +479,44 @@ const ViewerCanvas = forwardRef(({
     setPan(p => clampPan(p.x, p.y));
   }, [zoom]);
 
-  // ★★★ FIX-FLICKER: forceClearTokenではMapをクリアしない（UI状態のみクリア）★★★
+  // ★★★ P0-FINAL: forceClearToken は同一contextなら Map clear しない（ちらつき根絶）★★★
   const prevForceClearTokenRef = useRef(forceClearToken);
+  const prevCanvasContextKeyForClearRef = useRef(canvasContextKey);
   useEffect(() => {
     if (forceClearToken === prevForceClearTokenRef.current) return;
     prevForceClearTokenRef.current = forceClearToken;
 
-    console.log('[ViewerCanvas] P2 FIX: forceClearToken changed, clearing Map and UI state:', forceClearToken);
+    // ★★★ P0-FINAL: contextKey同一なら Map clear しない（選択維持時の不要clear防止）★★★
+    if (canvasContextKey === prevCanvasContextKeyForClearRef.current) {
+      console.log('[P0-FINAL] forceClearToken changed but contextKey same, skipping Map clear:', {
+        forceClearToken,
+        contextKey: canvasContextKey?.substring(0, 20) || 'null',
+      });
 
-    // ★★★ P2 FIX: Mapもクリアして「全削除」を確実に反映 ★★★
+      // UI状態のみクリア（Map は保持）
+      setSelectedId(null);
+      setCurrentShape(null);
+      setIsDrawing(false);
+      setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
+      if (transformerRef.current) {
+        transformerRef.current.nodes([]);
+        transformerRef.current.getLayer()?.batchDraw();
+      }
+      return;
+    }
+
+    prevCanvasContextKeyForClearRef.current = canvasContextKey;
+    console.log('[ViewerCanvas] P2 FIX: forceClearToken changed AND contextKey changed, clearing Map:', {
+      forceClearToken,
+      contextKey: canvasContextKey?.substring(0, 20) || 'null',
+    });
+
+    // ★★★ P2 FIX: contextKey変化時のみMapをクリア（全削除/切替時）★★★
     shapesMapRef.current = new Map();
     pendingCtxRef.current = null;
     bump();
 
-    // UI状態のみクリア
+    // UI状態クリア
     setSelectedId(null);
     setCurrentShape(null);
     setIsDrawing(false);
@@ -501,7 +525,7 @@ const ViewerCanvas = forwardRef(({
       transformerRef.current.nodes([]);
       transformerRef.current.getLayer()?.batchDraw();
     }
-  }, [forceClearToken]);
+  }, [forceClearToken, canvasContextKey]);
 
   // ★★★ FIX-PENDING: existingShapes FULL SYNC（pendingCtx対応版）★★★
   // ★★★ P0-FLICKER: 送信後のrefetch瞬間emptyを無視（ちらつき防止）★★★

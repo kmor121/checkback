@@ -1705,8 +1705,11 @@ function ShareViewContent() {
         console.log('[Hunk O] tempCommentId cleared after new comment submit');
       }
 
-      // ★★★ CRITICAL: 描画クリアを最優先で実行（明示クリアトークンをインクリメント）★★★
-      setForceClearToken(prev => prev + 1);
+      // ★★★ P0-FINAL: 編集送信時はforceClearTokenを使わない（選択維持でMap clearは不要）★★★
+      // 新規送信時のみ forceClearToken を使用（contextが変わるため）
+      if (!submittedCommentId) {
+        setForceClearToken(prev => prev + 1);
+      }
       viewerCanvasRef.current?.afterSubmitClear();
       viewerCanvasRef.current?.clear();
       
