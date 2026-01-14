@@ -537,6 +537,15 @@ function ShareViewContent() {
       return computed;
     }
     
+    // P0-FIX: computed が null の瞬間でも lock があれば lock を返す（送信直後のnull防止）
+    if (lockPaintContextIdRef.current) {
+      const locked = String(lockPaintContextIdRef.current);
+      stablePaintContextIdRef.current = { fileId, id: locked };
+      lastNonNullPaintContextIdRef.current = locked;
+      if (DEBUG_MODE) console.log('[ShareView] stablePaintContextId OUT (locked):', locked?.substring(0, 12));
+      return locked;
+    }
+    
     // computed=nullでも前回値があれば保持（チラつき防止）
     if (prev && fileId === prevFileIdRef) {
       if (DEBUG_MODE) console.log('[ShareView] stablePaintContextId OUT (prev):', prev?.substring(0, 12));
