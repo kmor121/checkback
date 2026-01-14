@@ -725,20 +725,15 @@ const ViewerCanvas = forwardRef(({
     // Hunk E: 非empty時はカウンターリセット
     prevEmptyCountRef.current = 0;
     
-    // ★★★ DEBUG: FULL SYNC開始 ★★★
-    console.log('[ViewerCanvas] FULL SYNC START:', {
-      ctx,
-      incomingLength: shapesToSync.length,
-      prevMapSize,
+    // ★★★ P0-DIAG: FULL SYNC入口ログ（常に出力） ★★★
+    console.log('[ViewerCanvas] FULL SYNC IN', {
       renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
+      incomingLength: shapesToSync.length,
+      firstIncomingCommentId: shapesToSync[0] ? resolveCommentId(shapesToSync[0])?.substring(0, 12) : 'none',
+      showAllPaint,
+      ctx: ctx?.substring(0, 20) || 'null',
+      prevMapSize,
     });
-    if (DEBUG_MODE && shapesToSync.length > 0) {
-      console.log('[ViewerCanvas] FULL SYNC: Incoming sample:', {
-        count: shapesToSync.length,
-        sample0: shapesToSync[0] ? { id: shapesToSync[0].id?.substring(0,8), comment_id: resolveCommentId(shapesToSync[0])?.substring(0,12) } : null,
-        sample1: shapesToSync[1] ? { id: shapesToSync[1].id?.substring(0,8), comment_id: resolveCommentId(shapesToSync[1])?.substring(0,12) } : null,
-      });
-    }
 
     // ★★★ CRITICAL: dirtyなローカルshapeを保持するために一時保存 ★★★
     const dirtyShapes = new Map();

@@ -2990,7 +2990,22 @@ function ShareViewContent() {
                 </div>
               </div>
             ) : (
-              <ViewerCanvas
+              {/* P0-DIAG: 一時ログ（ViewerCanvasに渡す直前） */}
+            {(() => {
+              const passedShapes = freezeActiveRef.current && freezeRef.current?.shapesForCanvas ? freezeRef.current.shapesForCanvas : shapesForCanvasSafe;
+              console.log('[ShareView->ViewerCanvas]', {
+                stablePaintContextId: stablePaintContextId?.substring(0, 12) || 'null',
+                activeCommentId: activeCommentId?.substring(0, 12) || 'null',
+                composerMode,
+                shapesForCanvasLen: shapesForCanvas?.length || 0,
+                shapesForCanvasSafeLen: shapesForCanvasSafe?.length || 0,
+                existingShapesPassedLen: passedShapes?.length || 0,
+                firstExistingShapeCommentId: passedShapes?.[0] ? resolveCommentId(passedShapes[0])?.substring(0, 12) : 'none',
+                paintContextId: paintContextId?.substring(0, 12) || 'null',
+              });
+              return null;
+            })()}
+            <ViewerCanvas
                 /* P0-FLICKER: key削除でremount防止、内部リセットはcanvasContextKeyで制御 */
                 ref={viewerCanvasRef}
                 fileUrl={file?.file_url}
