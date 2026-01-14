@@ -378,6 +378,11 @@ const ViewerCanvas = forwardRef(({
       emptyStreakCountRef.current = 0;
       prevEmptyCountRef.current = 0;
       bump();
+      
+      // ★★★ Hunk2: 強制再描画（残像防止）★★★
+      requestAnimationFrame(() => {
+        stageRef.current?.batchDraw?.();
+      });
     }
   }, [hidePaintOverlay, selectedId, bump]);
 
@@ -494,8 +499,13 @@ const ViewerCanvas = forwardRef(({
       prevCanvasContextKeyRef.current = canvasContextKey;
 
       console.log('[B-FIX] CTX CHANGED complete: shapesVersion bumped, Map size=0');
-    }
-  }, [canvasContextKey, bump]);
+
+      // ★★★ Hunk2: 強制再描画（残像防止）★★★
+      requestAnimationFrame(() => {
+        stageRef.current?.batchDraw?.();
+      });
+      }
+      }, [canvasContextKey, bump]);
 
   // CRITICAL: fileIdentity/pageNumber変更時のみリセット（Mapをクリア）
   useEffect(() => {
@@ -548,7 +558,12 @@ const ViewerCanvas = forwardRef(({
     }
 
     console.log('[Hunk2] forceClearToken complete: Map size=0, lastNonEmpty cleared');
-  }, [forceClearToken]);
+
+    // ★★★ Hunk2: 強制再描画（残像防止）★★★
+    requestAnimationFrame(() => {
+      stageRef.current?.batchDraw?.();
+    });
+    }, [forceClearToken]);
 
   // ★★★ FIX-PENDING: existingShapes FULL SYNC（pendingCtx対応版）★★★
   // ★★★ P0-FLICKER: 送信後のrefetch瞬間emptyを無視（ちらつき防止）★★★
@@ -3208,7 +3223,8 @@ const ViewerCanvas = forwardRef(({
 
         {/* 注釈Layer（contentGroup内に配置） */}
         {/* P2 FIX: 背景ロード完了まで描画レイヤーを非表示 */}
-        <Layer visible={bgReady}>
+        {/* ★★★ Hunk1: canvasContextKeyでLayerを強制リマウント（残像根絶）★★★ */}
+        <Layer key={`paint:${canvasContextKey || 'none'}`} visible={bgReady}>
           <Group
             ref={contentGroupRef}
             x={viewX}
