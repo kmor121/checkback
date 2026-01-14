@@ -700,7 +700,8 @@ const ViewerCanvas = forwardRef(({
       // paintMode不問（送信直後はpaintMode=falseになるため）
       // ★★★ P0-FLICKER-v2: prevMapSize不問（送信完了直後はMapが空でも保持）★★★
       // ★★★ 案B例外: allowIntentionalEmpty時は温存しない ★★★
-      if (!allowIntentionalEmpty && lastNonEmptyShapesRef.current && lastNonEmptyShapesRef.current.length > 0 && emptyStreakCountRef.current < 5) {
+      // ★★★ Hunk2追加: hidePaintOverlay時も温存しない（確実な空表示）★★★
+      if (!allowIntentionalEmpty && !hidePaintOverlay && lastNonEmptyShapesRef.current && lastNonEmptyShapesRef.current.length > 0 && emptyStreakCountRef.current < 5) {
         console.log('[P0-FLICKER] SYNC SKIP: transient empty, preserving lastNonEmpty shapes', {
           ctx,
           prevMapSize,
