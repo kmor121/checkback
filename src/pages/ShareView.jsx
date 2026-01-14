@@ -1709,6 +1709,28 @@ function ShareViewContent() {
           });
         }
 
+        // ★★★ Hunk1 (P0): freezeRef も同時にリライト（temp_ID → 実ID）★★★
+        if (freezeActiveRef.current && freezeRef.current?.shapesForCanvas?.length > 0 && submittedCommentId) {
+          const freezeKey = String(freezeRef.current.toId || freezeRef.current.key || '');
+          if (isTempCid(freezeKey)) {
+            const rewrittenShapes = freezeRef.current.shapesForCanvas.map(s => ({
+              ...s,
+              comment_id: submittedCommentId,
+              commentId: submittedCommentId,
+            }));
+            freezeRef.current = {
+              ...freezeRef.current,
+              shapesForCanvas: rewrittenShapes,
+              toId: submittedCommentId,
+              key: submittedCommentId,
+            };
+            console.log('[P0-FIX] freezeRef rewritten from temp to real ID:', {
+              from: freezeKey.substring(0, 12),
+              to: submittedCommentId.substring(0, 12),
+            });
+          }
+        }
+
         // ★★★ CRITICAL: 送信時にのみDraftShapesをDBに保存 ★★★
         if (shapesToCommit.length > 0) {
           console.log('[ShareView] Saving draft shapes to DB:', shapesToCommit.length);
