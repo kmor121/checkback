@@ -119,6 +119,7 @@ const ViewerCanvas = forwardRef(({
   renderTargetCommentId = null, // ★★★ REQUIRED: 表示対象commentId（リロード後の下書き復元用） ★★★
   canvasContextKey = null, // ★★★ P1: 内部リセット用キー（paintContextId含む）★★★
   isCanvasTransitioning = false, // ★★★ D: 遷移中フラグ（incoming empty時のMap保持用）★★★
+  hidePaintOverlay = false, // ★★★ 案B: 新規コメント入力中は描画を非表示 ★★★
 }, ref) => {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
