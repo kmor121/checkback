@@ -732,12 +732,11 @@ const ViewerCanvas = forwardRef(({
       prevMapSize,
       renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
     });
-    if (DEBUG_MODE) {
-      console.log('[ViewerCanvas] FULL SYNC IN:', {
-        incomingLength: existingShapes?.length,
-        shapesToSyncLength: shapesToSync?.length,
-        renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
-        first: existingShapes?.[0] ? { id: existingShapes[0].id?.substring(0,8), comment_id: resolveCommentId(existingShapes[0])?.substring(0,12) } : null,
+    if (DEBUG_MODE && shapesToSync.length > 0) {
+      console.log('[ViewerCanvas] FULL SYNC: Incoming sample:', {
+        count: shapesToSync.length,
+        sample0: shapesToSync[0] ? { id: shapesToSync[0].id?.substring(0,8), comment_id: resolveCommentId(shapesToSync[0])?.substring(0,12) } : null,
+        sample1: shapesToSync[1] ? { id: shapesToSync[1].id?.substring(0,8), comment_id: resolveCommentId(shapesToSync[1])?.substring(0,12) } : null,
       });
     }
 
