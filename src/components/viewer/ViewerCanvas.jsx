@@ -546,6 +546,11 @@ const ViewerCanvas = forwardRef(({
 
     if (!shapesToSync) return;
 
+    // ★★★ P0-TDZ-FIX: prevMapSize を参照より前に必ず宣言 ★★★
+    const prevMapSize = shapesMapRef.current.size;
+    const ctx = canvasContextKey || 'no-ctx';
+    const isPending = !!pendingCtxRef.current;
+
     const incomingEmpty = shapesToSync.length === 0;
 
     // ★★★ P0-FLICKER: 非空shapesを記録 ★★★
@@ -569,17 +574,6 @@ const ViewerCanvas = forwardRef(({
         return;
       }
     }
-
-    
-
-    
-
-    
-
-    // const incomingEmpty = existingShapes.length === 0;
-    const prevMapSize = shapesMapRef.current.size;
-    const ctx = canvasContextKey || 'no-ctx';
-    const isPending = !!pendingCtxRef.current;
 
     // ★★★ FIX-PENDING: pending中のincomingEmpty は何もしない（旧Map保持）★★★
     if (isPending && incomingEmpty) {
