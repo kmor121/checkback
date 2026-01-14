@@ -2991,28 +2991,67 @@ function ShareViewContent() {
                   </div>
                   ) : (
                   <>
-                  {/* P0-DIAG: 一時ログ（ViewerCanvasに渡す直前） */}
-                  {(() => {
-                  const passedShapes = freezeActiveRef.current && freezeRef.current?.shapesForCanvas ? freezeRef.current.shapesForCanvas : shapesForCanvasSafe;
-                  console.log('[ShareView->ViewerCanvas]', {
-                    stablePaintContextId: stablePaintContextId?.substring(0, 12) || 'null',
-                    activeCommentId: activeCommentId?.substring(0, 12) || 'null',
-                    composerMode,
-                    shapesForCanvasLen: shapesForCanvas?.length || 0,
-                    shapesForCanvasSafeLen: shapesForCanvasSafe?.length || 0,
-                    existingShapesPassedLen: passedShapes?.length || 0,
-                    firstExistingShapeCommentId: passedShapes?.[0] ? resolveCommentId(passedShapes[0])?.substring(0, 12) : 'none',
-                    paintContextId: paintContextId?.substring(0, 12) || 'null',
-                  });
-                  return null;
-                  })()}
-                  <ViewerCanvas
-                /* P0-FLICKER: key削除でremount防止、内部リセットはcanvasContextKeyで制御 */
-                ref={viewerCanvasRef}
-                fileUrl={file?.file_url}
-                mimeType={file?.mime_type}
-                pageNumber={currentPage}
-                existingShapes={freezeActiveRef.current && freezeRef.current?.shapesForCanvas ? freezeRef.current.shapesForCanvas : shapesForCanvasSafe}
+                    {/* P0-DIAG: 一時ログ（ViewerCanvasに渡す直前） */}
+                    {(() => {
+                      // ★★★ P0-FIX: existingShapes決定ロジックを統一 ★★★
+                      // 原則: shapesForCanvasSafe を使用
+                      // 例外: freeze中かつfreeze有効時のみfreezeを使用
+                      let passedShapes = shapesForCanvasSafe;
+
+                      // freeze は送信中のみ有効（短時間）
+                      if (freezeActiveRef.current && freezeRef.current?.shapesForCanvas?.length > 0) {
+                        passedShapes = freezeRef.current.shapesForCanvas;
+                      }
+
+                      // ★★★ P0-FIX: handoff残留チェック＆クリア ★★★
+                      // shapesForCanvasSafe に db shapes が入ってきたら handoff は不要
+                      // または、stablePaintContextId が handoff.key と異なれば handoff は stale
+                      if (handoffRef.current) {
+                        const handoffKey = handoffRef.current.key;
+                        const hasFreshDbShapes = shapesForCanvasSafe.length > 0 && 
+                          shapesForCanvasSafe.some(s => !String(resolveCommentId(s) || '').startsWith('temp_'));
+                        const contextMismatch = stablePaintContextId && handoffKey && 
+                          String(stablePaintContextId) !== String(handoffKey);
+
+                        if (hasFreshDbShapes || contextMismatch) {
+                          console.log('[P0-FIX] handoff cleared (stale):', {
+                            reason: hasFreshDbShapes ? 'fresh db shapes arrived' : 'context mismatch',
+                            handoffKey: handoffKey?.substring(0, 12) || 'null',
+                            stablePaintContextId: stablePaintContextId?.substring(0, 12) || 'null',
+                          });
+                          handoffRef.current = null;
+                        }
+                      }
+
+                      if (DEBUG_MODE) {
+                        console.log('[ShareView->ViewerCanvas]', {
+                          stablePaintContextId: stablePaintContextId?.substring(0, 12) || 'null',
+                          activeCommentId: activeCommentId?.substring(0, 12) || 'null',
+                          composerMode,
+                          shapesForCanvasLen: shapesForCanvas?.length || 0,
+                          shapesForCanvasSafeLen: shapesForCanvasSafe?.length || 0,
+                          existingShapesPassedLen: passedShapes?.length || 0,
+                          firstExistingShapeCommentId: passedShapes?.[0] ? resolveCommentId(passedShapes[0])?.substring(0, 12) : 'none',
+                          paintContextId: paintContextId?.substring(0, 12) || 'null',
+                          handoffActive: !!handoffRef.current,
+                          freezeActive: freezeActiveRef.current,
+                        });
+                      }
+                      return null;
+                    })()}
+                    <ViewerCanvas
+                        /* P0-FLICKER: key削除でremount防止、内部リセットはcanvasContextKeyで制御 */
+                        ref={viewerCanvasRef}
+                        fileUrl={file?.file_url}
+                        mimeType={file?.mime_type}
+                        pageNumber={currentPage}
+                        existingShapes={(() => {
+                          // ★★★ P0-FIX: existingShapes決定（上のログと同一ロジック）★★★
+                          if (freezeActiveRef.current && freezeRef.current?.shapesForCanvas?.length > 0) {
+                            return freezeRef.current.shapesForCanvas;
+                          }
+                          return shapesForCanvasSafe;
+                        })()}
                 comments={comments.filter(c => c.page_no === currentPage)}
                 activeCommentId={activeCommentId}
                 canvasContextKey={canvasInternalResetKey}
