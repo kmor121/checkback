@@ -554,6 +554,22 @@ const ViewerCanvas = forwardRef(({
       emptyStreakCountRef.current = 0;
     }
 
+    // ★★★ P0-SYNC-GUARD: 送信直後の一瞬empty（refetch中）を無視 ★★★
+    // 条件: incoming=0, prevMap>0, ctx同一, 遷移中でない → 保持
+    if (incomingEmpty && prevMapSize > 0 && !isPending) {
+      // lastNonEmptyがあり、連続emptyが5回未満なら保持
+      if (lastNonEmptyShapesRef.current && lastNonEmptyShapesRef.current.length > 0 && emptyStreakCountRef.current < 5) {
+        emptyStreakCountRef.current += 1;
+        console.log('[P0-SYNC-GUARD] SYNC SKIP: transient empty, preserving Map', {
+          ctx,
+          prevMapSize,
+          emptyStreak: emptyStreakCountRef.current,
+          lastNonEmptyCount: lastNonEmptyShapesRef.current.length,
+        });
+        return;
+      }
+    }
+
     
 
     

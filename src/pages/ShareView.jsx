@@ -1461,15 +1461,16 @@ function ShareViewContent() {
       console.log('[P0-FINAL] paintContextId locked for edit submit:', lockPaintContextIdRef.current.substring(0, 12));
     }
 
-    // ★★★ P0-FINAL: freeze は shapes のみ（comments は freeze しない）★★★
+    // ★★★ P0-FINAL: freeze は shapesForCanvasSafe を使う（空防止）★★★
+    const safeShapesForFreeze = shapesForCanvasSafe.length > 0 ? shapesForCanvasSafe : (lastStableShapesRef.current || []);
     freezeRef.current = {
-      shapesForCanvas: [...shapesForCanvas],
+      shapesForCanvas: [...safeShapesForFreeze],
       draftCountByCommentId: { ...draftCountByCommentId },
       activeCommentId,
     };
     freezeActiveRef.current = true;
     console.log('[P0-FINAL] Freeze activated (shapes only):', {
-      shapesCount: shapesForCanvas.length,
+      shapesCount: safeShapesForFreeze.length,
     });
 
     const shapesToCommit = draftShapesRef.current || [];
@@ -2658,15 +2659,15 @@ function ShareViewContent() {
       });
     }
     
-    // ★★★ P1 FIX: 差分がある場合のみ更新して無限ループを防止 ★★★
-    const hasChanged = 
-      Object.keys(scanned).length !== Object.keys(draftCountByCommentId).length ||
-      Object.keys(scanned).some(key => scanned[key] !== draftCountByCommentId[key]);
-
-    if (hasChanged) {
+    // ★★★ P0-LOOP FIX: 差分がある場合のみ更新して無限ループを防止 ★★★
+    // JSON比較で厳密に差分チェック（参照比較だと毎回trueになる）
+    const scannedJson = JSON.stringify(scanned);
+    const currentJson = JSON.stringify(draftCountByCommentId);
+    
+    if (scannedJson !== currentJson) {
       setDraftCountByCommentId(scanned);
     }
-  }, [shareLink?.file_id, guestId, comments, scanEditDraftsForFile]);
+  }, [shareLink?.file_id, guestId, comments?.length, scanEditDraftsForFile]);
 
   const handleSaveName = () => {
     if (!guestName.trim()) return;
