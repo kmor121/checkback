@@ -2990,20 +2990,6 @@ function ShareViewContent() {
                 </div>
               </div>
             ) : (
-              {(() => {
-                const passedShapes = freezeActiveRef.current && freezeRef.current?.shapesForCanvas ? freezeRef.current.shapesForCanvas : shapesForCanvasSafe;
-                if (DEBUG_MODE) {
-                  console.log('[ShareView->ViewerCanvas] pass existingShapes', {
-                    paintContextId: paintContextId?.substring(0, 12) || 'null',
-                    activeCommentId: activeCommentId?.substring(0, 12) || 'null',
-                    shapesForCanvasLen: shapesForCanvas?.length,
-                    shapesForCanvasSafeLen: shapesForCanvasSafe?.length,
-                    passedLen: passedShapes?.length,
-                    freezeActive: freezeActiveRef.current,
-                  });
-                }
-                return null;
-              })()}
               <ViewerCanvas
                 /* P0-FLICKER: key削除でremount防止、内部リセットはcanvasContextKeyで制御 */
                 ref={viewerCanvasRef}
