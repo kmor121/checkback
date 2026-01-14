@@ -419,33 +419,41 @@ function ShareViewContent() {
     cleanupExpiredDrafts();
   }, []);
 
-  // ★★★ P1: 下書き復元トリガー（初回ロード & targetKey変更時）★★★
-  // ★★★ CRITICAL FIX: tempCommentIdを同期的に確定（レース根絶）★★★
+  // ★★★ P0-FINAL: tempCommentId は composerMode='new' の時だけ生成 ★★★
+  // 送信後に勝手に生成されて view→new に戻る不具合を防止
   useEffect(() => {
     if (!shareLink?.file_id) return;
     
-    // ★★★ CRITICAL: 復元 or 即座に生成（どちらかを必ず実行）★★★
+    // ★★★ P0-FINAL: composerMode が 'new' でない場合は生成しない ★★★
+    if (composerMode !== 'new') {
+      console.log('[ShareView] tempCommentId generation skipped (not in new mode):', { composerMode });
+      return;
+    }
+    
+    // ★★★ 既存のtempCommentIdがあれば復元 ★★★
     const savedTempId = localStorage.getItem(`tempCommentId:${shareLink.file_id}`);
     if (savedTempId && savedTempId !== 'null' && savedTempId !== 'undefined' && savedTempId.trim() !== '') {
-      setTempCommentId(savedTempId);
-      console.log('[ShareView] ✓ Restored tempCommentId:', {
-        scopeId: shareLink.file_id.substring(0, 12),
-        tempCommentId: savedTempId.substring(0, 12),
-      });
+      if (tempCommentId !== savedTempId) {
+        setTempCommentId(savedTempId);
+        console.log('[ShareView] ✓ Restored tempCommentId:', {
+          scopeId: shareLink.file_id.substring(0, 12),
+          tempCommentId: savedTempId.substring(0, 12),
+        });
+      }
     } else {
+      // ★★★ 無ければ生成（composerMode='new'の時のみ到達）★★★
       if (savedTempId && (savedTempId === 'null' || savedTempId === 'undefined' || savedTempId.trim() === '')) {
         localStorage.removeItem(`tempCommentId:${shareLink.file_id}`);
       }
-      // ★★★ CRITICAL: 無ければ即座に生成（描画開始前に必ず確定）★★★
       const newTempId = generateTempCommentId();
       setTempCommentId(newTempId);
       localStorage.setItem(`tempCommentId:${shareLink.file_id}`, newTempId);
-      console.log('[ShareView] ✓ Generated new tempCommentId:', {
+      console.log('[ShareView] ✓ Generated new tempCommentId (new mode):', {
         scopeId: shareLink.file_id.substring(0, 12),
         tempCommentId: newTempId.substring(0, 12),
       });
     }
-  }, [shareLink?.file_id]);
+  }, [shareLink?.file_id, composerMode]);
 
   // ★★★ tempCommentIdの永続化 ★★★
   useEffect(() => {
@@ -1596,6 +1604,9 @@ function ShareViewContent() {
           share_token: token 
         });
         const maxSeqNo = existingComments.reduce((max, c) => Math.max(max, c.seq_no || 0), 0);
+        
+        // ★★★ P0-FINAL: 新規作成したコメントIDを外部スコープで参照可能に ★★★
+        let newlyCreatedCommentId = null;
 
         // アンカー位置の計算（shapesToCommitがあればその中心）
         let anchor_nx = 0.5;
@@ -1639,6 +1650,10 @@ function ShareViewContent() {
           resolved: false,
           has_paint: shapesToCommit.length > 0,
         });
+        
+        // ★★★ P0-FINAL: 新規作成したコメントIDを保存 ★★★
+        newlyCreatedCommentId = comment.id;
+        submittedCommentId = String(comment.id);
 
         // ★★★ CRITICAL: 送信時にのみDraftShapesをDBに保存 ★★★
         if (shapesToCommit.length > 0) {
@@ -1690,9 +1705,17 @@ function ShareViewContent() {
         showToast('コメントを送信しました', 'success');
       }
 
-      // ★★★ P0-FLICKER-FIX: 編集送信時の submittedCommentId を先に確定 ★★★
-      const submittedCommentId = 
-        (composerMode === 'edit' && composerTargetCommentId) ? String(composerTargetCommentId) : null;
+      // ★★★ P0-FINAL: 新規/編集両方で送信したコメントIDを取得 ★★★
+      // 新規送信時は comment 変数に作成結果が入っている（上のelse節で定義）
+      // 編集送信時は composerTargetCommentId を使用
+      let submittedCommentId = null;
+      if (composerMode === 'edit' && composerTargetCommentId) {
+        submittedCommentId = String(composerTargetCommentId);
+      } else if (composerMode === 'new' || composerMode === 'reply') {
+        // comment は新規作成時に定義される（上のelse節）
+        // この時点では comment がスコープ外なので、invalidate後に取得する方式に変更
+        // → 代わりに作成直後のcomment.idを使うため、try内で変数を外に出す
+      }
 
       // Hunk O: 新規投稿成功時にtempCommentIdを完全クリア（newの残骸根絶）
       if (composerMode === 'new' || sendDraftScope === 'new') {
@@ -1741,9 +1764,8 @@ function ShareViewContent() {
       
       setPendingFiles([]);
       
-      // ★★★ P0-FLICKER-FIX: 編集送信後は選択維持でちらつき根絶 ★★★
+      // ★★★ P0-FINAL: 新規/編集どちらも送信したコメントを選択維持（UX統一）★★★
       if (submittedCommentId) {
-        // 編集送信：activeCommentIdを明示的に維持（idempotent）
         setActiveCommentId(submittedCommentId);
         setComposerMode('view');
         setComposerTargetCommentId(null);
@@ -1751,12 +1773,11 @@ function ShareViewContent() {
         setPaintSessionCommentId(null);
         setPaintMode(false);
         setReplyingThreadId(null);
-        // ★★★ P0-FINAL: 編集送信後はDockを維持（レイアウトリフロー防止）★★★
-        // setIsDockOpen(false); // コメント：閉じない（選択維持仕様に合う）
-        console.log('[P0-FLICKER-FIX] Edit submit: selection maintained:', submittedCommentId.substring(0, 12));
+        // Dockは開いたままで選択維持
+        console.log('[P0-FINAL] Submit complete: selection maintained:', submittedCommentId.substring(0, 12));
       } else {
-        // 新規送信：従来通り選択解除
-        setComposerMode('new');
+        // submittedCommentIdがない場合のみ（通常は発生しない）
+        setComposerMode('view');
         setComposerTargetCommentId(null);
         setComposerParentCommentId(null);
         setPaintSessionCommentId(null);
@@ -1805,11 +1826,8 @@ function ShareViewContent() {
   };
 
   const selectComment = (comment) => {
-    // 対応済みチェック
-    if (comment.resolved) {
-      showToast('対応済みのコメントは編集できません', 'info');
-      return;
-    }
+    // ★★★ P0-FINAL: コメント選択は対応済みでも許可（閲覧は可能）★★★
+    // 編集/返信は別途ブロックされる
 
     // ★★★ FIX-5: paintMode中は自動OFF（警告なし、下書き保持）★★★
     if (paintMode) {
@@ -1822,7 +1840,6 @@ function ShareViewContent() {
     if (activeCommentId === comment.id) {
       addDebugLog(`[C] deselect same (toggle off)`);
       setActiveCommentId(null);
-      // setShowAllPaint(true); // ★★★ FIX: コメント選択解除時に全描画が残るのを防ぐため削除 ★★★
       setComposerMode('view');
       setComposerTargetCommentId(null);
       setComposerText('');
@@ -1832,26 +1849,23 @@ function ShareViewContent() {
       return;
     }
 
-    // 別のコメントをクリック → 選択のみ（編集には入らない）
+    // ★★★ P0-FINAL: 別のコメントをクリック → 必ず view に遷移（new/edit からも復帰）★★★
     setCurrentPage(comment.page_no);
-    // ★★★ P2: activeCommentIdは維持（paintContextId null防止でちらつき根絶）★★★
-    setActiveCommentId(comment.id);
+    setActiveCommentId(String(comment.id));
     setPaintSessionCommentId(null);
     setIsDockOpen(true);
-    // ★★★ P1 FIX: コメント選択時は showAllPaint=false にする（前コメントの描画消失対策）★★★
     setShowAllPaint(false);
 
-    // ★★★ CRITICAL: 既存コメント選択時は view 状態に（"新規作成中"バッジ防止）★★★
+    // ★★★ P0-FINAL: 必ず view に遷移（new状態から復帰できるように）★★★
     setComposerMode('view');
     setComposerTargetCommentId(null);
     setComposerText('');
-    // ★★★ P2: draftShapesはクリアしない（view時も下書き表示するため保持）★★★
-    // setDraftShapes([]);
-    // draftShapesRef.current = [];
     
     // ★★★ P1: 前のedit/new draftkeyをクリア ★★★
     hydratedKeyRef.current = null;
     setHydratedKeyState(null);
+    
+    console.log('[P0-FINAL] selectComment: switched to view mode:', comment.id.substring(0, 12));
   };
 
   const enterEdit = (comment) => {
