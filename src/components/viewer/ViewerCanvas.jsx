@@ -566,7 +566,9 @@ const ViewerCanvas = forwardRef(({
 
     // ★★★ Hunk2: 強制再描画（残像防止）★★★
     requestAnimationFrame(() => {
-      stageRef.current?.batchDraw?.();
+      if (stageRef.current) {
+        stageRef.current.batchDraw();
+      }
     });
     }, [forceClearToken]);
 
