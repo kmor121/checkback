@@ -3288,10 +3288,10 @@ const ViewerCanvas = forwardRef(({
 
         {/* 注釈Layer（contentGroup内に配置） */}
         {/* P2 FIX: 背景ロード完了まで描画レイヤーを非表示 */}
-        {/* ★★★ Hunk1: canvasContextKey + forceClearToken でLayerを強制リマウント（残像根絶）★★★ */}
+        {/* ★★★ Hunk1: canvasContextKey + forceClearToken + shapesVersion でLayerを強制リマウント（残像根絶）★★★ */}
         {/* ★★★ P0-FIX: hidePaintOverlay時にLayer自体を非表示（残像根絶）★★★ */}
         <Layer 
-          key={`paint:${canvasContextKey || 'none'}:${forceClearToken}`} 
+          key={`paint:${canvasContextKey || 'none'}:${forceClearToken}:${shapesVersion}`} 
           visible={bgReady && !hidePaintOverlay}
           listening={!hidePaintOverlay}
         >
