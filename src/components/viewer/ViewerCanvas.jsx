@@ -483,15 +483,16 @@ const ViewerCanvas = forwardRef(({
 
     const prev = prevCanvasContextKeyRef.current;
     if (prev !== canvasContextKey) {
-      console.log('[B-FIX] CTX CHANGED -> Map/pending/lastNonEmpty cleared', { prev, next: canvasContextKey });
+      console.log('[B-FIX] CTX CHANGED -> Map/pending/lastNonEmpty/emptyStreak cleared', { prev, next: canvasContextKey });
 
       // B) 描画混在対策: コンテキスト変更時は即座にMapをクリアし、古い描画の残留を根絶
       shapesMapRef.current = new Map();
       pendingCtxRef.current = null;
-      // ★★★ Hunk1: lastNonEmptyもクリア（跨ぎ温存防止）★★★
+      // ★★★ Hunk1: lastNonEmpty/emptyStreakを必ずリセット（跨ぎ温存防止）★★★
       lastNonEmptyShapesRef.current = { key: null, shapes: null };
       emptyStreakCountRef.current = 0;
       prevEmptyCountRef.current = 0;
+      lastEmptyAppliedCtxRef.current = null;
       bump(); // 画面を確実に更新
 
       setSelectedId(null);
@@ -505,8 +506,8 @@ const ViewerCanvas = forwardRef(({
       requestAnimationFrame(() => {
         stageRef.current?.batchDraw?.();
       });
-      }
-      }, [canvasContextKey, bump]);
+    }
+  }, [canvasContextKey, bump]);
 
   // CRITICAL: fileIdentity/pageNumber変更時のみリセット（Mapをクリア）
   useEffect(() => {
@@ -613,30 +614,27 @@ const ViewerCanvas = forwardRef(({
 
     // ★★★ P0-SYNC-GUARD: 送信直後の一瞬empty（refetch中）を無視 ★★★
     // 条件: incoming=0, prevMap>0, ctx同一, 遷移中でない → 保持
-    // ★★★ 案B例外: allowIntentionalEmpty時は温存しない（新規コメント入力中は空表示が正しい）★★★
-    // ★★★ Hunk2追加: hidePaintOverlay時も温存しない（確実な空表示）★★★
-    // ★★★ Hunk1: lastNonEmptyは同一コンテキストでのみ使用（跨ぎ温存防止）★★★
+    // ★★★ Hunk2: transient emptyガードを同一ctxのみに限定（別コメント混入防止）★★★
     if (incomingEmpty && prevMapSize > 0 && !isPending && !allowIntentionalEmpty && !hidePaintOverlay) {
       const lastNonEmpty = lastNonEmptyShapesRef.current;
       const isSameCtx = lastNonEmpty?.key === ctx;
       const lastNonEmptyCount = (isSameCtx && lastNonEmpty?.shapes?.length) || 0;
-      
-      // lastNonEmptyがあり、同一コンテキストで、連続emptyが5回未満なら保持
+
+      // ★★★ CRITICAL: 同一コンテキストかつ連続empty5回未満のみ保持を許可 ★★★
       if (isSameCtx && lastNonEmptyCount > 0 && emptyStreakCountRef.current < 5) {
         emptyStreakCountRef.current += 1;
-        console.log('[P0-SYNC-GUARD] SYNC SKIP: transient empty, preserving Map', {
-          ctx,
+        console.log('[P0-SYNC-GUARD] SYNC SKIP: transient empty, preserving Map (same ctx)', {
+          ctx: ctx?.substring(0, 20) || 'null',
           prevMapSize,
           emptyStreak: emptyStreakCountRef.current,
           lastNonEmptyCount,
-          lastNonEmptyCtx: lastNonEmpty?.key?.substring(0, 20) || 'null',
         });
         return;
       }
-      // コンテキストが違う場合は温存しない（正しい空を表示）
+      // ★★★ CRITICAL: コンテキスト不一致なら温存禁止（別コメント混入防止）★★★
       if (!isSameCtx && lastNonEmptyCount > 0) {
-        console.log('[P0-SYNC-GUARD] Context mismatch, NOT preserving (correct empty):', {
-          ctx: ctx?.substring(0, 20) || 'null',
+        console.log('[P0-SYNC-GUARD] Context mismatch, NOT preserving (prevent cross-comment bleed):', {
+          currentCtx: ctx?.substring(0, 20) || 'null',
           lastNonEmptyCtx: lastNonEmpty?.key?.substring(0, 20) || 'null',
         });
       }
@@ -747,23 +745,18 @@ const ViewerCanvas = forwardRef(({
       emptyStreakCountRef.current += 1;
 
       // ★★★ P0-FLICKER: 同一contextKeyかつ前回非空があれば、5回連続emptyまで保持 ★★★
-      // これにより送信→refetch→空→DB取得完了の瞬間的なemptyでちらつかない
-      // paintMode不問（送信直後はpaintMode=falseになるため）
-      // ★★★ P0-FLICKER-v2: prevMapSize不問（送信完了直後はMapが空でも保持）★★★
-      // ★★★ 案B例外: allowIntentionalEmpty時は温存しない ★★★
-      // ★★★ Hunk2追加: hidePaintOverlay時も温存しない（確実な空表示）★★★
-      // ★★★ Hunk1: lastNonEmptyは同一コンテキストでのみ使用（跨ぎ温存防止）★★★
+      // ★★★ Hunk2: transient emptyガードを同一ctxのみに限定（別コメント混入防止）★★★
       const lastNonEmpty = lastNonEmptyShapesRef.current;
       const isSameCtx = lastNonEmpty?.key === ctx;
       const lastNonEmptyCount = (isSameCtx && lastNonEmpty?.shapes?.length) || 0;
-      
+
+      // ★★★ CRITICAL: 同一コンテキストかつ連続empty5回未満のみ保持を許可 ★★★
       if (!allowIntentionalEmpty && !hidePaintOverlay && isSameCtx && lastNonEmptyCount > 0 && emptyStreakCountRef.current < 5) {
-        console.log('[P0-FLICKER] SYNC SKIP: transient empty, preserving lastNonEmpty shapes', {
-          ctx,
+        console.log('[P0-FLICKER] SYNC SKIP: transient empty, preserving lastNonEmpty (same ctx)', {
+          ctx: ctx?.substring(0, 20) || 'null',
           prevMapSize,
           emptyStreak: emptyStreakCountRef.current,
           lastNonEmptyCount,
-          lastNonEmptyCtx: lastNonEmpty?.key?.substring(0, 20) || 'null',
           paintMode,
         });
         // ★★★ P0-FLICKER-v2: lastNonEmptyをMapに復元（表示を維持）★★★
@@ -775,10 +768,10 @@ const ViewerCanvas = forwardRef(({
         }
         return;
       }
-      // コンテキストが違う場合は温存しない（正しい空を表示）
+      // ★★★ CRITICAL: コンテキスト不一致なら温存禁止（別コメント混入防止）★★★
       if (!isSameCtx && lastNonEmpty?.shapes?.length > 0) {
-        console.log('[P0-FLICKER] Context mismatch, NOT preserving (correct empty):', {
-          ctx: ctx?.substring(0, 20) || 'null',
+        console.log('[P0-FLICKER] Context mismatch, NOT preserving (prevent cross-comment bleed):', {
+          currentCtx: ctx?.substring(0, 20) || 'null',
           lastNonEmptyCtx: lastNonEmpty?.key?.substring(0, 20) || 'null',
         });
       }
