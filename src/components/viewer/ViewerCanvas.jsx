@@ -382,7 +382,8 @@ const ViewerCanvas = forwardRef(({
       emptyStreakCountRef.current = 0;
       prevEmptyCountRef.current = 0;
       bump();
-      
+      console.log('[Hunk2] shapesVersion bumped after hidePaintOverlay clear');
+
       // ★★★ Hunk2: 強制再描画（残像防止）★★★
       requestAnimationFrame(() => {
         stageRef.current?.batchDraw?.();
@@ -629,13 +630,14 @@ const ViewerCanvas = forwardRef(({
       lastNonEmptyShapesRef.current = { key: null, shapes: null };
       emptyStreakCountRef.current = 0;
       bump();
+      console.log('[案B2] shapesVersion bumped after Intentional empty clear');
 
       // ★★★ P0-FIX: 確実に画面を更新 ★★★
       requestAnimationFrame(() => {
         stageRef.current?.batchDraw?.();
       });
       return;
-    }
+      }
 
     // ★★★ P0-FLICKER: 非空shapesを記録（コンテキストキー付き）★★★
     if (!incomingEmpty) {
@@ -694,13 +696,14 @@ const ViewerCanvas = forwardRef(({
       lastNonEmptyShapesRef.current = { key: null, shapes: null };
       emptyStreakCountRef.current = 0;
       bump();
+      console.log('[Hunk2] shapesVersion bumped after transitioning clear (intent)');
 
       // ★★★ P0-FIX: 確実に画面を更新 ★★★
       requestAnimationFrame(() => {
         stageRef.current?.batchDraw?.();
       });
       return;
-    }
+      }
 
     // ★★★ FIX-PENDING: pending中のincomingEmpty は何もしない（旧Map保持）★★★
     if (isPending && incomingEmpty) {
