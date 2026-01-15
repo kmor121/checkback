@@ -612,6 +612,29 @@ const ViewerCanvas = forwardRef(({
     // ★★★ Hunk2: 空判定は filtered (incoming) 基準 ★★★
     const incomingEmpty = incoming.length === 0;
 
+    // ★★★ 案B2-修正: temp_新規コメントで「空」を意図している時は、SYNC_GUARDより先に必ず空表示にする ★★★
+    const isTempCtx = String(renderTargetCommentId || '').startsWith('temp_');
+    if (!showAllPaint && isTempCtx && incomingEmpty && !hidePaintOverlay) {
+      console.log('[案B2] Intentional empty BEFORE SYNC_GUARD: clearing Map for temp_ ctx', {
+        ctx: ctx?.substring(0, 20) || 'null',
+        prevMapSize,
+        isTempCtx,
+        paintMode,
+        showAllPaint,
+      });
+      // Map / lastNonEmpty / emptyStreak を全部リセット（残像防止）
+      shapesMapRef.current = new Map();
+      lastNonEmptyShapesRef.current = { key: null, shapes: null };
+      emptyStreakCountRef.current = 0;
+      bump();
+
+      // ★★★ P0-FIX: 確実に画面を更新 ★★★
+      requestAnimationFrame(() => {
+        stageRef.current?.batchDraw?.();
+      });
+      return;
+    }
+
     // ★★★ P0-FLICKER: 非空shapesを記録（コンテキストキー付き）★★★
     if (!incomingEmpty) {
       lastNonEmptyShapesRef.current = { key: ctx, shapes: shapesToSync };
