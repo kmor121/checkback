@@ -646,7 +646,9 @@ const ViewerCanvas = forwardRef(({
     // ★★★ P0-SYNC-GUARD: 送信直後の一瞬empty（refetch中）を無視 ★★★
     // 条件: incoming=0, prevMap>0, ctx同一, 遷移中でない → 保持
     // ★★★ Hunk2: transient emptyガードを同一ctxのみに限定（別コメント混入防止）★★★
-    if (incomingEmpty && prevMapSize > 0 && !isPending && !allowIntentionalEmpty && !hidePaintOverlay) {
+    // ★★★ P1 FIX: temp_コンテキスト（新規）では温存禁止（前コメント混入防止）★★★
+    const isNewTempCtx = String(renderTargetCommentId || '').startsWith('temp_');
+    if (incomingEmpty && prevMapSize > 0 && !isPending && !allowIntentionalEmpty && !hidePaintOverlay && !isNewTempCtx) {
       const lastNonEmpty = lastNonEmptyShapesRef.current;
       const isSameCtx = lastNonEmpty?.key === ctx;
       const lastNonEmptyCount = (isSameCtx && lastNonEmpty?.shapes?.length) || 0;
@@ -654,11 +656,12 @@ const ViewerCanvas = forwardRef(({
       // ★★★ CRITICAL: 同一コンテキストかつ連続empty5回未満のみ保持を許可 ★★★
       if (isSameCtx && lastNonEmptyCount > 0 && emptyStreakCountRef.current < 5) {
         emptyStreakCountRef.current += 1;
-        console.log('[P0-SYNC-GUARD] SYNC SKIP: transient empty, preserving Map (same ctx)', {
+        console.log('[P0-SYNC-GUARD] SYNC SKIP: transient empty, preserving Map (same ctx, NOT temp_)', {
           ctx: ctx?.substring(0, 20) || 'null',
           prevMapSize,
           emptyStreak: emptyStreakCountRef.current,
           lastNonEmptyCount,
+          isNewTempCtx,
         });
         return;
       }

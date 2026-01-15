@@ -3125,7 +3125,13 @@ function ShareViewContent() {
                         mimeType={file?.mime_type}
                         pageNumber={currentPage}
                         existingShapes={(() => {
-                          // ★★★ 案B: 新規コメント入力中（paintMode OFF）は空表示 ★★★
+                          // ★★★ 案B2: 新規コメント（composerMode='new', paintMode=false）中はfreeze/handoffも空にする ★★★
+                          const hideNewTextOnly = composerMode === 'new' && !paintMode && !showAllPaint;
+                          if (hideNewTextOnly) {
+                            console.log('[案B2] existingShapes=[] (new text-only, no paint)');
+                            return [];
+                          }
+                          // ★★★ 案B: isNewCommentInputActive時も空表示 ★★★
                           if (isNewCommentInputActive && !paintMode && composerMode === 'new') {
                             return [];
                           }
