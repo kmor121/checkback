@@ -338,6 +338,9 @@ const ViewerCanvas = forwardRef(({
     if (DEBUG_MODE) console.log('[ViewerCanvas] renderedShapes UMEMO: Default to empty (no targetId, showAllPaint=false)');
     return [];
   }, [shapesVersion, showAllPaint, renderTargetCommentId, currentShape]);
+
+  // ★★★ Hunk1: hidePaintOverlay時は描画を確実に空にする（表示レイヤー制御）★★★
+  const renderedShapesFinal = hidePaintOverlay ? [] : renderedShapes;
   
   // ★ CRITICAL: activeShapes を existingShapes から抽出（comment_id統一判定）
   const activeShapes = useMemo(() => {
@@ -757,6 +760,7 @@ const ViewerCanvas = forwardRef(({
       const lastNonEmptyCount = (isSameCtx && lastNonEmpty?.shapes?.length) || 0;
 
       // ★★★ CRITICAL: 同一コンテキストかつ連続empty5回未満のみ保持を許可 ★★★
+      // ★★★ Hunk2: hidePaintOverlay時は意図的空表示なのでtransient guard無効 ★★★
       if (!allowIntentionalEmpty && !hidePaintOverlay && isSameCtx && lastNonEmptyCount > 0 && emptyStreakCountRef.current < 5) {
         console.log('[P0-FLICKER] SYNC SKIP: transient empty, preserving lastNonEmpty (same ctx)', {
           ctx: ctx?.substring(0, 20) || 'null',
@@ -3265,16 +3269,14 @@ const ViewerCanvas = forwardRef(({
             scaleX={contentScale}
             scaleY={contentScale}
           >
-            {/* ★★★ 案B: hidePaintOverlay時は描画を非表示（Mapは保持） ★★★ */}
-            {!hidePaintOverlay && (
-              <>
-                {/* ★★★ CRITICAL: 確定済みshapeのみ描画（currentShapeとの重複は既に除外済み）★★★ */}
-                {renderedShapes.map(s => renderShape(s, true))}
-                
-                {/* ★★★ CRITICAL: 描画中のcurrentShapeは最後に独立して描画 ★★★ */}
-                {currentShape && renderShape(currentShape, false)}
-              </>
-            )}
+            {/* ★★★ Hunk1: renderedShapesFinalで描画を確実に制御 ★★★ */}
+            <>
+              {/* ★★★ CRITICAL: 確定済みshapeのみ描画（currentShapeとの重複は既に除外済み）★★★ */}
+              {renderedShapesFinal.map(s => renderShape(s, true))}
+
+              {/* ★★★ CRITICAL: 描画中のcurrentShapeは最後に独立して描画 ★★★ */}
+              {!hidePaintOverlay && currentShape && renderShape(currentShape, false)}
+            </>
             
             <Transformer ref={transformerRef} />
           </Group>
