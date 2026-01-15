@@ -581,11 +581,8 @@ const ViewerCanvas = forwardRef(({
   const allowIntentionalEmpty = isTempCtx && !paintMode && !showAllPaint;
 
   useLayoutEffect(() => {
-    // ★★★ Hunk2: hidePaintOverlay中はFULL SYNCを停止（空表示維持）★★★
-    if (hidePaintOverlay) {
-      console.log('[SYNC] hidePaintOverlay=true, skipping FULL SYNC to maintain empty display');
-      return;
-    }
+    // ★★★ P0-FIX: hidePaintOverlay中でもFULL SYNC許可（Layer非表示で安全）★★★
+    // Layer visible=false なので同期してもユーザーには見えず、解除時に即反映される
     
     // ★ 操作中は更新を保留し、pending に保存
     if (isInteractingRef.current) {
@@ -3261,7 +3258,12 @@ const ViewerCanvas = forwardRef(({
         {/* 注釈Layer（contentGroup内に配置） */}
         {/* P2 FIX: 背景ロード完了まで描画レイヤーを非表示 */}
         {/* ★★★ Hunk1: canvasContextKey + forceClearToken でLayerを強制リマウント（残像根絶）★★★ */}
-        <Layer key={`paint:${canvasContextKey || 'none'}:${forceClearToken}`} visible={bgReady}>
+        {/* ★★★ P0-FIX: hidePaintOverlay時にLayer自体を非表示（残像根絶）★★★ */}
+        <Layer 
+          key={`paint:${canvasContextKey || 'none'}:${forceClearToken}`} 
+          visible={bgReady && !hidePaintOverlay}
+          listening={!hidePaintOverlay}
+        >
           <Group
             ref={contentGroupRef}
             x={viewX}
