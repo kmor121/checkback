@@ -578,6 +578,12 @@ const ViewerCanvas = forwardRef(({
   const allowIntentionalEmpty = isTempCtx && !paintMode && !showAllPaint;
 
   useLayoutEffect(() => {
+    // ★★★ Hunk2: hidePaintOverlay中はFULL SYNCを停止（空表示維持）★★★
+    if (hidePaintOverlay) {
+      console.log('[SYNC] hidePaintOverlay=true, skipping FULL SYNC to maintain empty display');
+      return;
+    }
+    
     // ★ 操作中は更新を保留し、pending に保存
     if (isInteractingRef.current) {
       console.log('[SYNC] Interaction in progress, deferring SYNC');
@@ -642,9 +648,9 @@ const ViewerCanvas = forwardRef(({
     
     // ★★★ 案B: allowIntentionalEmpty時は即座にMapクリア（前コメント描画を消す）★★★
     if (incomingEmpty && allowIntentionalEmpty) {
-      // ★★★ P0-FIX: 同一ctxで連発しないガード ★★★
-      if (lastEmptyAppliedCtxRef.current === ctx) {
-        console.log('[案B] Intentional empty: already applied for this ctx, skipping', { ctx });
+      // ★★★ P0-FIX: Mapが空のときだけskip、復活後は再クリア可能に ★★★
+      if (lastEmptyAppliedCtxRef.current === ctx && shapesMapRef.current.size === 0) {
+        console.log('[案B] Intentional empty: already applied and Map empty, skipping', { ctx });
         return;
       }
       lastEmptyAppliedCtxRef.current = ctx;
@@ -786,9 +792,9 @@ const ViewerCanvas = forwardRef(({
       if (isCanvasTransitioning) {
           // hidePaintOverlay または allowIntentionalEmpty 時は空表示を優先
           if (hidePaintOverlay || allowIntentionalEmpty) {
-            // ★★★ P0-FIX: 同一ctxで連発しないガード ★★★
-            if (lastEmptyAppliedCtxRef.current === ctx) {
-              console.log('[Hunk2] transitioning clear intent: already applied for this ctx, skipping', { ctx });
+            // ★★★ P0-FIX: Mapが空のときだけskip、復活後は再クリア可能に ★★★
+            if (lastEmptyAppliedCtxRef.current === ctx && shapesMapRef.current.size === 0) {
+              console.log('[Hunk2] transitioning clear intent: already applied and Map empty, skipping', { ctx });
               return;
             }
             lastEmptyAppliedCtxRef.current = ctx;
