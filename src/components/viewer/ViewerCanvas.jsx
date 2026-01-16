@@ -396,7 +396,12 @@ const ViewerCanvas = forwardRef(({
           transformerRef.current.nodes([]);
           transformerRef.current.getLayer()?.clear?.();
         }
-        stageRef.current?.batchDraw?.();
+        const stage = stageRef.current?.getStage?.() || stageRef.current;
+        if (stage?.batchDraw) {
+          stage.batchDraw();
+        } else {
+          console.warn('[P0-GUARD] stage missing; skip batchDraw (hidePaintOverlay cleanup)');
+        }
       });
     }
   }, [hidePaintOverlay, selectedId, bump]);
@@ -466,7 +471,10 @@ const ViewerCanvas = forwardRef(({
     requestAnimationFrame(() => {
       if (transformerRef.current) {
         transformerRef.current.nodes([]);
-        transformerRef.current.getLayer()?.batchDraw();
+        const layer = transformerRef.current.getLayer();
+        if (layer?.batchDraw) {
+          layer.batchDraw();
+        }
       }
     });
   }, [activeCommentId]);
@@ -608,8 +616,11 @@ const ViewerCanvas = forwardRef(({
 
     // ★★★ Hunk2: 強制再描画（残像防止）★★★
     requestAnimationFrame(() => {
-      if (stageRef.current) {
-        stageRef.current.batchDraw();
+      const stage = stageRef.current?.getStage?.() || stageRef.current;
+      if (stage?.batchDraw) {
+        stage.batchDraw();
+      } else {
+        console.warn('[P0-GUARD] stage missing; skip batchDraw (forceClearToken)');
       }
     });
     }, [forceClearToken]);
@@ -645,7 +656,12 @@ const ViewerCanvas = forwardRef(({
           transformerRef.current.nodes([]);
           transformerRef.current.getLayer()?.clear?.();
         }
-        stageRef.current?.batchDraw?.();
+        const stage = stageRef.current?.getStage?.() || stageRef.current;
+        if (stage?.batchDraw) {
+          stage.batchDraw();
+        } else {
+          console.warn('[P0-GUARD] stage missing; skip batchDraw (EMPTY FULL SYNC)');
+        }
       });
       return;
     }
@@ -1074,14 +1090,23 @@ const ViewerCanvas = forwardRef(({
           transformerRef.current.padding(0);
           transformerRef.current.boundBoxFunc(null);
         }
-        transformerRef.current.getLayer().batchDraw();
+        const layer = transformerRef.current.getLayer();
+        if (layer?.batchDraw) {
+          layer.batchDraw();
+        }
       } else {
         transformerRef.current.nodes([]);
-        transformerRef.current.getLayer().batchDraw();
+        const layer = transformerRef.current.getLayer();
+        if (layer?.batchDraw) {
+          layer.batchDraw();
+        }
       }
     } else {
       transformerRef.current.nodes([]);
-      transformerRef.current.getLayer().batchDraw();
+      const layer = transformerRef.current.getLayer();
+      if (layer?.batchDraw) {
+        layer.batchDraw();
+      }
     }
     }, [selectedId, isEditMode, shapes]);
 
@@ -1359,7 +1384,10 @@ const ViewerCanvas = forwardRef(({
     // Transformer解除（先に）
     if (transformerRef.current) {
       transformerRef.current.nodes([]);
-      transformerRef.current.getLayer()?.batchDraw();
+      const layer = transformerRef.current.getLayer();
+      if (layer?.batchDraw) {
+        layer.batchDraw();
+      }
     }
     
     // Optimistic update（★★★ CRITICAL: 新しいMapを作成 ★★★）
