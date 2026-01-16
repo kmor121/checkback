@@ -384,53 +384,11 @@ const ViewerCanvas = forwardRef(({
       prevEmptyCountRef.current = 0;
       bump();
       console.log('[Hunk2] shapesVersion bumped after hidePaintOverlay clear');
-
-      // ★★★ NEW: Konva Layer canvas残像を物理的にクリア ★★★
-      requestAnimationFrame(() => {
-        if (paintLayerRef.current) {
-          paintLayerRef.current.destroyChildren();
-          paintLayerRef.current.clear();
-          paintLayerRef.current.draw();
-        }
-        if (transformerRef.current) {
-          transformerRef.current.nodes([]);
-          transformerRef.current.getLayer()?.clear?.();
-        }
-        const stage = stageRef.current?.getStage?.() || stageRef.current;
-        if (stage?.batchDraw) {
-          stage.batchDraw();
-        } else {
-          console.warn('[P0-GUARD] stage missing; skip batchDraw (hidePaintOverlay cleanup)');
-        }
-      });
+      // Layer自体がunmountされるため物理クリア不要
     }
   }, [hidePaintOverlay, selectedId, bump]);
 
-  // ★★★ P0-NUKE: hidePaintOverlay時にpaintOverlayノードを完全破棄（表示確実消去）★★★
-  useEffect(() => {
-    if (!hidePaintOverlay) return;
 
-    const stage = stageRef.current?.getStage?.() || stageRef.current;
-    if (!stage?.find) return;
-
-    const nodes = stage.find('.paintOverlay');
-    const list = nodes?.toArray ? nodes.toArray()
-      : Array.isArray(nodes) ? nodes
-      : nodes ? [nodes] : [];
-
-    const count = list.length;
-    console.log('[P0-NUKE] hidePaintOverlay -> destroy paintOverlay nodes:', count);
-
-    list.forEach(n => {
-      try { n?.destroy?.(); } catch (e) {}
-    });
-
-    if (stage?.batchDraw) {
-      stage.batchDraw();
-    } else {
-      console.warn('[P0-GUARD] stage missing; skip batchDraw (hidePaintOverlay)');
-    }
-  }, [hidePaintOverlay]);
 
   // CRITICAL: activeCommentId変化時の完全リセット
   // ★★★ FIX: コメント切替時は全ての編集状態を完全クリア（前コメントの描画残り防止）★★★
@@ -648,24 +606,7 @@ const ViewerCanvas = forwardRef(({
       prevEmptyCountRef.current = 0;
       bump();
       console.log('[SYNC] shapesVersion bumped after hidePaintOverlay EMPTY SYNC');
-      
-      requestAnimationFrame(() => {
-        if (paintLayerRef.current) {
-          paintLayerRef.current.destroyChildren();
-          paintLayerRef.current.clear();
-          paintLayerRef.current.draw();
-        }
-        if (transformerRef.current) {
-          transformerRef.current.nodes([]);
-          transformerRef.current.getLayer()?.clear?.();
-        }
-        const stage = stageRef.current?.getStage?.() || stageRef.current;
-        if (stage?.batchDraw) {
-          stage.batchDraw();
-        } else {
-          console.warn('[P0-GUARD] stage missing; skip batchDraw (EMPTY FULL SYNC)');
-        }
-      });
+      // Layer自体がunmountされるため物理クリア不要
       return;
     }
     
