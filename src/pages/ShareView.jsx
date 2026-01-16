@@ -3063,7 +3063,29 @@ function ShareViewContent() {
                   <div className="text-lg font-medium">準備中...</div>
                   </div>
                   </div>
-                  ) : (
+            ) : (() => {
+              const isNewTextOnlyComposer = composerMode === 'new' && !paintMode && !showAllPaint && isNewCommentInputActive;
+              
+              if (isNewTextOnlyComposer) {
+                return (
+                  <div className="relative w-full h-full flex items-center justify-center overflow-hidden bg-gray-200">
+                    {file?.mime_type?.startsWith('image/') ? (
+                      <img 
+                        src={file?.file_url} 
+                        alt="Preview" 
+                        className="max-w-full max-h-full object-contain"
+                        style={{ pointerEvents: 'none' }}
+                      />
+                    ) : (
+                      <div className="text-gray-500 text-sm">
+                        新規コメント入力中（ペイントをONにすると描画できます）
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              return (
                   <>
                     {/* P0-DIAG: 一時ログ（ViewerCanvasに渡す直前） */}
                     {(() => {
@@ -3270,8 +3292,9 @@ function ShareViewContent() {
                   guestId: guestId,
                 }}
               />
-          </>
-            )}
+            </>
+              );
+            })()}
             
             {/* ズーム制御 */}
             <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-2 flex items-center gap-2">
@@ -3318,6 +3341,7 @@ function ShareViewContent() {
                           // 新規モード（paintMode OFF）で入力開始 → キャンバス空表示
                           if (composerMode === 'new' && !paintMode) {
                             setIsNewCommentInputActive(true);
+                            if (activeCommentId) setActiveCommentId(null);
                             setForceClearToken(prev => prev + 1); // forceClearでMap即時クリア
                           }
                         }}

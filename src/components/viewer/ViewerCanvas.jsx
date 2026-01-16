@@ -385,59 +385,6 @@ const ViewerCanvas = forwardRef(({
       console.log('[Hunk2] shapesVersion bumped after hidePaintOverlay clear');
     }
   }, [hidePaintOverlay, selectedId, bump]);
-  
-  // ★★★ P0: hidePaintOverlay時にcanvas残像を確実に消す（useLayoutEffect=描画前）★★★
-  useLayoutEffect(() => {
-    if (!hidePaintOverlay) return;
-    
-    const layer = paintLayerRef.current;
-    const kc = layer?.getCanvas?.();
-    const dom = kc?._canvas; // Konva Canvas -> DOM canvas
-    
-    if (!dom) {
-      console.warn('[P0-CANVAS-VIS] no paint layer canvas yet', { hidePaintOverlay });
-      return;
-    }
-    
-    // まず見た目を確実に消す（これが最重要）
-    dom.style.visibility = 'hidden';
-    
-    // 念のためピクセルも消しておく（効かない環境があってもvisibilityで担保される）
-    try {
-      const ctx = dom.getContext('2d');
-      if (ctx) ctx.clearRect(0, 0, dom.width, dom.height);
-    } catch {}
-    
-    console.log('[P0-CANVAS-VIS] paint canvas hidden', {
-      w: dom.width,
-      h: dom.height
-    });
-  }, [hidePaintOverlay]);
-  
-  // ★★★ P0: hidePaintOverlay解除時は確実に再表示 ★★★
-  useLayoutEffect(() => {
-    if (hidePaintOverlay) return;
-    
-    const layer = paintLayerRef.current;
-    const kc = layer?.getCanvas?.();
-    const dom = kc?._canvas;
-    
-    if (!dom) return;
-    
-    // 再表示
-    dom.style.visibility = 'visible';
-    
-    // 再描画を促す（null安全）
-    try { layer.draw?.(); } catch {}
-    try { layer.batchDraw?.(); } catch {}
-    const stage = stageRef.current?.getStage?.() || stageRef.current;
-    stage?.batchDraw?.();
-    
-    console.log('[P0-CANVAS-VIS] paint canvas visible', {
-      w: dom.width,
-      h: dom.height
-    });
-  }, [hidePaintOverlay]);
 
 
 
@@ -1179,45 +1126,6 @@ const ViewerCanvas = forwardRef(({
   const handleBgLoad = useCallback((size) => {
     setBgSize(size);
     setBgReady(true);
-  }, []);
-  
-  // ★★★ P0: 物理クリア（canvas残像/ghost根絶）★★★
-  const hardClearPaintPixels = useCallback((reason) => {
-    const stage = stageRef.current?.getStage?.() || stageRef.current;
-    const layer = paintLayerRef.current;
-    
-    // transformer選択解除（安全に）
-    try { transformerRef.current?.nodes?.([]); } catch {}
-    
-    // Konva Canvas の DOM canvas を直接取得して clearRect
-    const clearKonvaCanvas = (kc) => {
-      if (!kc) return;
-      // Konva Canvas は kc._canvas に実DOMがいる
-      const dom = kc._canvas || kc.canvas || kc;
-      const ctx = dom?.getContext?.('2d') || kc.getContext?.();
-      if (dom && ctx) {
-        ctx.clearRect(0, 0, dom.width, dom.height);
-      }
-    };
-    
-    if (layer) {
-      try {
-        clearKonvaCanvas(layer.getCanvas?.());
-        clearKonvaCanvas(layer.getHitCanvas?.());
-        layer.clear?.();
-        layer.draw?.();
-      } catch {}
-    }
-    
-    // Stage全体も再描画（null安全）
-    stage?.batchDraw?.();
-    
-    // DOM canvas数の観測ログ（増殖検知）
-    try {
-      const container = stage?.content || stage?.container?.();
-      const domCanvases = container?.querySelectorAll?.('canvas')?.length;
-      console.log('[P0-HARD-CLEAR] paint pixels cleared', { reason, domCanvases, layerExists: !!layer });
-    } catch {}
   }, []);
   
   // CRITICAL: パンは select ツール時のみ（描画ツールとの競合回避）
