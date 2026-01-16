@@ -3562,8 +3562,8 @@ function ShareViewContent() {
                     <div key={comment.id} className="space-y-2">
                       <Card 
                         className={`hover:shadow-md transition-shadow ${
-                          isEditing ? 'border-2 border-green-600 bg-green-50' : 
-                          isSelected ? 'border-2 border-blue-600 bg-blue-50' : 
+                          !isNewTextOnlyComposer && isEditing ? 'border-2 border-green-600 bg-green-50' : 
+                          !isNewTextOnlyComposer && isSelected ? 'border-2 border-blue-600 bg-blue-50' : 
                           comment.resolved ? 'opacity-75 bg-gray-50' : ''
                         }`}
                       >
