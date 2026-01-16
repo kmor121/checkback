@@ -506,7 +506,10 @@ const ViewerCanvas = forwardRef(({
       // Transformer解除
       if (transformerRef.current) {
         transformerRef.current.nodes([]);
-        transformerRef.current.getLayer()?.batchDraw();
+        const layer = transformerRef.current.getLayer();
+        if (layer?.batchDraw) {
+          layer.batchDraw();
+        }
       }
     }
   }, [clearAfterSubmitNonce]);
@@ -713,7 +716,12 @@ const ViewerCanvas = forwardRef(({
 
       // ★★★ P0-FIX: 確実に画面を更新 ★★★
       requestAnimationFrame(() => {
-        stageRef.current?.batchDraw?.();
+        const stage = stageRef.current?.getStage?.() || stageRef.current;
+        if (stage?.batchDraw) {
+          stage.batchDraw();
+        } else {
+          console.warn('[P0-GUARD] stage missing; skip batchDraw (intentional empty B2)');
+        }
       });
       return;
       }
@@ -2690,7 +2698,10 @@ const ViewerCanvas = forwardRef(({
       // Transformer解除
       if (transformerRef.current) {
         transformerRef.current.nodes([]);
-        transformerRef.current.getLayer()?.batchDraw();
+        const layer = transformerRef.current.getLayer();
+        if (layer?.batchDraw) {
+          layer.batchDraw();
+        }
       }
     },
     delete: handleDelete,
