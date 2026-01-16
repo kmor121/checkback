@@ -513,12 +513,16 @@ const ViewerCanvas = forwardRef(({
 
       // ★★★ Hunk2: 強制再描画（残像防止）★★★
       requestAnimationFrame(() => {
-        const stage = stageRef.current?.getStage?.() || stageRef.current;
-        if (stage?.batchDraw) {
-          stage.batchDraw();
-        } else {
-          console.warn('[P0-GUARD] stage missing; skip batchDraw');
+        if (!stageRef.current) {
+          console.warn('[P0-GUARD] stageRef.current is null; skip batchDraw');
+          return;
         }
+        const stage = stageRef.current.getStage?.() || stageRef.current;
+        if (!stage?.batchDraw) {
+          console.warn('[P0-GUARD] stage.batchDraw unavailable; skip batchDraw');
+          return;
+        }
+        stage.batchDraw();
       });
     }
   }, [canvasContextKey, bump]);
@@ -577,12 +581,16 @@ const ViewerCanvas = forwardRef(({
 
     // ★★★ Hunk2: 強制再描画（残像防止）★★★
     requestAnimationFrame(() => {
-      const stage = stageRef.current?.getStage?.() || stageRef.current;
-      if (stage?.batchDraw) {
-        stage.batchDraw();
-      } else {
-        console.warn('[P0-GUARD] stage missing; skip batchDraw (forceClearToken)');
+      if (!stageRef.current) {
+        console.warn('[P0-GUARD] stageRef.current is null; skip batchDraw (forceClearToken)');
+        return;
       }
+      const stage = stageRef.current.getStage?.() || stageRef.current;
+      if (!stage?.batchDraw) {
+        console.warn('[P0-GUARD] stage.batchDraw unavailable; skip batchDraw (forceClearToken)');
+        return;
+      }
+      stage.batchDraw();
     });
     }, [forceClearToken]);
 
@@ -657,12 +665,16 @@ const ViewerCanvas = forwardRef(({
 
       // ★★★ P0-FIX: 確実に画面を更新 ★★★
       requestAnimationFrame(() => {
-        const stage = stageRef.current?.getStage?.() || stageRef.current;
-        if (stage?.batchDraw) {
-          stage.batchDraw();
-        } else {
-          console.warn('[P0-GUARD] stage missing; skip batchDraw (intentional empty B2)');
+        if (!stageRef.current) {
+          console.warn('[P0-GUARD] stageRef.current is null; skip batchDraw (intentional empty B2)');
+          return;
         }
+        const stage = stageRef.current.getStage?.() || stageRef.current;
+        if (!stage?.batchDraw) {
+          console.warn('[P0-GUARD] stage.batchDraw unavailable; skip batchDraw (intentional empty B2)');
+          return;
+        }
+        stage.batchDraw();
       });
       return;
       }
@@ -728,7 +740,16 @@ const ViewerCanvas = forwardRef(({
 
       // ★★★ P0-FIX: 確実に画面を更新 ★★★
       requestAnimationFrame(() => {
-        stageRef.current?.batchDraw?.();
+        if (!stageRef.current) {
+          console.warn('[P0-GUARD] stageRef.current is null; skip batchDraw (intentional empty)');
+          return;
+        }
+        const stage = stageRef.current.getStage?.() || stageRef.current;
+        if (!stage?.batchDraw) {
+          console.warn('[P0-GUARD] stage.batchDraw unavailable; skip batchDraw (intentional empty)');
+          return;
+        }
+        stage.batchDraw();
       });
       return;
       }
@@ -873,12 +894,16 @@ const ViewerCanvas = forwardRef(({
 
             // ★★★ P0-FIX: 確実に画面を更新 ★★★
             requestAnimationFrame(() => {
-              const stage = stageRef.current?.getStage?.() || stageRef.current;
-              if (stage?.batchDraw) {
-                stage.batchDraw();
-              } else {
-                console.warn('[P0-GUARD] stage missing; skip batchDraw');
+              if (!stageRef.current) {
+                console.warn('[P0-GUARD] stageRef.current is null; skip batchDraw');
+                return;
               }
+              const stage = stageRef.current.getStage?.() || stageRef.current;
+              if (!stage?.batchDraw) {
+                console.warn('[P0-GUARD] stage.batchDraw unavailable; skip batchDraw');
+                return;
+              }
+              stage.batchDraw();
             });
             return;
           }
@@ -3307,6 +3332,7 @@ const ViewerCanvas = forwardRef(({
 
       {/* ★★★ FIX-NO-BLANK: Stage全体は常に表示、shapesGroupのみopacity制御 ★★★ */}
       <Stage
+        key={`stage:${canvasContextKey || 'none'}:${forceClearToken}:${hidePaintOverlay ? 'hide' : 'show'}`}
         ref={stageRef}
         width={containerSize.width}
         height={containerSize.height}
