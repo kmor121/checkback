@@ -138,8 +138,11 @@ function ShareViewContent() {
   const [isNewCommentInputActive, setIsNewCommentInputActive] = useState(false); // 新規コメント入力中フラグ
   const [isDockOpen, setIsDockOpen] = useState(false);
 
+  const isNewTextOnlyComposerActive =
+  composerMode === 'new' && !paintMode && !showAllPaint && isNewCommentInputActive;
+
   const isNewTextOnlyComposer =
-    composerMode === 'new' && !paintMode && !showAllPaint;
+    composerMode === 'new' && !paintMode && !showAllPaint && isNewCommentInputActive;
 
   const enterNewTextOnlyComposer = (e) => {
     e?.stopPropagation?.(); // 親のcomment card clickで再選択されるのを防ぐ
@@ -1923,7 +1926,13 @@ function ShareViewContent() {
     }
   };
 
-  const selectComment = (comment) => {
+    const selectComment = (comment) => {
+    const isNewTextOnlyComposerActive =
+      composerMode === 'new' && !paintMode && !showAllPaint && isNewCommentInputActive;
+    if (isNewTextOnlyComposerActive) {
+      console.log('[P0] selection suppressed (new text-only composer active)');
+      return;
+    }
     // ★★★ P0-FINAL: コメント選択は対応済みでも許可（閲覧は可能）★★★
     // 編集/返信は別途ブロックされる
 
@@ -3361,9 +3370,8 @@ function ShareViewContent() {
                         placeholder={composerMode === 'edit' ? '編集中...' : composerMode === 'reply' ? '返信を入力...' : 'コメントを入力...'}
                         value={composerText}
                         onChange={(e) => setComposerText(e.target.value)}
-                        onMouseDown={(e) => enterNewTextOnlyComposer(e)}
-                        onFocus={(e) => enterNewTextOnlyComposer(e)} // 念のためフォールバック
-                        onClick={(e) => e.stopPropagation()} // 保険
+                        onPointerDownCapture={(e) => enterNewTextOnlyComposer('textarea')}
+                        onFocus={() => enterNewTextOnlyComposer('focus-fallback')}
                         onBlur={() => {
                           // 入力欄を離れたら解除（ただしテキストがあれば維持）
                           if (!composerText.trim()) {
@@ -3541,8 +3549,11 @@ function ShareViewContent() {
               ) : (
                 sortedComments.map((comment) => {
                                   const shapesCount = paintShapes.filter(s => s.comment_id === comment.id).length;
-                                  const isSelected = activeCommentId === comment.id;
-                                  const isEditing = composerMode === 'edit' && composerTargetCommentId === comment.id;
+                                  const isNewTextOnlyComposerActive =
+                                    composerMode === 'new' && !paintMode && !showAllPaint && isNewCommentInputActive;
+
+                                  const isSelected = !isNewTextOnlyComposerActive && activeCommentId === comment.id;
+                                  const isEditing  = !isNewTextOnlyComposerActive && composerMode === 'edit' && composerTargetCommentId === comment.id;
                                   const isPaintingThis = paintMode && paintSessionCommentId === comment.id;
                                   const replies = repliesByParent.get(comment.id) || [];
                                   const commentAttachments = attachmentsByComment.get(comment.id) || [];
