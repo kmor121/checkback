@@ -594,8 +594,30 @@ const ViewerCanvas = forwardRef(({
   const allowIntentionalEmpty = isTempCtx && !paintMode && !showAllPaint;
 
   useLayoutEffect(() => {
-    // ★★★ P0-FIX: hidePaintOverlay中でもFULL SYNC許可（Layer非表示で安全）★★★
-    // Layer visible=false なので同期してもユーザーには見えず、解除時に即反映される
+    // ★★★ CRITICAL: hidePaintOverlay時はEMPTY同期を強制実行（見た目を確実に空にする）★★★
+    if (hidePaintOverlay) {
+      console.log('[SYNC] hidePaintOverlay=true -> forcing EMPTY FULL SYNC');
+      shapesMapRef.current = new Map();
+      lastNonEmptyShapesRef.current = { key: null, shapes: null };
+      emptyStreakCountRef.current = 0;
+      prevEmptyCountRef.current = 0;
+      bump();
+      console.log('[SYNC] shapesVersion bumped after hidePaintOverlay EMPTY SYNC');
+      
+      requestAnimationFrame(() => {
+        if (paintLayerRef.current) {
+          paintLayerRef.current.destroyChildren();
+          paintLayerRef.current.clear();
+          paintLayerRef.current.draw();
+        }
+        if (transformerRef.current) {
+          transformerRef.current.nodes([]);
+          transformerRef.current.getLayer()?.clear?.();
+        }
+        stageRef.current?.batchDraw?.();
+      });
+      return;
+    }
     
     // ★ 操作中は更新を保留し、pending に保存
     if (isInteractingRef.current) {
