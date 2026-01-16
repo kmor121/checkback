@@ -191,6 +191,11 @@ function ShareViewContent() {
     composerMode === 'new' && !paintMode && !showAllPaint && isNewCommentInputActive;
 
   const enterNewTextOnlyComposer = (e) => {
+    // CONTRACT (P0): New text input must suppress comment selection.
+    // - Must run on Textarea pointer down *capture* (before CommentCard onClick)
+    // - Must stopPropagation to prevent parent re-select
+    // - Must null activeCommentId/composerTargetCommentId immediately
+    // NOTE: Do NOT replace this with <img> swap, Stage remount, rAF/batchDraw hacks.
     e?.stopPropagation?.(); // 親のcomment card clickで再選択されるのを防ぐ
 
     setComposerMode('new');
@@ -3278,6 +3283,8 @@ function ShareViewContent() {
                 hidePaintOverlay={(() => {
                   // ★★★ P0: 新規テキスト入力中かつ描画なしの時のみhide（描画ある時は表示維持）★★★
                   const hasAnyShapes = (shapesForCanvasSafe?.length || 0) > 0;
+                  // CONTRACT (P0): Only hide paint overlay when composing NEW text AND there are ZERO shapes.
+                  // If any shape exists, keep overlay visible so "draw -> type -> back" keeps drawings.
                   return composerMode === 'new' && !paintMode && !showAllPaint && isNewCommentInputActive && !hasAnyShapes;
                 })()}
                 debugInfo={{

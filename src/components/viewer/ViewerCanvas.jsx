@@ -3251,6 +3251,7 @@ const ViewerCanvas = forwardRef(({
 
       {/* ★★★ FIX-NO-BLANK: Stage全体は常に表示、shapesGroupのみopacity制御 ★★★ */}
       {/* HUNK1: Stage key削除でちらつき防止（強制再マウントは不要） */}
+      {/* CONTRACT (P0): Never remount Stage via key. Zoom/Pan must be preserved. */}
       <Stage
         ref={stageRef}
         width={containerSize.width}
@@ -3286,6 +3287,8 @@ const ViewerCanvas = forwardRef(({
         {/* 注釈Layer（contentGroup内に配置） */}
         {/* P2 FIX: 背景ロード完了まで描画レイヤーを非表示 */}
         {/* P0: paint Layerに key を付与して hidePaintOverlay 切替時に確実に再マウント（残像根絶） */}
+        {/* CONTRACT (P0): Paint layer may remount ONLY as a controlled mechanism to remove ghosting
+// when hidePaintOverlay/canvasContextKey changes. Do NOT move this remounting to Stage. */}
         {bgReady && (
           <Layer 
             key={`paint:${hidePaintOverlay ? 'hide' : 'show'}:${forceClearToken}:${canvasContextKey || 'none'}`}
