@@ -3347,32 +3347,33 @@ const ViewerCanvas = forwardRef(({
         {/* 注釈Layer（contentGroup内に配置） */}
         {/* P2 FIX: 背景ロード完了まで描画レイヤーを非表示 */}
         {/* ★★★ Hunk1: canvasContextKey + forceClearToken + shapesVersion でLayerを強制リマウント（残像根絶）★★★ */}
-        {/* ★★★ P0-FIX: hidePaintOverlay時にLayer自体を非表示（残像根絶）★★★ */}
-        <Layer 
-          ref={paintLayerRef}
-          key={`paint:${canvasContextKey || 'none'}:${forceClearToken}:${shapesVersion}`} 
-          visible={bgReady && !hidePaintOverlay}
-          listening={!hidePaintOverlay}
-        >
-          <Group
-            ref={contentGroupRef}
-            x={viewX}
-            y={viewY}
-            scaleX={contentScale}
-            scaleY={contentScale}
+        {/* ★★★ P0-FIX: hidePaintOverlay時にLayer自体をunmount（残像根絶）★★★ */}
+        {bgReady && !hidePaintOverlay && (
+          <Layer 
+            ref={paintLayerRef}
+            key={`paint:${canvasContextKey || 'none'}:${forceClearToken}:${shapesVersion}`} 
+            listening
           >
-            {/* ★★★ Hunk1: renderedShapesFinalで描画を確実に制御 ★★★ */}
-            <>
-              {/* ★★★ CRITICAL: 確定済みshapeのみ描画（currentShapeとの重複は既に除外済み）★★★ */}
-              {renderedShapesFinal.map(s => renderShape(s, true))}
+            <Group
+              ref={contentGroupRef}
+              x={viewX}
+              y={viewY}
+              scaleX={contentScale}
+              scaleY={contentScale}
+            >
+              {/* ★★★ Hunk1: renderedShapesFinalで描画を確実に制御 ★★★ */}
+              <>
+                {/* ★★★ CRITICAL: 確定済みshapeのみ描画（currentShapeとの重複は既に除外済み）★★★ */}
+                {renderedShapesFinal.map(s => renderShape(s, true))}
 
-              {/* ★★★ CRITICAL: 描画中のcurrentShapeは最後に独立して描画 ★★★ */}
-              {!hidePaintOverlay && currentShape && renderShape(currentShape, false)}
-            </>
-            
-            <Transformer ref={transformerRef} name="paintOverlay" />
-          </Group>
-        </Layer>
+                {/* ★★★ CRITICAL: 描画中のcurrentShapeは最後に独立して描画 ★★★ */}
+                {currentShape && renderShape(currentShape, false)}
+              </>
+              
+              <Transformer ref={transformerRef} name="paintOverlay" />
+            </Group>
+          </Layer>
+        )}
         
         {/* ★ DEBUGオーバーレイ Layer削除（DOM HUDに統合） */}
       </Stage>
