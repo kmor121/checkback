@@ -439,14 +439,15 @@ function ShareViewContent() {
   }, [showAllPaint, token, shareLink?.file_id, currentPage]);
 
   useEffect(() => {
-    if (!isNewTextOnlyComposer) return;
+    const isNewTextOnly = composerMode === 'new' && !paintMode && !showAllPaint && isNewCommentInputActive;
+    if (!isNewTextOnly) return;
 
     // ハイライト判定に使っているstateを全てnullへ
     if (activeCommentId) setActiveCommentId(null);
     if (composerTargetCommentId) setComposerTargetCommentId(null);
 
     console.log('[P0] cleared selection for new text-only composer');
-  }, [isNewTextOnlyComposer, activeCommentId, composerTargetCommentId]);
+  }, [composerMode, paintMode, showAllPaint, isNewCommentInputActive, activeCommentId, composerTargetCommentId]);
 
   // ★★★ 初期化時に期限切れ下書きをクリーンアップ ★★★
   useEffect(() => {
@@ -1928,8 +1929,6 @@ function ShareViewContent() {
   };
 
     const selectComment = (comment) => {
-    const isNewTextOnlyComposerActive =
-      composerMode === 'new' && !paintMode && !showAllPaint && isNewCommentInputActive;
     if (isNewTextOnlyComposerActive) {
       console.log('[P0] selection suppressed (new text-only composer active)');
       return;
@@ -3104,23 +3103,27 @@ function ShareViewContent() {
             ) : (() => {
 
 
-              const isNewTextOnlyComposer = composerMode === 'new' && !paintMode && !showAllPaint;
+              const isNewTextOnlyComposer = composerMode === 'new' && !paintMode && !showAllPaint && isNewCommentInputActive;
 
               if (isNewTextOnlyComposer) {
                 return (
-                  <div className="relative w-full h-full flex items-center justify-center overflow-hidden bg-gray-200">
-                    {file?.mime_type?.startsWith('image/') ? (
-                      <img 
-                        src={file?.file_url} 
-                        alt="Preview"
-                        className="max-w-full max-h-full object-contain"
-                        style={{ pointerEvents: 'none' }}
-                      />
-                    ) : (
-                      <div className="text-gray-500 text-sm">
-                        新規コメント入力中（ペイントをONにすると描画できます）
-                      </div>
-                    )}
+                  <div className="absolute inset-0 bg-gray-200 overflow-auto">
+                    <div className="min-w-full min-h-full flex items-center justify-center p-4">
+                      {file?.mime_type?.startsWith('image/') ? (
+                        <div style={{ zoom: zoom / 100 }}>
+                          <img
+                            src={file?.file_url}
+                            alt="Preview"
+                            className="max-w-full max-h-full object-contain"
+                            style={{ pointerEvents: 'none' }}
+                          />
+                        </div>
+                      ) : (
+                        <div className="text-gray-500 text-sm">
+                          新規コメント入力中（ペイントをONにすると描画できます）
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               }
