@@ -124,6 +124,7 @@ const ViewerCanvas = forwardRef(({
   const containerRef = useRef(null);
   const stageRef = useRef(null);
   const contentGroupRef = useRef(null);
+  const paintLayerRef = useRef(null);
   const stableFileUrlRef = useRef(fileUrl);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [bgSize, setBgSize] = useState({ width: 800, height: 600 });
@@ -384,8 +385,17 @@ const ViewerCanvas = forwardRef(({
       bump();
       console.log('[Hunk2] shapesVersion bumped after hidePaintOverlay clear');
 
-      // ★★★ Hunk2: 強制再描画（残像防止）★★★
+      // ★★★ NEW: Konva Layer canvas残像を物理的にクリア ★★★
       requestAnimationFrame(() => {
+        if (paintLayerRef.current) {
+          paintLayerRef.current.destroyChildren();
+          paintLayerRef.current.clear();
+          paintLayerRef.current.draw();
+        }
+        if (transformerRef.current) {
+          transformerRef.current.nodes([]);
+          transformerRef.current.getLayer()?.clear?.();
+        }
         stageRef.current?.batchDraw?.();
       });
     }
@@ -3291,6 +3301,7 @@ const ViewerCanvas = forwardRef(({
         {/* ★★★ Hunk1: canvasContextKey + forceClearToken + shapesVersion でLayerを強制リマウント（残像根絶）★★★ */}
         {/* ★★★ P0-FIX: hidePaintOverlay時にLayer自体を非表示（残像根絶）★★★ */}
         <Layer 
+          ref={paintLayerRef}
           key={`paint:${canvasContextKey || 'none'}:${forceClearToken}:${shapesVersion}`} 
           visible={bgReady && !hidePaintOverlay}
           listening={!hidePaintOverlay}
