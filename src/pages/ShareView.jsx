@@ -3254,7 +3254,7 @@ function ShareViewContent() {
                 draftCommentId={paintContextId}
                 renderTargetCommentId={paintContextId}
                 activeCommentId={paintContextId}
-                hidePaintOverlay={isNewCommentInputActive && !paintMode && composerMode === 'new' && !showAllPaint}
+                hidePaintOverlay={composerMode === 'new' && !paintMode && !showAllPaint}
                 debugInfo={{
                   isReady: isReady,
                   readyDetails: readyDetails,
