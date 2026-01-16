@@ -1924,6 +1924,12 @@ function ShareViewContent() {
   };
 
   const selectComment = (comment) => {
+    // ★★★ Hunk3-P0: 新規テキスト入力中は選択を無効化（入口ガード） ★★★
+    if (isNewTextOnlyComposer) {
+      console.log('[P0] selectComment suppressed (new text-only composer active)');
+      return;
+    }
+
     // ★★★ P0-FINAL: コメント選択は対応済みでも許可（閲覧は可能）★★★
     // 編集/返信は別途ブロックされる
 
