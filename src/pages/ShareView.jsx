@@ -3553,11 +3553,8 @@ function ShareViewContent() {
               ) : (
                 sortedComments.map((comment) => {
                                   const shapesCount = paintShapes.filter(s => s.comment_id === comment.id).length;
-                                  const isNewTextOnlyComposerActive =
-                                    composerMode === 'new' && !paintMode && !showAllPaint && isNewCommentInputActive;
-
-                                  const isSelected = !isNewTextOnlyComposerActive && activeCommentId === comment.id;
-                                  const isEditing  = !isNewTextOnlyComposerActive && composerMode === 'edit' && composerTargetCommentId === comment.id;
+                                  const isSelected = activeCommentId === comment.id && !isNewTextOnlyComposerActive;
+                                  const isEditing = composerMode === 'edit' && composerTargetCommentId === comment.id && !isNewTextOnlyComposerActive;
                                   const isPaintingThis = paintMode && paintSessionCommentId === comment.id;
                                   const replies = repliesByParent.get(comment.id) || [];
                                   const commentAttachments = attachmentsByComment.get(comment.id) || [];
