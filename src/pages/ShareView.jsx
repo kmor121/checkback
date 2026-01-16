@@ -200,6 +200,25 @@ function ShareViewContent() {
   const [composerParentCommentId, setComposerParentCommentId] = useState(null);
   const [pendingFiles, setPendingFiles] = useState([]);
   const [replyingThreadId, setReplyingThreadId] = useState(null);
+
+  // ★★★ Hunk1-P0: 新規テキスト入力中状態を統一 ★★★
+  const isNewTextOnlyComposer =
+    composerMode === 'new' && !paintMode && !showAllPaint;
+
+  const enterNewTextOnlyComposer = (e) => {
+    e?.stopPropagation?.();
+
+    setComposerMode('new');
+    setPaintMode(false);
+    setShowAllPaint(false);
+
+    // ★★★ 右一覧のハイライトを消す ★★★
+    if (activeCommentId) setActiveCommentId(null);
+    if (composerTargetCommentId) setComposerTargetCommentId(null);
+
+    setIsNewCommentInputActive(true);
+    setForceClearToken(prev => prev + 1);
+  };
   
   const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
