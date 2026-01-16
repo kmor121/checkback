@@ -138,6 +138,24 @@ function ShareViewContent() {
   const [isNewCommentInputActive, setIsNewCommentInputActive] = useState(false); // 新規コメント入力中フラグ
   const [isDockOpen, setIsDockOpen] = useState(false);
 
+  const isNewTextOnlyComposer =
+    composerMode === 'new' && !paintMode && !showAllPaint;
+
+  const enterNewTextOnlyComposer = (e) => {
+    e?.stopPropagation?.(); // 親のcomment card clickで再選択されるのを防ぐ
+
+    setComposerMode('new');
+    setPaintMode(false);
+    setShowAllPaint(false);
+
+    // ★★★ 右一覧のハイライトを消す ★★★
+    if (activeCommentId) setActiveCommentId(null);
+    if (composerTargetCommentId) setComposerTargetCommentId(null);
+
+    setIsNewCommentInputActive(true);
+    setForceClearToken(prev => prev + 1);
+  };
+
   // ★★★ P1 FIX: activeCommentId がある場合は showAllPaint を強制的に false にする不変条件 ★★★
   const effectiveShowAllPaint = showAllPaint && !activeCommentId;
   
@@ -415,6 +433,16 @@ function ShareViewContent() {
     const key = `showAllPaint:${token}:${shareLink.file_id}:${currentPage}`;
     localStorage.setItem(key, String(showAllPaint));
   }, [showAllPaint, token, shareLink?.file_id, currentPage]);
+
+  useEffect(() => {
+    if (!isNewTextOnlyComposer) return;
+
+    // ハイライト判定に使っているstateを全てnullへ
+    if (activeCommentId) setActiveCommentId(null);
+    if (composerTargetCommentId) setComposerTargetCommentId(null);
+
+    console.log('[P0] cleared selection for new text-only composer');
+  }, [isNewTextOnlyComposer, activeCommentId, composerTargetCommentId]);
 
   // ★★★ 初期化時に期限切れ下書きをクリーンアップ ★★★
   useEffect(() => {
@@ -3064,15 +3092,17 @@ function ShareViewContent() {
                   </div>
                   </div>
             ) : (() => {
-              const isNewTextOnlyComposer = composerMode === 'new' && !paintMode && !showAllPaint && isNewCommentInputActive;
-              
+
+
+              const isNewTextOnlyComposer = composerMode === 'new' && !paintMode && !showAllPaint;
+
               if (isNewTextOnlyComposer) {
                 return (
                   <div className="relative w-full h-full flex items-center justify-center overflow-hidden bg-gray-200">
                     {file?.mime_type?.startsWith('image/') ? (
                       <img 
                         src={file?.file_url} 
-                        alt="Preview" 
+                        alt="Preview"
                         className="max-w-full max-h-full object-contain"
                         style={{ pointerEvents: 'none' }}
                       />
@@ -3092,11 +3122,6 @@ function ShareViewContent() {
                       // ★★★ P0-FIX: existingShapes決定ロジックを統一 ★★★
                       // 原則: shapesForCanvasSafe を使用
                       // 例外: freeze中かつfreeze有効時のみfreezeを使用
-                      // ★★★ 案B: 新規コメント入力中（paintMode OFF）は空表示 ★★★
-                      if (isNewCommentInputActive && !paintMode && composerMode === 'new') {
-                        // 新規テキスト入力中は空表示（描画残りによる誤解防止）
-                        return null;
-                      }
                       let passedShapes = shapesForCanvasSafe;
 
                       // freeze は送信中のみ有効（短時間）
@@ -3276,7 +3301,7 @@ function ShareViewContent() {
                 draftCommentId={paintContextId}
                 renderTargetCommentId={paintContextId}
                 activeCommentId={paintContextId}
-                hidePaintOverlay={composerMode === 'new' && !paintMode && !showAllPaint}
+                hidePaintOverlay={isNewTextOnlyComposer}
                 debugInfo={{
                   isReady: isReady,
                   readyDetails: readyDetails,
@@ -3336,15 +3361,9 @@ function ShareViewContent() {
                         placeholder={composerMode === 'edit' ? '編集中...' : composerMode === 'reply' ? '返信を入力...' : 'コメントを入力...'}
                         value={composerText}
                         onChange={(e) => setComposerText(e.target.value)}
-                        onFocus={() => {
-                          setIsDockOpen(true);
-                          // 新規モード（paintMode OFF）で入力開始 → キャンバス空表示
-                          if (composerMode === 'new' && !paintMode) {
-                            setIsNewCommentInputActive(true);
-                            if (activeCommentId) setActiveCommentId(null);
-                            setForceClearToken(prev => prev + 1); // forceClearでMap即時クリア
-                          }
-                        }}
+                        onMouseDown={(e) => enterNewTextOnlyComposer(e)}
+                        onFocus={(e) => enterNewTextOnlyComposer(e)} // 念のためフォールバック
+                        onClick={(e) => e.stopPropagation()} // 保険
                         onBlur={() => {
                           // 入力欄を離れたら解除（ただしテキストがあれば維持）
                           if (!composerText.trim()) {
