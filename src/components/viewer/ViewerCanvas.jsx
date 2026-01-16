@@ -404,16 +404,23 @@ const ViewerCanvas = forwardRef(({
   // ★★★ P0-NUKE: hidePaintOverlay時にpaintOverlayノードを完全破棄（表示確実消去）★★★
   useEffect(() => {
     if (!hidePaintOverlay) return;
-    const stage = stageRef.current;
-    if (!stage) return;
+
+    const stage = stageRef.current?.getStage?.() || stageRef.current;
+    if (!stage?.find) return;
 
     const nodes = stage.find('.paintOverlay');
-    const count = nodes?.length || 0;
+    const list = nodes?.toArray ? nodes.toArray()
+      : Array.isArray(nodes) ? nodes
+      : nodes ? [nodes] : [];
 
+    const count = list.length;
     console.log('[P0-NUKE] hidePaintOverlay -> destroy paintOverlay nodes:', count);
 
-    nodes.each(n => n.destroy());
-    stage.batchDraw();
+    list.forEach(n => {
+      try { n?.destroy?.(); } catch (e) {}
+    });
+
+    stage.batchDraw?.();
   }, [hidePaintOverlay]);
 
   // CRITICAL: activeCommentId変化時の完全リセット
