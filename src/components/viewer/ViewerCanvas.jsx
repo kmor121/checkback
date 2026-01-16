@@ -401,6 +401,21 @@ const ViewerCanvas = forwardRef(({
     }
   }, [hidePaintOverlay, selectedId, bump]);
 
+  // ★★★ P0-NUKE: hidePaintOverlay時にpaintOverlayノードを完全破棄（表示確実消去）★★★
+  useEffect(() => {
+    if (!hidePaintOverlay) return;
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const nodes = stage.find('.paintOverlay');
+    const count = nodes?.length || 0;
+
+    console.log('[P0-NUKE] hidePaintOverlay -> destroy paintOverlay nodes:', count);
+
+    nodes.each(n => n.destroy());
+    stage.batchDraw();
+  }, [hidePaintOverlay]);
+
   // CRITICAL: activeCommentId変化時の完全リセット
   // ★★★ FIX: コメント切替時は全ての編集状態を完全クリア（前コメントの描画残り防止）★★★
   useEffect(() => {
@@ -2646,24 +2661,25 @@ const ViewerCanvas = forwardRef(({
     const isEditable = isEditableShape2(shape);
 
     const commonProps = {
-      stroke: shape.stroke,
-      strokeWidth: shape.strokeWidth,
-      // ★★★ CRITICAL: 描画中のshapeは完全非インタラクティブ ★★★
-      listening: isSelectable && !isDrawingThisShape,
-      onPointerDown: (isSelectable && !isDrawingThisShape) ? (e) => {
-        e.cancelBubble = true;
-        setSelectedId(shape.id);
-        if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
-        if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
-      } : undefined,
-      ref: (node) => { if (node) shapeRefs.current[shape.id] = node; },
-      // ★★★ CRITICAL: 描画中のshapeはドラッグ不可 ★★★
-      draggable: isEditable && !isDrawingThisShape,
-      onDragStart: (isEditable && !isDrawingThisShape) ? (e) => handleDragStart(shape, e) : undefined,
-      onDragMove: (isEditable && !isDrawingThisShape) ? (e) => handleDragMove(shape, e) : undefined,
-      onDragEnd: (isEditable && !isDrawingThisShape) ? (e) => handleDragEnd(shape, e) : undefined,
-      onTransformStart: (isEditable && canTransform && !isDrawingThisShape) ? (e) => handleTransformStart(shape, e) : undefined,
-      onTransformEnd: (isEditable && canTransform && !isDrawingThisShape) ? (e) => handleTransformEnd(shape, e) : undefined,
+    name: 'paintOverlay',
+    stroke: shape.stroke,
+    strokeWidth: shape.strokeWidth,
+    // ★★★ CRITICAL: 描画中のshapeは完全非インタラクティブ ★★★
+    listening: isSelectable && !isDrawingThisShape,
+    onPointerDown: (isSelectable && !isDrawingThisShape) ? (e) => {
+      e.cancelBubble = true;
+      setSelectedId(shape.id);
+      if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
+      if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
+    } : undefined,
+    ref: (node) => { if (node) shapeRefs.current[shape.id] = node; },
+    // ★★★ CRITICAL: 描画中のshapeはドラッグ不可 ★★★
+    draggable: isEditable && !isDrawingThisShape,
+    onDragStart: (isEditable && !isDrawingThisShape) ? (e) => handleDragStart(shape, e) : undefined,
+    onDragMove: (isEditable && !isDrawingThisShape) ? (e) => handleDragMove(shape, e) : undefined,
+    onDragEnd: (isEditable && !isDrawingThisShape) ? (e) => handleDragEnd(shape, e) : undefined,
+    onTransformStart: (isEditable && canTransform && !isDrawingThisShape) ? (e) => handleTransformStart(shape, e) : undefined,
+    onTransformEnd: (isEditable && canTransform && !isDrawingThisShape) ? (e) => handleTransformEnd(shape, e) : undefined,
     };
 
     // バウンディングボックス用の計算
@@ -2767,6 +2783,7 @@ const ViewerCanvas = forwardRef(({
       return (
         <Group
           key={shape.id}
+          name="paintOverlay"
           ref={(node) => { if (node) shapeRefs.current[shape.id] = node; }}
           x={groupX}
           y={groupY}
@@ -2920,6 +2937,7 @@ const ViewerCanvas = forwardRef(({
         return (
           <Group
             key={shape.id}
+            name="paintOverlay"
             ref={(node) => { if (node) shapeRefs.current[shape.id] = node; }}
             x={groupX}
             y={groupY}
@@ -3036,6 +3054,7 @@ const ViewerCanvas = forwardRef(({
         return (
           <Group
             key={shape.id}
+            name="paintOverlay"
             x={x}
             y={y}
             ref={(node) => { if (node) shapeRefs.current[shape.id] = node; }}
@@ -3344,7 +3363,7 @@ const ViewerCanvas = forwardRef(({
               {!hidePaintOverlay && currentShape && renderShape(currentShape, false)}
             </>
             
-            <Transformer ref={transformerRef} />
+            <Transformer ref={transformerRef} name="paintOverlay" />
           </Group>
         </Layer>
         
