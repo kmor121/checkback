@@ -8,8 +8,8 @@ import ProjectSchedule from './pages/ProjectSchedule';
 import ProjectTalk from './pages/ProjectTalk';
 import Projects from './pages/Projects';
 import QuickCheck from './pages/QuickCheck';
-import public_ from './pages/_public';
 import ShareView from './pages/ShareView';
+import public_ from './pages/_public';
 import __Layout from './Layout.jsx';
 
 
@@ -24,8 +24,8 @@ export const PAGES = {
     "ProjectTalk": ProjectTalk,
     "Projects": Projects,
     "QuickCheck": QuickCheck,
-    "_public": public_,
     "ShareView": ShareView,
+    "_public": public_,
 }
 
 export const pagesConfig = {

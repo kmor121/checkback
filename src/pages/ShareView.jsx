@@ -3100,37 +3100,8 @@ function ShareViewContent() {
                   <div className="text-lg font-medium">準備中...</div>
                   </div>
                   </div>
-            ) : (() => {
-
-
-              const isNewTextOnlyComposer = composerMode === 'new' && !paintMode && !showAllPaint && isNewCommentInputActive;
-
-              if (isNewTextOnlyComposer) {
-                return (
-                  <div className="absolute inset-0 bg-gray-200 overflow-auto">
-                    <div className="min-w-full min-h-full flex items-center justify-center p-4">
-                      {file?.mime_type?.startsWith('image/') ? (
-                        <div style={{ zoom: zoom / 100 }}>
-                          <img
-                            src={file?.file_url}
-                            alt="Preview"
-                            className="max-w-full max-h-full object-contain"
-                            style={{ pointerEvents: 'none' }}
-                          />
-                        </div>
-                      ) : (
-                        <div className="text-gray-500 text-sm">
-                          新規コメント入力中（ペイントをONにすると描画できます）
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              }
-
-              return (
+            ) : (
                   <>
-                    {/* P0-DIAG: 一時ログ（ViewerCanvasに渡す直前） */}
                     {(() => {
                       // ★★★ P0-FIX: existingShapes決定ロジックを統一 ★★★
                       // 原則: shapesForCanvasSafe を使用
@@ -3331,8 +3302,7 @@ function ShareViewContent() {
                 }}
               />
             </>
-              );
-            })()}
+              )}
             
             {/* ズーム制御 */}
             <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-2 flex items-center gap-2">

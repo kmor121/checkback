@@ -3308,9 +3308,10 @@ const ViewerCanvas = forwardRef(({
 
         {/* 注釈Layer（contentGroup内に配置） */}
         {/* P2 FIX: 背景ロード完了まで描画レイヤーを非表示 */}
-        {/* HUNK3: PaintLayerは常時マウント、hidePaintOverlay時はlistening=false */}
+        {/* P0: paint Layerに key を付与して hidePaintOverlay 切替時に確実に再マウント（残像根絶） */}
         {bgReady && (
           <Layer 
+            key={`paint:${hidePaintOverlay ? 'hide' : 'show'}:${forceClearToken}:${canvasContextKey || 'none'}`}
             ref={paintLayerRef}
             listening={!hidePaintOverlay}
           >
@@ -3321,19 +3322,20 @@ const ViewerCanvas = forwardRef(({
               scaleX={contentScale}
               scaleY={contentScale}
             >
-              {/* ★★★ Hunk1: renderedShapesFinalで描画を確実に制御 ★★★ */}
-              <>
-                {/* ★★★ CRITICAL: 確定済みshapeのみ描画（currentShapeとの重複は既に除外済み）★★★ */}
-                {renderedShapesFinal.map(s => renderShape(s, true))}
+              {!hidePaintOverlay && (
+                <>
+                  {/* ★★★ CRITICAL: 確定済みshapeのみ描画（currentShapeとの重複は既に除外済み）★★★ */}
+                  {renderedShapesFinal.map(s => renderShape(s, true))}
 
-                {/* ★★★ CRITICAL: 描画中のcurrentShapeは最後に独立して描画 ★★★ */}
-                {currentShape && renderShape(currentShape, false)}
-              </>
-              
-              <Transformer ref={transformerRef} name="paintOverlay" />
+                  {/* ★★★ CRITICAL: 描画中のcurrentShapeは最後に独立して描画 ★★★ */}
+                  {currentShape && renderShape(currentShape, false)}
+
+                  <Transformer ref={transformerRef} name="paintOverlay" />
+                </>
+              )}
             </Group>
-          </Layer>
-        )}
+            </Layer>
+            )}
         
         {/* ★ DEBUGオーバーレイ Layer削除（DOM HUDに統合） */}
       </Stage>
