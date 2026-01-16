@@ -384,7 +384,30 @@ const ViewerCanvas = forwardRef(({
       prevEmptyCountRef.current = 0;
       bump();
       console.log('[Hunk2] shapesVersion bumped after hidePaintOverlay clear');
-      // Layer自体がunmountされるため物理クリア不要
+      
+      // ★★★ HUNK3: canvas残像を物理クリア（即時実行、rAF使わない）★★★
+      transformerRef.current?.nodes?.([]);
+      const layer = paintLayerRef.current;
+      if (layer) {
+        const mainCanvas = layer.getCanvas?.();
+        const hitCanvas = layer.getHitCanvas?.();
+        if (mainCanvas?.clear) {
+          mainCanvas.clear();
+          console.log('[HIDE_CLEAR] mainCanvas cleared');
+        }
+        if (hitCanvas?.clear) {
+          hitCanvas.clear();
+        }
+        layer.clear?.();
+        layer.draw?.();
+        console.log('[HIDE_CLEAR] layerExists=true, canvasCleared=yes');
+      } else {
+        console.log('[HIDE_CLEAR] layerExists=false, canvasCleared=no');
+      }
+      const stage = stageRef.current?.getStage?.() || stageRef.current;
+      stage?.batchDraw?.();
+      transformerRef.current?.getLayer?.()?.batchDraw?.();
+      console.log('[SYNC] hidePaintOverlay physical clear complete');
     }
   }, [hidePaintOverlay, selectedId, bump]);
 
@@ -510,20 +533,6 @@ const ViewerCanvas = forwardRef(({
       prevCanvasContextKeyRef.current = canvasContextKey;
 
       console.log('[B-FIX] CTX CHANGED complete: shapesVersion bumped, Map size=0');
-
-      // ★★★ Hunk2: 強制再描画（残像防止）★★★
-      requestAnimationFrame(() => {
-        if (!stageRef.current) {
-          console.warn('[P0-GUARD] stageRef.current is null; skip batchDraw');
-          return;
-        }
-        const stage = stageRef.current.getStage?.() || stageRef.current;
-        if (!stage?.batchDraw) {
-          console.warn('[P0-GUARD] stage.batchDraw unavailable; skip batchDraw');
-          return;
-        }
-        stage.batchDraw();
-      });
     }
   }, [canvasContextKey, bump]);
 
@@ -578,20 +587,6 @@ const ViewerCanvas = forwardRef(({
     }
 
     console.log('[Hunk2] forceClearToken complete: Map size=0, lastNonEmpty cleared');
-
-    // ★★★ Hunk2: 強制再描画（残像防止）★★★
-    requestAnimationFrame(() => {
-      if (!stageRef.current) {
-        console.warn('[P0-GUARD] stageRef.current is null; skip batchDraw (forceClearToken)');
-        return;
-      }
-      const stage = stageRef.current.getStage?.() || stageRef.current;
-      if (!stage?.batchDraw) {
-        console.warn('[P0-GUARD] stage.batchDraw unavailable; skip batchDraw (forceClearToken)');
-        return;
-      }
-      stage.batchDraw();
-    });
     }, [forceClearToken]);
 
   // ★★★ FIX-PENDING: existingShapes FULL SYNC（pendingCtx対応版）★★★
@@ -662,20 +657,6 @@ const ViewerCanvas = forwardRef(({
       emptyStreakCountRef.current = 0;
       bump();
       console.log('[案B2] shapesVersion bumped after Intentional empty clear');
-
-      // ★★★ P0-FIX: 確実に画面を更新 ★★★
-      requestAnimationFrame(() => {
-        if (!stageRef.current) {
-          console.warn('[P0-GUARD] stageRef.current is null; skip batchDraw (intentional empty B2)');
-          return;
-        }
-        const stage = stageRef.current.getStage?.() || stageRef.current;
-        if (!stage?.batchDraw) {
-          console.warn('[P0-GUARD] stage.batchDraw unavailable; skip batchDraw (intentional empty B2)');
-          return;
-        }
-        stage.batchDraw();
-      });
       return;
       }
 
@@ -737,20 +718,6 @@ const ViewerCanvas = forwardRef(({
       emptyStreakCountRef.current = 0;
       bump();
       console.log('[Hunk2] shapesVersion bumped after transitioning clear (intent)');
-
-      // ★★★ P0-FIX: 確実に画面を更新 ★★★
-      requestAnimationFrame(() => {
-        if (!stageRef.current) {
-          console.warn('[P0-GUARD] stageRef.current is null; skip batchDraw (intentional empty)');
-          return;
-        }
-        const stage = stageRef.current.getStage?.() || stageRef.current;
-        if (!stage?.batchDraw) {
-          console.warn('[P0-GUARD] stage.batchDraw unavailable; skip batchDraw (intentional empty)');
-          return;
-        }
-        stage.batchDraw();
-      });
       return;
       }
 
@@ -3331,8 +3298,8 @@ const ViewerCanvas = forwardRef(({
       )}
 
       {/* ★★★ FIX-NO-BLANK: Stage全体は常に表示、shapesGroupのみopacity制御 ★★★ */}
+      {/* HUNK1: Stage key削除でちらつき防止（強制再マウントは不要） */}
       <Stage
-        key={`stage:${canvasContextKey || 'none'}:${forceClearToken}:${hidePaintOverlay ? 'hide' : 'show'}`}
         ref={stageRef}
         width={containerSize.width}
         height={containerSize.height}
@@ -3366,13 +3333,11 @@ const ViewerCanvas = forwardRef(({
 
         {/* 注釈Layer（contentGroup内に配置） */}
         {/* P2 FIX: 背景ロード完了まで描画レイヤーを非表示 */}
-        {/* ★★★ Hunk1: canvasContextKey + forceClearToken + shapesVersion でLayerを強制リマウント（残像根絶）★★★ */}
-        {/* ★★★ P0-FIX: hidePaintOverlay時にLayer自体をunmount（残像根絶）★★★ */}
-        {bgReady && !hidePaintOverlay && (
+        {/* HUNK3: PaintLayerは常時マウント、hidePaintOverlay時はlistening=false */}
+        {bgReady && (
           <Layer 
             ref={paintLayerRef}
-            key={`paint:${canvasContextKey || 'none'}:${forceClearToken}:${shapesVersion}`} 
-            listening
+            listening={!hidePaintOverlay}
           >
             <Group
               ref={contentGroupRef}
