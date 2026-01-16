@@ -3156,16 +3156,6 @@ function ShareViewContent() {
                         mimeType={file?.mime_type}
                         pageNumber={currentPage}
                         existingShapes={(() => {
-                          // ★★★ 案B2: 新規コメント（composerMode='new', paintMode=false）中はfreeze/handoffも空にする ★★★
-                          const hideNewTextOnly = composerMode === 'new' && !paintMode && !showAllPaint;
-                          if (hideNewTextOnly) {
-                            console.log('[案B2] existingShapes=[] (new text-only, no paint)');
-                            return [];
-                          }
-                          // ★★★ 案B: isNewCommentInputActive時も空表示 ★★★
-                          if (isNewCommentInputActive && !paintMode && composerMode === 'new') {
-                            return [];
-                          }
                           // ★★★ P0-FIX: existingShapes決定（上のログと同一ロジック）★★★
                           if (freezeActiveRef.current && freezeRef.current?.shapesForCanvas?.length > 0) {
                             return freezeRef.current.shapesForCanvas;
@@ -3285,7 +3275,11 @@ function ShareViewContent() {
                 draftCommentId={paintContextId}
                 renderTargetCommentId={paintContextId}
                 activeCommentId={paintContextId}
-                hidePaintOverlay={isNewTextOnlyComposer}
+                hidePaintOverlay={(() => {
+                  // ★★★ P0: 新規テキスト入力中かつ描画なしの時のみhide（描画ある時は表示維持）★★★
+                  const hasAnyShapes = (shapesForCanvasSafe?.length || 0) > 0;
+                  return composerMode === 'new' && !paintMode && !showAllPaint && isNewCommentInputActive && !hasAnyShapes;
+                })()}
                 debugInfo={{
                   isReady: isReady,
                   readyDetails: readyDetails,

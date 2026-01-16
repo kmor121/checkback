@@ -370,21 +370,13 @@ const ViewerCanvas = forwardRef(({
     }
   }, [fileUrl]);
 
-  // ★★★ 案B: hidePaintOverlay時は選択解除 + Map/lastNonEmptyクリア（確実な空表示）★★★
+  // ★★★ P0: hidePaintOverlay時は選択解除のみ（Map破壊禁止、Layer key切替で残像根絶）★★★
   useEffect(() => {
-    if (hidePaintOverlay) {
-      if (selectedId) {
-        setSelectedId(null);
-      }
-      console.log('[案B] hidePaintOverlay=true: clearing Map, lastNonEmpty, emptyStreak for guaranteed empty display');
-      shapesMapRef.current = new Map();
-      lastNonEmptyShapesRef.current = { key: null, shapes: null };
-      emptyStreakCountRef.current = 0;
-      prevEmptyCountRef.current = 0;
-      bump();
-      console.log('[Hunk2] shapesVersion bumped after hidePaintOverlay clear');
+    if (hidePaintOverlay && selectedId) {
+      setSelectedId(null);
+      console.log('[P0] hidePaintOverlay=true: selection cleared (Map preserved)');
     }
-  }, [hidePaintOverlay, selectedId, bump]);
+  }, [hidePaintOverlay, selectedId]);
 
 
 
@@ -532,26 +524,18 @@ const ViewerCanvas = forwardRef(({
     setPan(p => clampPan(p.x, p.y));
   }, [zoom]);
 
-  // ★★★ Hunk2: forceClearToken は無条件でMap clear（案Bトリガー用）★★★
+  // ★★★ P0: forceClearToken は UI状態のみリセット（Map破壊禁止、Layer key切替で対応）★★★
   const prevForceClearTokenRef = useRef(forceClearToken);
   useEffect(() => {
     if (forceClearToken === prevForceClearTokenRef.current) return;
     prevForceClearTokenRef.current = forceClearToken;
 
-    console.log('[Hunk2] forceClearToken changed, unconditionally clearing Map:', {
+    console.log('[P0] forceClearToken changed, clearing UI state only (Map preserved):', {
       forceClearToken,
       canvasContextKey: canvasContextKey?.substring(0, 20) || 'null',
     });
 
-    // ★★★ Hunk2: 無条件でMapクリア + lastNonEmptyリセット + emptyStreak ★★★
-    shapesMapRef.current = new Map();
-    pendingCtxRef.current = null;
-    lastNonEmptyShapesRef.current = { key: null, shapes: null };
-    emptyStreakCountRef.current = 0;
-    prevEmptyCountRef.current = 0;
-    bump();
-
-    // UI状態クリア
+    // ★★★ P0: UI状態のみクリア（Map/lastNonEmpty/emptyStreakは保持）★★★
     setSelectedId(null);
     setCurrentShape(null);
     setIsDrawing(false);
@@ -561,7 +545,7 @@ const ViewerCanvas = forwardRef(({
       transformerRef.current.getLayer()?.batchDraw();
     }
 
-    console.log('[Hunk2] forceClearToken complete: Map size=0, lastNonEmpty cleared');
+    console.log('[P0] forceClearToken complete: UI cleared, Map preserved');
     }, [forceClearToken]);
 
   // ★★★ FIX-PENDING: existingShapes FULL SYNC（pendingCtx対応版）★★★
@@ -575,16 +559,9 @@ const ViewerCanvas = forwardRef(({
   const allowIntentionalEmpty = isTempCtx && !paintMode && !showAllPaint;
 
   useLayoutEffect(() => {
-    // ★★★ CRITICAL: hidePaintOverlay時はEMPTY同期を強制実行（見た目を確実に空にする）★★★
+    // ★★★ P0: hidePaintOverlay時はMap破壊禁止（Layer key切替で残像根絶）★★★
     if (hidePaintOverlay) {
-      console.log('[SYNC] hidePaintOverlay=true -> forcing EMPTY FULL SYNC');
-      shapesMapRef.current = new Map();
-      lastNonEmptyShapesRef.current = { key: null, shapes: null };
-      emptyStreakCountRef.current = 0;
-      prevEmptyCountRef.current = 0;
-      bump();
-      console.log('[SYNC] shapesVersion bumped after hidePaintOverlay EMPTY SYNC');
-      // Layer自体がunmountされるため物理クリア不要
+      console.log('[P0] hidePaintOverlay=true -> SYNC SKIP (Map preserved, Layer will remount)');
       return;
     }
     
