@@ -138,24 +138,6 @@ function ShareViewContent() {
   const [isNewCommentInputActive, setIsNewCommentInputActive] = useState(false); // 新規コメント入力中フラグ
   const [isDockOpen, setIsDockOpen] = useState(false);
 
-  const isNewTextOnlyComposer =
-    composerMode === 'new' && !paintMode && !showAllPaint;
-
-  const enterNewTextOnlyComposer = (e) => {
-    e?.stopPropagation?.(); // 親のcomment card clickで再選択されるのを防ぐ
-
-    setComposerMode('new');
-    setPaintMode(false);
-    setShowAllPaint(false);
-
-    // ★★★ 右一覧のハイライトを消す ★★★
-    if (activeCommentId) setActiveCommentId(null);
-    if (composerTargetCommentId) setComposerTargetCommentId(null);
-
-    setIsNewCommentInputActive(true);
-    setForceClearToken(prev => prev + 1);
-  };
-
   // ★★★ P1 FIX: activeCommentId がある場合は showAllPaint を強制的に false にする不変条件 ★★★
   const effectiveShowAllPaint = showAllPaint && !activeCommentId;
   
