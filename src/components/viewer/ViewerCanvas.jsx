@@ -420,7 +420,11 @@ const ViewerCanvas = forwardRef(({
       try { n?.destroy?.(); } catch (e) {}
     });
 
-    stage.batchDraw?.();
+    if (stage?.batchDraw) {
+      stage.batchDraw();
+    } else {
+      console.warn('[P0-GUARD] stage missing; skip batchDraw (hidePaintOverlay)');
+    }
   }, [hidePaintOverlay]);
 
   // CRITICAL: activeCommentId変化時の完全リセット
@@ -540,7 +544,12 @@ const ViewerCanvas = forwardRef(({
 
       // ★★★ Hunk2: 強制再描画（残像防止）★★★
       requestAnimationFrame(() => {
-        stageRef.current?.batchDraw?.();
+        const stage = stageRef.current?.getStage?.() || stageRef.current;
+        if (stage?.batchDraw) {
+          stage.batchDraw();
+        } else {
+          console.warn('[P0-GUARD] stage missing; skip batchDraw');
+        }
       });
     }
   }, [canvasContextKey, bump]);
@@ -899,7 +908,12 @@ const ViewerCanvas = forwardRef(({
 
             // ★★★ P0-FIX: 確実に画面を更新 ★★★
             requestAnimationFrame(() => {
-              stageRef.current?.batchDraw?.();
+              const stage = stageRef.current?.getStage?.() || stageRef.current;
+              if (stage?.batchDraw) {
+                stage.batchDraw();
+              } else {
+                console.warn('[P0-GUARD] stage missing; skip batchDraw');
+              }
             });
             return;
           }
