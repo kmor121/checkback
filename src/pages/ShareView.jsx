@@ -33,10 +33,7 @@ import {
   Trash2,
   Check,
   Circle as CircleIcon,
-  Reply,
-  Maximize,
-  ArrowLeftRight,
-  ArrowUpDown
+  Reply
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
@@ -125,8 +122,6 @@ function ShareViewContent() {
   const [isPasswordVerified, setIsPasswordVerified] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [zoom, setZoom] = useState(100);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [fit, setFit] = useState('all'); // 'all', 'width', 'height', or null for manual
   const [commentFilter, setCommentFilter] = useState('all');
   const [commentSort, setCommentSort] = useState('page');
   const [paintMode, setPaintMode] = useState(false);
@@ -422,14 +417,6 @@ function ShareViewContent() {
     enabled: isReady && !!shareLink?.file_id,
     staleTime: 60000,
   });
-
-  const prevFileIdRef = useRef(file?.id);
-  useEffect(() => {
-    if (file?.id && file.id !== prevFileIdRef.current) {
-      prevFileIdRef.current = file.id;
-      setFit('all');
-    }
-  }, [file?.id]);
 
   // Ready状態の詳細判定（useMemoで遅延評価）
   const readyDetails = React.useMemo(() => ({
@@ -3189,10 +3176,6 @@ function ShareViewContent() {
                   if (!comment) return;
                   selectComment(comment);
                 }}
-                pan={pan}
-                setPan={setPan}
-                fit={fit}
-                setFit={setFit}
                 onShapesChange={(updated) => {
                   // ★★★ CRITICAL: ViewerCanvasからの同期コールバック ★★★
                   
@@ -3323,23 +3306,13 @@ function ShareViewContent() {
               )}
             
             {/* ズーム制御 */}
-            <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-2 flex items-center gap-1">
-              <Button variant="outline" size="icon" onClick={() => { setZoom(Math.max(25, zoom - 25)); setFit(null); }}>
+            <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-2 flex items-center gap-2">
+              <Button variant="outline" size="icon" onClick={() => setZoom(Math.max(50, zoom - 25))}>
                 <ZoomOut className="w-4 h-4" />
               </Button>
-              <span className="text-sm font-medium w-16 text-center" style={{ minWidth: '50px' }}>{Math.round(zoom)}%</span>
-              <Button variant="outline" size="icon" onClick={() => { setZoom(Math.min(400, zoom + 25)); setFit(null); }}>
+              <span className="text-sm font-medium w-16 text-center">{zoom}%</span>
+              <Button variant="outline" size="icon" onClick={() => setZoom(Math.min(200, zoom + 25))}>
                 <ZoomIn className="w-4 h-4" />
-              </Button>
-              <div className="border-l h-6 mx-2" />
-              <Button variant="outline" size="icon" onClick={() => setFit('all')} title="全体表示">
-                <Maximize className="w-4 h-4" />
-              </Button>
-              <Button variant="outline" size="icon" onClick={() => setFit('width')} title="幅に合わせる">
-                <ArrowLeftRight className="w-4 h-4" />
-              </Button>
-              <Button variant="outline" size="icon" onClick={() => setFit('height')} title="高さに合わせる">
-                <ArrowUpDown className="w-4 h-4" />
               </Button>
             </div>
           </div>

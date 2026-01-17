@@ -120,11 +120,6 @@ const ViewerCanvas = forwardRef(({
   canvasContextKey = null, // ★★★ P1: 内部リセット用キー（paintContextId含む）★★★
   isCanvasTransitioning = false, // ★★★ D: 遷移中フラグ（incoming empty時のMap保持用）★★★
   hidePaintOverlay = false, // ★★★ 案B: 新規コメント入力中は描画を非表示 ★★★
-  pan,
-  setPan,
-  setZoom,
-  fit,
-  setFit,
 }, ref) => {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
@@ -208,7 +203,7 @@ const ViewerCanvas = forwardRef(({
   }, [currentShape]);
   
   // パン状態
-
+  const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0, px: 0, py: 0 });
   
@@ -368,25 +363,6 @@ const ViewerCanvas = forwardRef(({
     return sameId(shapeCommentId(shape), effectiveActiveId);
   };
   
-  useEffect(() => {
-    if (fit && bgSize.width > 0 && containerSize.width > 0) {
-      let newZoom;
-      if (fit === 'all') {
-        newZoom = Math.min(
-          containerSize.width / bgSize.width,
-          containerSize.height / bgSize.height
-        ) * 100;
-      } else if (fit === 'width') {
-        newZoom = (containerSize.width / bgSize.width) * 100;
-      } else if (fit === 'height') {
-        newZoom = (containerSize.height / bgSize.height) * 100;
-      }
-      setZoom(newZoom);
-      setPan({ x: 0, y: 0 });
-      setFit(null);
-    }
-  }, [fit, bgSize, containerSize, setZoom, setPan, setFit]);
-
   // fileUrl安定化（最後の有効URLを保持）
   useEffect(() => {
     if (fileUrl) {
@@ -536,7 +512,7 @@ const ViewerCanvas = forwardRef(({
     setCurrentShape(null);
     setUndoStack([]);
     setRedoStack([]);
-    // Pan is now managed by ShareView
+    setPan({ x: 0, y: 0 });
     setBgReady(false); // P2 FIX: ファイル変更時に背景ロード状態をリセット
   }, [fileIdentity, pageNumber]);
 
@@ -1104,7 +1080,13 @@ const ViewerCanvas = forwardRef(({
   }, []);
   
   // スケール計算 - 画面に収めるfitScaleとユーザーズーム
-  const contentScale = zoom / 100;
+  const fitScale = Math.min(
+    containerSize.width / bgSize.width,
+    containerSize.height / bgSize.height
+  ) || 1;
+  
+  const userScale = zoom / 100;
+  const contentScale = fitScale * userScale;
   
   const scaledWidth = bgSize.width * contentScale;
   const scaledHeight = bgSize.height * contentScale;
