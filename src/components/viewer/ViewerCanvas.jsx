@@ -125,6 +125,7 @@ const ViewerCanvas = forwardRef(({
   onBgLoad = null, // ★★★ FIT: 背景ロード完了時のコールバック ★★★
   externalPan = null, // ★★★ FIT: 親からのpan制御 ★★★
   onPanChange = null, // ★★★ FIT: pan変更を親に通知 ★★★
+  onScaleInfoChange = null, // ★★★ SCALE: 実表示倍率を親に通知 ★★★
 }, ref) => {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
@@ -1193,6 +1194,16 @@ const ViewerCanvas = forwardRef(({
   
   const userScale = zoom / 100;
   const contentScale = baseFitScale * userScale;
+  
+  // ★★★ SCALE: 実表示倍率を親に通知（同値ガード付き）★★★
+  const prevEffectivePercentRef = useRef(null);
+  useEffect(() => {
+    if (!onScaleInfoChange) return;
+    const effectivePercent = Math.round(contentScale * 100);
+    if (prevEffectivePercentRef.current === effectivePercent) return;
+    prevEffectivePercentRef.current = effectivePercent;
+    onScaleInfoChange({ effectiveScale: contentScale, effectivePercent, fitScale: baseFitScale, zoom });
+  }, [contentScale, baseFitScale, zoom, onScaleInfoChange]);
   
   const scaledWidth = bgSize.width * contentScale;
   const scaledHeight = bgSize.height * contentScale;

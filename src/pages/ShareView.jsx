@@ -123,6 +123,7 @@ function ShareViewContent() {
   const [currentPage, setCurrentPage] = useState(1);
   const [zoom, setZoom] = useState(100);
   const [fitMode, setFitMode] = useState('all'); // 'all' | 'width' | 'height' (P1-FIT: ViewerCanvasのbaseFitScaleを切り替え)
+  const [displayPercent, setDisplayPercent] = useState(100); // ★★★ SCALE: 実表示倍率（UI用）★★★
   const [commentFilter, setCommentFilter] = useState('all');
   const [commentSort, setCommentSort] = useState('page');
   const [paintMode, setPaintMode] = useState(false);
@@ -1262,6 +1263,11 @@ function ShareViewContent() {
     const key = `lastActiveCommentId:${token}:${shareLink.file_id}:${currentPage}`;
     localStorage.setItem(key, activeCommentId);
   }, [activeCommentId, token, shareLink?.file_id, currentPage]);
+
+  // ★★★ SCALE: ViewerCanvasから実表示倍率を受け取る ★★★
+  const handleScaleInfoChange = React.useCallback((info) => {
+    setDisplayPercent(info.effectivePercent);
+  }, []);
 
   // ★★★ P0-FIX: onBgLoadコールバックをトップレベルで定義（hooks順序固定）★★★
   const handleBgLoadCallback = React.useCallback((bgSize, containerSize) => {
@@ -3188,6 +3194,7 @@ function ShareViewContent() {
                         externalPan={pan}
                         onPanChange={setPan}
                         onBgLoad={handleBgLoadCallback}
+                        onScaleInfoChange={handleScaleInfoChange}
                         existingShapes={(() => {
                           // ★★★ P0-FIX: existingShapes決定（上のログと同一ロジック）★★★
                           if (freezeActiveRef.current && freezeRef.current?.shapesForCanvas?.length > 0) {
@@ -3339,7 +3346,7 @@ function ShareViewContent() {
               <Button variant="outline" size="icon" onClick={() => { setZoom(Math.max(25, zoom - 25)); }}>
                 <ZoomOut className="w-4 h-4" />
               </Button>
-              <span className="text-sm font-medium w-16 text-center">{zoom}%</span>
+              <span className="text-sm font-medium w-16 text-center">{displayPercent}%</span>
               <Button variant="outline" size="icon" onClick={() => { setZoom(Math.min(400, zoom + 25)); }}>
                 <ZoomIn className="w-4 h-4" />
               </Button>
