@@ -546,7 +546,11 @@ const ViewerCanvas = forwardRef(({
   }, [fileIdentity, pageNumber, externalPan]);
 
   // zoom変更時はpanのクランプのみ（shapesは触らない）
-  // ★★★ FIT-FIX: contentScale をインライン計算（TDZ回避）★★★
+  // ★★★ FIT-FIX: pan/setPanを依存配列から除外（無限ループ防止）★★★
+  // ★★★ panの現在値はrefで参照、変化検知はzoom/containerSize/bgSizeのみ ★★★
+  const panRef = useRef(pan);
+  panRef.current = pan;
+  
   useEffect(() => {
     // contentScale をここで計算（定義前に参照できないため）
     const localFitScale = Math.min(
@@ -557,16 +561,19 @@ const ViewerCanvas = forwardRef(({
     
     const currentScaledWidth = bgSize.width * localContentScale;
     const currentScaledHeight = bgSize.height * localContentScale;
-    const clamped = clampPan(pan.x, pan.y, currentScaledWidth, currentScaledHeight);
+    
+    // ★★★ CRITICAL: panRef経由で現在値を取得（依存配列に入れない）★★★
+    const currentPan = panRef.current;
+    const clamped = clampPan(currentPan.x, currentPan.y, currentScaledWidth, currentScaledHeight);
     
     // 同値ガード（無限ループ防止）
-    if (clamped.x !== pan.x || clamped.y !== pan.y) {
-      console.log('[FIT] zoom/size changed, clamping pan:', { from: pan, to: clamped });
+    if (clamped.x !== currentPan.x || clamped.y !== currentPan.y) {
+      console.log('[FIT] zoom/size changed, clamping pan:', { from: currentPan, to: clamped });
       setPan(clamped);
     } else if (DEBUG_MODE) {
       console.log('[FIT] zoom/size changed, pan already clamped (skip setPan)');
     }
-  }, [zoom, containerSize.width, containerSize.height, bgSize.width, bgSize.height, clampPan, pan, setPan]);
+  }, [zoom, containerSize.width, containerSize.height, bgSize.width, bgSize.height, clampPan, setPan]);
 
   // ★★★ P0: forceClearToken は UI状態のみリセット（Map破壊禁止、Layer key切替で対応）★★★
   const prevForceClearTokenRef = useRef(forceClearToken);
