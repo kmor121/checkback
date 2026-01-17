@@ -25,11 +25,13 @@ export default function AdminDocuments() {
     setDownloading(prev => ({ ...prev, [doc.name]: true }));
     
     try {
-      const response = await fetch(`/${doc.path}`);
-      if (!response.ok) throw new Error('ファイルの取得に失敗しました');
+      const response = await base44.functions.invoke('downloadDocumentation', { fileName: doc.name });
       
-      const content = await response.text();
-      const blob = new Blob([content], { type: 'text/markdown' });
+      if (!response.data || !response.data.content) {
+        throw new Error('ファイルの取得に失敗しました');
+      }
+      
+      const blob = new Blob([response.data.content], { type: 'text/markdown' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
