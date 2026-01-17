@@ -3439,28 +3439,47 @@ const ViewerCanvas = forwardRef(({
               scaleY={contentScale}
             >
               {!hidePaintOverlay && (
-                <>
-                  {/* ★★★ P0-DIAG: 描画直前の詳細ログ ★★★ */}
-                  {console.log('[ViewerCanvas] RENDER:', {
-                    renderedShapesFinalCount: renderedShapesFinal.length,
-                    currentShapeExists: !!currentShape,
-                    currentShapeId: currentShape?.id?.substring(0, 8) || 'null',
-                    currentShapeTool: currentShape?.tool || 'null',
-                    currentShapePoints: currentShape?.points?.length || 0,
-                    viewX,
-                    viewY,
-                    contentScale,
-                  }) || null}
+                  <>
+                    {/* ★★★ P0-DEBUG: デバッグマーカー（localStorage.debugPaintLayer=1で表示）★★★ */}
+                    {typeof localStorage !== 'undefined' && localStorage.getItem('debugPaintLayer') === '1' && (
+                      <Rect
+                        x={40}
+                        y={40}
+                        width={120}
+                        height={120}
+                        stroke="magenta"
+                        strokeWidth={6}
+                        fill="rgba(255,0,255,0.2)"
+                        listening={false}
+                      />
+                    )}
 
-                  {/* ★★★ CRITICAL: 確定済みshapeのみ描画（currentShapeとの重複は既に除外済み）★★★ */}
-                  {renderedShapesFinal.map(s => renderShape(s, true))}
+                    {/* ★★★ P0-DIAG: 描画直前の詳細ログ ★★★ */}
+                    {console.log('[ViewerCanvas] RENDER:', {
+                      renderedShapesFinalCount: renderedShapesFinal.length,
+                      currentShapeExists: !!currentShape,
+                      currentShapeId: currentShape?.id?.substring(0, 8) || 'null',
+                      currentShapeTool: currentShape?.tool || 'null',
+                      currentShapePoints: currentShape?.points?.length || 0,
+                      currentShapeX: currentShape?.x,
+                      currentShapeY: currentShape?.y,
+                      currentShapeWidth: currentShape?.width,
+                      currentShapeHeight: currentShape?.height,
+                      currentShapeRadius: currentShape?.radius,
+                      viewX,
+                      viewY,
+                      contentScale,
+                    }) || null}
 
-                  {/* ★★★ CRITICAL: 描画中のcurrentShapeは最後に独立して描画 ★★★ */}
-                  {currentShape && renderShape(currentShape, false)}
+                    {/* ★★★ CRITICAL: 確定済みshapeのみ描画（currentShapeとの重複は既に除外済み）★★★ */}
+                    {renderedShapesFinal.map(s => renderShape(s, true))}
 
-                  <Transformer ref={transformerRef} name="paintOverlay" />
-                </>
-              )}
+                    {/* ★★★ CRITICAL: 描画中のcurrentShapeは最後に独立して描画 ★★★ */}
+                    {currentShape && renderShape(currentShape, false)}
+
+                    <Transformer ref={transformerRef} name="paintOverlay" />
+                  </>
+                )}
             </Group>
             </Layer>
             )}
