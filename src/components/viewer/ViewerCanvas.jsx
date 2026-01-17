@@ -1113,7 +1113,7 @@ const ViewerCanvas = forwardRef(({
   }, [containerSize, onBgLoad]);
   
   // CRITICAL: パンは select ツール時のみ（描画ツールとの競合回避）
-    const canPan = tool === 'select' && (scaledWidth > containerSize.width + 1 || scaledHeight > containerSize.height + 1);
+  const canPan = paintMode && tool === 'select' && zoom > 100;
   
   // パン範囲のクランプ
   const clampPan = (nx, ny) => {

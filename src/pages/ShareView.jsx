@@ -3176,12 +3176,12 @@ function ShareViewContent() {
                         mimeType={file?.mime_type}
                         pageNumber={currentPage}
                         onBgLoad={(bgSize, containerSize) => {
-                          // ★★★ FIT: 初期フィット適用 ★★★
-                          if (fitMode === 'fit') {
-                            setZoom(100);
-                            if (viewerCanvasRef.current?.resetPan) {
-                              viewerCanvasRef.current.resetPan();
-                            }
+                          // ★★★ FIT: 初期フィット適用（ファイル変更時のみ） ★★★
+                          if (fitMode === 'fit' && bgSize && containerSize && bgSize.width > 0 && bgSize.height > 0 && containerSize.width > 0 && containerSize.height > 0) {
+                            const scale = Math.min(containerSize.width / bgSize.width, containerSize.height / bgSize.height);
+                            const newZoom = Math.round(scale * 100);
+                            console.log('[FIT] Initial fit applied:', { bgSize, containerSize, scale, newZoom });
+                            setZoom(newZoom);
                           }
                         }}
                         existingShapes={(() => {
@@ -3331,28 +3331,33 @@ function ShareViewContent() {
             
             {/* ズーム制御 */}
             <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-2 flex items-center gap-2">
-              <Button variant="outline" size="icon" onClick={() => { setZoom(Math.max(10, zoom - 25)); setFitMode('manual'); }}>
+              <Button variant="outline" size="icon" onClick={() => { setZoom(Math.max(25, zoom - 25)); setFitMode('manual'); }}>
                 <ZoomOut className="w-4 h-4" />
               </Button>
-              <span className="text-sm font-medium w-16 text-center">{Math.round(zoom)}%</span>
-              <Button variant="outline" size="icon" onClick={() => { setZoom(Math.min(1600, zoom + 25)); setFitMode('manual'); }}>
+              <span className="text-sm font-medium w-16 text-center">{zoom}%</span>
+              <Button variant="outline" size="icon" onClick={() => { setZoom(Math.min(400, zoom + 25)); setFitMode('manual'); }}>
                 <ZoomIn className="w-4 h-4" />
               </Button>
               <div className="border-l pl-2 ml-1 flex gap-1">
                 <Button 
-                  variant={fitMode === 'fit' ? 'secondary' : 'outline'} 
+                  variant={fitMode === 'fit' ? 'default' : 'outline'} 
                   size="sm" 
                   className="text-xs px-2"
                   onClick={() => {
-                    setZoom(100);
+                    const canvas = viewerCanvasRef.current;
+                    if (!canvas) return;
+                    const bg = canvas.getBgSize?.();
+                    const container = canvas.getContainerSize?.();
+                    if (!bg || !container || bg.width === 0 || bg.height === 0) return;
+                    const scale = Math.min(container.width / bg.width, container.height / bg.height);
+                    setZoom(Math.round(scale * 100));
                     setFitMode('fit');
-                    viewerCanvasRef.current?.resetPan();
                   }}
                 >
                   全体
                 </Button>
                 <Button 
-                  variant={fitMode === 'width' ? 'secondary' : 'outline'} 
+                  variant={fitMode === 'width' ? 'default' : 'outline'} 
                   size="sm" 
                   className="text-xs px-2"
                   onClick={() => {
@@ -3360,20 +3365,16 @@ function ShareViewContent() {
                     if (!canvas) return;
                     const bg = canvas.getBgSize?.();
                     const container = canvas.getContainerSize?.();
-                    if (!bg || !container || !bg.width || !bg.height || container.width === 0 || bg.width === 0) return;
-                    const fitScale = Math.min(container.width / bg.width, container.height / bg.height);
-                    if (fitScale <= 0) return;
-                    const targetScale = container.width / bg.width;
-                    const newZoom = (targetScale / fitScale) * 100;
-                    setZoom(newZoom);
+                    if (!bg || !container || bg.width === 0) return;
+                    const scale = container.width / bg.width;
+                    setZoom(Math.round(scale * 100));
                     setFitMode('width');
-                    canvas.resetPan();
                   }}
                 >
                   横幅
                 </Button>
                 <Button 
-                  variant={fitMode === 'height' ? 'secondary' : 'outline'} 
+                  variant={fitMode === 'height' ? 'default' : 'outline'} 
                   size="sm" 
                   className="text-xs px-2"
                   onClick={() => {
@@ -3381,14 +3382,10 @@ function ShareViewContent() {
                     if (!canvas) return;
                     const bg = canvas.getBgSize?.();
                     const container = canvas.getContainerSize?.();
-                    if (!bg || !container || !bg.width || !bg.height || container.height === 0 || bg.height === 0) return;
-                    const fitScale = Math.min(container.width / bg.width, container.height / bg.height);
-                    if (fitScale <= 0) return;
-                    const targetScale = container.height / bg.height;
-                    const newZoom = (targetScale / fitScale) * 100;
-                    setZoom(newZoom);
+                    if (!bg || !container || bg.height === 0) return;
+                    const scale = container.height / bg.height;
+                    setZoom(Math.round(scale * 100));
                     setFitMode('height');
-                    canvas.resetPan();
                   }}
                 >
                   縦幅
