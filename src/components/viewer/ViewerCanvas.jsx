@@ -551,6 +551,10 @@ const ViewerCanvas = forwardRef(({
   const panRef = useRef(pan);
   panRef.current = pan;
   
+  // ★★★ CRITICAL: setPan も ref 経由で参照（依存配列に入れると再生成で無限ループ）★★★
+  const setPanRef = useRef(setPan);
+  setPanRef.current = setPan;
+  
   useEffect(() => {
     // contentScale をここで計算（定義前に参照できないため）
     const localFitScale = Math.min(
@@ -569,11 +573,11 @@ const ViewerCanvas = forwardRef(({
     // 同値ガード（無限ループ防止）
     if (clamped.x !== currentPan.x || clamped.y !== currentPan.y) {
       console.log('[FIT] zoom/size changed, clamping pan:', { from: currentPan, to: clamped });
-      setPan(clamped);
+      setPanRef.current(clamped);
     } else if (DEBUG_MODE) {
       console.log('[FIT] zoom/size changed, pan already clamped (skip setPan)');
     }
-  }, [zoom, containerSize.width, containerSize.height, bgSize.width, bgSize.height, clampPan, setPan]);
+  }, [zoom, containerSize.width, containerSize.height, bgSize.width, bgSize.height, clampPan]);
 
   // ★★★ P0: forceClearToken は UI状態のみリセット（Map破壊禁止、Layer key切替で対応）★★★
   const prevForceClearTokenRef = useRef(forceClearToken);
