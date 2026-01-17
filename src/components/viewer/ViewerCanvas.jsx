@@ -574,8 +574,26 @@ const ViewerCanvas = forwardRef(({
   }, [canvasContextKey, bump]);
 
   // CRITICAL: fileIdentity/pageNumber変更時のみリセット（Mapをクリア）
+  // ★★★ P0-FIT: fileIdentity が空の瞬間は無視（初期化中の誤reset防止）★★★
+  const prevFileIdentityRef = useRef(fileIdentity);
   useEffect(() => {
-    console.log('[ViewerCanvas] fileIdentity/pageNumber changed, resetting state (INTENDED)', { fileIdentity, pageNumber, mapSizeBefore: shapesMapRef.current.size });
+    const prev = prevFileIdentityRef.current;
+    const next = fileIdentity;
+    
+    // ★★★ P0-FIT: 空→空 または 空→実値 の初回確定では reset しない ★★★
+    if (!prev && !next) return;
+    if (!prev && next) {
+      prevFileIdentityRef.current = next;
+      return;
+    }
+    
+    // ★★★ P0-FIT: 同値なら何もしない ★★★
+    if (prev === next && pageNumber === prevFileIdentityRef.pageNumber) return;
+    
+    prevFileIdentityRef.current = next;
+    prevFileIdentityRef.pageNumber = pageNumber;
+    
+    console.log('[ViewerCanvas] fileIdentity/pageNumber changed, resetting state (INTENDED)', { prev, next, pageNumber, mapSizeBefore: shapesMapRef.current.size });
     shapesMapRef.current = new Map(); // ★ Mapをクリア（ファイル/ページ変更時のみ）
     bump();
     setSelectedId(null);
@@ -1518,6 +1536,19 @@ const ViewerCanvas = forwardRef(({
     }
     handlePointerUp(e);
   };
+  
+  // ★★★ P0-FIT: window pointerup で描画取りこぼし防止（Stage外で離した場合）★★★
+  useEffect(() => {
+    const handleWindowPointerUp = (e) => {
+      // 描画中のみ監視（無関係イベント除外）
+      if (!isDrawingRef2.current) return;
+      console.log('[P0-FIT] window pointerUp detected during drawing, committing shape');
+      handlePointerUp(e);
+    };
+    
+    window.addEventListener('pointerup', handleWindowPointerUp);
+    return () => window.removeEventListener('pointerup', handleWindowPointerUp);
+  }, []); // 空依存で常時監視、isDrawingRef2.current で実行時判定
 
   // PointerDown: 描画開始（描画モード時のみ）
   const handlePointerDown = (e) => {
@@ -1970,26 +2001,32 @@ const ViewerCanvas = forwardRef(({
 
   // PointerUp: 描画終了（CRITICAL: refベースで判定、propsに依存しない）
   const handlePointerUp = async () => {
-    // ★★★ P0-DIAG: pointerUp開始時の状態を必ず出力 ★★★
-    console.log('[🎨 DRAW_DIAG] pointerUp ENTRY:', {
-      isDrawing: isDrawingRef2.current,
-      tool,
-      canDrawNew,
-      canCommitNew,
-      paintMode,
-      draftReady,
-      renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
-      draftCommentId: draftCommentId?.substring(0, 12) || 'null',
-      currentShapeExists: !!currentShapeRef2.current,
-      currentShapeCommentId: currentShapeRef2.current?.comment_id?.substring(0, 12) || 'null',
-      mapSize: shapesMapRef.current.size,
-    });
+    if (DEBUG_MODE) {
+      console.log('[🎨 DRAW_DIAG] pointerUp ENTRY:', {
+        isDrawing: isDrawingRef2.current,
+        tool,
+        canDrawNew,
+        canCommitNew,
+        paintMode,
+        draftReady,
+        renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
+        draftCommentId: draftCommentId?.substring(0, 12) || 'null',
+        currentShapeExists: !!currentShapeRef2.current,
+        currentShapeCommentId: currentShapeRef2.current?.comment_id?.substring(0, 12) || 'null',
+        mapSize: shapesMapRef.current.size,
+      });
+    }
 
-    // CRITICAL: refベースで判定（親stateが揺れても描画完了）
+    // ★★★ P0-FIT: currentShape がある場合は isDrawing が false でも commit を試みる（取りこぼし防止）★★★
     const shape = currentShapeRef2.current;
-    if (!isDrawingRef2.current || !shape) {
-      console.log('[DRAW_DEBUG] pointerUp aborted: isDrawing=false or no currentShape');
+    if (!shape) {
+      if (DEBUG_MODE) console.log('[DRAW_DEBUG] pointerUp aborted: no currentShape');
       return;
+    }
+    
+    // ★★★ P0-FIT: isDrawing=false でも shape があれば commit 続行（Stage外pointerUp対策）★★★
+    if (!isDrawingRef2.current) {
+      console.log('[P0-FIT] pointerUp: isDrawing=false but currentShape exists, proceeding with commit');
     }
     
     try {
@@ -3536,14 +3573,14 @@ const ViewerCanvas = forwardRef(({
         </Layer>
 
         {/* 注釈Layer（contentGroup内に配置） */}
-        {/* P0-FIX: bgReady条件を削除（背景と同時にレンダー、描画可視復旧）*/}
-        {/* P0: paint Layerに key を付与して hidePaintOverlay 切替時に確実に再マウント（残像根絶） */}
+        {/* P0-FIT: bgReady まで opacity=0 で非表示（remount禁止、フラッシュ防止） */}
         {/* CONTRACT (P0): Paint layer may remount ONLY as a controlled mechanism to remove ghosting
 // when hidePaintOverlay/canvasContextKey changes. Do NOT move this remounting to Stage. */}
         <Layer 
           key={`paint:${hidePaintOverlay ? 'hide' : 'show'}:${forceClearToken}:${canvasContextKey || 'none'}`}
           ref={paintLayerRef}
-          listening={!hidePaintOverlay}
+          listening={!hidePaintOverlay && bgReady}
+          opacity={bgReady ? 1 : 0}
         >
             <Group
               ref={contentGroupRef}
