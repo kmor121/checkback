@@ -1478,24 +1478,39 @@ const ViewerCanvas = forwardRef(({
 
   // PointerDown: 描画開始（描画モード時のみ）
   const handlePointerDown = (e) => {
-    // ★★★ DEBUG: 描画開始直前の状態を詳細ログ（差分検出用）★★★
+    // ★★★ P0-DIAG: 描画開始直前の全状態を出力（描画失敗の根本原因特定用）★★★
     const beforeIds = renderedShapes.map(s => s.id);
     const uniqueCidsInRendered = [...new Set(renderedShapes.map(s => shapeCommentId(s)))].slice(0, 10);
     const targetId = effectiveActiveId != null ? String(effectiveActiveId) : '';
     
-    console.log('[DRAW_DEBUG] handlePointerDown BEFORE:', {
+    console.log('[🎨 DRAW_DIAG] handlePointerDown ENTRY:', {
+      // 描画許可判定
+      paintMode,
+      tool,
+      isSelectTool,
+      canDrawNew,
+      canCommitNew,
+      draftReady,
+      isDrawMode,
+      textEditorVisible: textEditor.visible,
+      // 対象ID
       targetId,
-      effectiveActiveId,
-      activeCommentId,
-      draftCommentId: draftCommentIdRef.current,
+      effectiveActiveId: effectiveActiveId?.substring(0, 12) || 'null',
+      activeCommentId: activeCommentId?.substring(0, 12) || 'null',
+      draftCommentId: draftCommentId?.substring(0, 12) || 'null',
+      draftCommentIdRef: draftCommentIdRef.current?.substring(0, 12) || 'null',
+      renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
+      // 表示状態
       showAllPaint,
       hidePaintUntilSelect,
+      hidePaintOverlay,
       renderedShapesLength: renderedShapes.length,
-      uniqueCommentIdsInRendered: uniqueCidsInRendered,
+      uniqueCommentIdsInRendered: uniqueCidsInRendered.map(id => String(id).substring(0, 12)),
       beforeIds: beforeIds.slice(0, 5).map(id => id?.substring?.(0, 8)),
-      tool,
-      paintMode,
-      isDrawMode,
+      // その他
+      isDrawing,
+      currentShapeExists: !!currentShape,
+      mapSize: shapesMapRef.current.size,
     });
 
     if (DEBUG_MODE) {
@@ -1515,18 +1530,19 @@ const ViewerCanvas = forwardRef(({
 
     // ★★★ FIX-1: selectツール時は描画開始しない（選択は別処理）★★★
     if (isSelectTool) {
+      console.log('[🎨 DRAW_DIAG] PointerDown BLOCKED: isSelectTool=true');
       return;
     }
     
     // ★★★ FIX-1: 新規描画はpaintModeだけでOK（T1/T2即描画）★★★
     if (!paintMode && tool !== 'text') {
-      console.warn('[ViewerCanvas] PointerDown blocked: paintMode=false', { paintMode, tool });
+      console.warn('[🎨 DRAW_DIAG] PointerDown BLOCKED: paintMode=false', { paintMode, tool });
       return;
     }
 
     // ★★★ Hunk Q (P0): draft準備中は描画開始をブロック ★★★
     if (paintMode && !draftReady && tool !== 'text') {
-      console.log('[Hunk Q] PointerDown blocked: draftReady=false (waiting for draft hydration)', { 
+      console.log('[🎨 DRAW_DIAG] PointerDown BLOCKED: draftReady=false (waiting for draft hydration)', { 
         paintMode, 
         draftReady, 
         tool 
@@ -1555,7 +1571,7 @@ const ViewerCanvas = forwardRef(({
 
     // ★ CRITICAL: activeCommentIdがnullでもonBeginPaintがあれば描画を許可
     if (activeCommentId == null && tool !== 'select' && !onBeginPaint) {
-      console.warn('[ViewerCanvas] Drawing blocked: activeCommentId is null and onBeginPaint is missing');
+      console.warn('[🎨 DRAW_DIAG] PointerDown BLOCKED: activeCommentId is null and onBeginPaint is missing');
       return;
     }
 
@@ -1626,16 +1642,21 @@ const ViewerCanvas = forwardRef(({
       // ★★★ CRITICAL: comment_idを取得（draftCommentId優先、fallback禁止）★★★
       const commentId = getCommentIdForDrawing();
       if (!commentId) {
-        console.error('[ViewerCanvas] Cannot start drawing: no commentId available');
+        console.error('[🎨 DRAW_DIAG] PointerDown BLOCKED: no commentId available', {
+          draftCommentId: draftCommentId?.substring(0, 12) || 'null',
+          renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
+          activeCommentId: activeCommentId?.substring(0, 12) || 'null',
+        });
         setIsDrawing(false);
         return;
       }
 
       // ★★★ DEBUG: 描画開始時のcomment_id確認 ★★★
-      console.log('[ViewerCanvas] Drawing with commentId:', {
+      console.log('[🎨 DRAW_DIAG] Drawing START with commentId:', {
         commentId: commentId?.substring(0, 12),
         draftCommentId: draftCommentId?.substring(0, 12) || 'null',
         effectiveActiveId: effectiveActiveId?.substring(0, 12) || 'null',
+        tool,
       });
 
       // ★★★ DEBUG HUD: 描画開始ログを追加 ★★★
@@ -1675,22 +1696,12 @@ const ViewerCanvas = forwardRef(({
         });
       }
 
-      // ★★★ DEBUG: 描画開始直後の状態を詳細ログ（差分検出用）★★★
-      // NOTE: renderedShapesはuseMemoなので、同一レンダリング内では変化しない
-      // 実際の変化は次のレンダリングで発生する
-      const afterIds = renderedShapes.map(s => s.id);
-      const uniqueCidsAfter = [...new Set(renderedShapes.map(s => shapeCommentId(s)))].slice(0, 10);
-      console.log('[DRAW_DEBUG] handlePointerDown AFTER (same render):', {
-        targetId: effectiveActiveId != null ? String(effectiveActiveId) : '',
-        effectiveActiveId,
-        activeCommentId,
-        draftCommentId: draftCommentIdRef.current,
-        showAllPaint,
-        hidePaintUntilSelect,
-        renderedShapesLength: renderedShapes.length,
-        uniqueCommentIdsInRendered: uniqueCidsAfter,
-        afterIds: afterIds.slice(0, 5).map(id => id?.substring?.(0, 8)),
-        newShapeCommentId: commentId,
+      // ★★★ P0-DIAG: 描画開始直後の currentShape 確認 ★★★
+      console.log('[🎨 DRAW_DIAG] currentShape created:', {
+        shapeId: newShape.id?.substring(0, 8),
+        comment_id: newShape.comment_id?.substring(0, 12),
+        tool: newShape.tool,
+        isDrawing: true,
       });
       } catch (err) {
       console.error('PointerDown Error:', err);
@@ -1916,8 +1927,8 @@ const ViewerCanvas = forwardRef(({
 
   // PointerUp: 描画終了（CRITICAL: refベースで判定、propsに依存しない）
   const handlePointerUp = async () => {
-    // ★★★ DEBUG: pointerUp開始時の状態を必ず出力 ★★★
-    console.log('[DRAW_DEBUG] pointerUp start:', {
+    // ★★★ P0-DIAG: pointerUp開始時の状態を必ず出力 ★★★
+    console.log('[🎨 DRAW_DIAG] pointerUp ENTRY:', {
       isDrawing: isDrawingRef2.current,
       tool,
       canDrawNew,
@@ -1927,6 +1938,7 @@ const ViewerCanvas = forwardRef(({
       renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
       draftCommentId: draftCommentId?.substring(0, 12) || 'null',
       currentShapeExists: !!currentShapeRef2.current,
+      currentShapeCommentId: currentShapeRef2.current?.comment_id?.substring(0, 12) || 'null',
       mapSize: shapesMapRef.current.size,
     });
 
@@ -2045,18 +2057,20 @@ const ViewerCanvas = forwardRef(({
       delete normalizedShape.radius;
 
       // ★★★ Hunk Q (P0): 新規shape確定は canCommitNew && draftReady で判定 ★★★
-      console.log('[DRAW_DEBUG] commit check:', {
+      console.log('[🎨 DRAW_DIAG] commit check:', {
         canCommitNew,
         paintMode,
         draftReady,
         normalizedShapeCommentId: normalizedShape.comment_id?.substring(0, 12) || 'null',
+        shapeTool,
       });
 
       if (!canCommitNew || !draftReady) {
-        console.warn('[Hunk Q] COMMIT blocked: canCommitNew=false or draftReady=false', { 
+        console.warn('[🎨 DRAW_DIAG] COMMIT BLOCKED: canCommitNew=false or draftReady=false', { 
           paintMode, 
           draftReady, 
-          canCommitNew 
+          canCommitNew,
+          tool: shapeTool,
         });
         setCurrentShape(null);
         setIsDrawing(false);
@@ -2064,8 +2078,10 @@ const ViewerCanvas = forwardRef(({
         return;
       }
 
-      console.log('[DRAW_DEBUG] COMMIT new shape -> addToMap + onSaveShape:', {
+      console.log('[🎨 DRAW_DIAG] COMMIT new shape -> addToMap + onSaveShape:', {
         shapeId: normalizedShape.id.substring(0, 8),
+        comment_id: normalizedShape.comment_id?.substring(0, 12),
+        tool: shapeTool,
         canCommitNew,
         draftReady,
         mapSizeBefore: shapesMapRef.current.size,
@@ -2080,13 +2096,17 @@ const ViewerCanvas = forwardRef(({
       newMap.set(shapeWithDirty.id, shapeWithDirty);
       shapesMapRef.current = newMap;
       bump();
-      console.log('[DRAW_DEBUG] Map updated after commit:', {
+      console.log('[🎨 DRAW_DIAG] Map updated after commit:', {
         shapeId: shapeWithDirty.id.substring(0, 8),
+        comment_id: shapeWithDirty.comment_id?.substring(0, 12),
+        tool: shapeWithDirty.tool,
         mapSizeAfter: shapesMapRef.current.size,
         allShapesCount: getAllShapes().length,
       });
 
       onShapesChange?.(getAllShapes()); // ★ 常に全量を渡す
+      console.log('[🎨 DRAW_DIAG] onShapesChange called with count:', getAllShapes().length);
+      
       setCurrentShape(null);
 
       // ★★★ C: 描画確定直後に新規作成したshapeを自動選択（ハンドル/枠が出る）★★★
@@ -2113,14 +2133,16 @@ const ViewerCanvas = forwardRef(({
         setLastMutation('create');
         setLastPayload(JSON.stringify(normalizedShape));
 
-        console.log('[DRAW_DEBUG] calling onSaveShape:', {
+        console.log('[🎨 DRAW_DIAG] calling onSaveShape:', {
           shapeId: normalizedShape.id.substring(0, 8),
+          comment_id: normalizedShape.comment_id?.substring(0, 12),
           mode: 'create',
+          tool: normalizedShape.tool,
         });
 
         try {
           const result = await onSaveShape(normalizedShape, 'create');
-          console.log('[DRAW_DEBUG] onSaveShape success:', {
+          console.log('[🎨 DRAW_DIAG] onSaveShape SUCCESS:', {
             shapeId: normalizedShape.id.substring(0, 8),
             result,
           });
