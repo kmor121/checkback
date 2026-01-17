@@ -525,16 +525,39 @@ const ViewerCanvas = forwardRef(({
   }, [fileIdentity, pageNumber, externalPan]);
 
   // zoom変更時はpanのクランプのみ（shapesは触らない）
-  // ★★★ FIT-FIX: clampPan結果が同値ならsetPanしない（無限ループ防止）★★★
+  // ★★★ FIT-FIX: clampPan をインライン計算（scaledWidth/Height の循環参照回避）★★★
   useEffect(() => {
-    const clamped = clampPan(pan.x, pan.y);
-    if (clamped.x !== pan.x || clamped.y !== pan.y) {
-      console.log('[FIT] zoom changed, clamping pan:', { from: pan, to: clamped });
-      setPan(clamped);
-    } else if (DEBUG_MODE) {
-      console.log('[FIT] zoom changed, pan already clamped (skip setPan)');
+    // ★ clampPan をインライン展開（関数呼び出しせず、直接計算）
+    const currentScaledWidth = bgSize.width * contentScale;
+    const currentScaledHeight = bgSize.height * contentScale;
+    
+    let clampedX = pan.x;
+    let clampedY = pan.y;
+    
+    if (currentScaledWidth <= containerSize.width) {
+      clampedX = 0;
+    } else {
+      const minX = containerSize.width - currentScaledWidth;
+      const maxX = 0;
+      clampedX = Math.min(maxX, Math.max(minX, pan.x));
     }
-  }, [zoom, containerSize.width, containerSize.height, scaledWidth, scaledHeight]);
+    
+    if (currentScaledHeight <= containerSize.height) {
+      clampedY = 0;
+    } else {
+      const minY = containerSize.height - currentScaledHeight;
+      const maxY = 0;
+      clampedY = Math.min(maxY, Math.max(minY, pan.y));
+    }
+    
+    // 同値ガード（無限ループ防止）
+    if (clampedX !== pan.x || clampedY !== pan.y) {
+      console.log('[FIT] zoom/size changed, clamping pan:', { from: pan, to: { x: clampedX, y: clampedY } });
+      setPan({ x: clampedX, y: clampedY });
+    } else if (DEBUG_MODE) {
+      console.log('[FIT] zoom/size changed, pan already clamped (skip setPan)');
+    }
+  }, [zoom, containerSize.width, containerSize.height, bgSize.width, bgSize.height]);
 
   // ★★★ P0: forceClearToken は UI状態のみリセット（Map破壊禁止、Layer key切替で対応）★★★
   const prevForceClearTokenRef = useRef(forceClearToken);
