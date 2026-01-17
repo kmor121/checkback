@@ -3514,16 +3514,15 @@ const ViewerCanvas = forwardRef(({
         </Layer>
 
         {/* 注釈Layer（contentGroup内に配置） */}
-        {/* P2 FIX: 背景ロード完了まで描画レイヤーを非表示 */}
+        {/* P0-FIX: bgReady条件を削除（背景と同時にレンダー、描画可視復旧）*/}
         {/* P0: paint Layerに key を付与して hidePaintOverlay 切替時に確実に再マウント（残像根絶） */}
         {/* CONTRACT (P0): Paint layer may remount ONLY as a controlled mechanism to remove ghosting
 // when hidePaintOverlay/canvasContextKey changes. Do NOT move this remounting to Stage. */}
-        {bgReady && (
-          <Layer 
-            key={`paint:${hidePaintOverlay ? 'hide' : 'show'}:${forceClearToken}:${canvasContextKey || 'none'}`}
-            ref={paintLayerRef}
-            listening={!hidePaintOverlay}
-          >
+        <Layer 
+          key={`paint:${hidePaintOverlay ? 'hide' : 'show'}:${forceClearToken}:${canvasContextKey || 'none'}`}
+          ref={paintLayerRef}
+          listening={!hidePaintOverlay}
+        >
             <Group
               ref={contentGroupRef}
               x={viewX}
@@ -3602,8 +3601,7 @@ const ViewerCanvas = forwardRef(({
                   </>
                 )}
             </Group>
-            </Layer>
-            )}
+        </Layer>
         
         {/* ★★★ P0-DEBUG: Stage直下のデバッグLayer（clipの影響を受けない）★★★ */}
         {typeof window !== 'undefined' && window.localStorage?.getItem('debugPaintLayer') === '1' && (
