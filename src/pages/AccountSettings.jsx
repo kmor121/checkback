@@ -133,9 +133,9 @@ export default function AccountSettings() {
           <CardContent className="space-y-4">
             <div>
               <Label>言語を選択</Label>
-              <Select value={language} onValueChange={setLanguage}>
+              <Select value={language || 'ja'} onValueChange={setLanguage}>
                 <SelectTrigger className="mt-1">
-                  <SelectValue />
+                  <SelectValue placeholder="言語を選択" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ja">日本語</SelectItem>
