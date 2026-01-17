@@ -2530,10 +2530,47 @@ const ViewerCanvas = forwardRef(({
     };
   }, [activeCommentId, effectiveActiveId, renderedShapes]);
 
+  // ★★★ フィット計算関数 ★★★
+  const calculateZoomForFit = React.useCallback((fitType = 'all') => {
+    if (!bgSize.width || !bgSize.height || !containerSize.width || !containerSize.height) {
+      return 100;
+    }
+    
+    let fitScaleValue;
+    if (fitType === 'all') {
+      // 全体フィット: 最小値を採用
+      fitScaleValue = Math.min(
+        containerSize.width / bgSize.width,
+        containerSize.height / bgSize.height
+      );
+    } else if (fitType === 'width') {
+      // 横幅フィット
+      fitScaleValue = containerSize.width / bgSize.width;
+    } else if (fitType === 'height') {
+      // 縦幅フィット
+      fitScaleValue = containerSize.height / bgSize.height;
+    } else {
+      fitScaleValue = Math.min(
+        containerSize.width / bgSize.width,
+        containerSize.height / bgSize.height
+      );
+    }
+    
+    // フィット倍率を%に変換
+    return Math.round(Math.max(10, Math.min(fitScaleValue * 100, 400)));
+  }, [bgSize, containerSize]);
+
   // Undo/Redo
   useImperativeHandle(ref, () => ({
     undo: performUndo,
     redo: performRedo,
+    fitToView: (fitType = 'all') => {
+      const newZoom = calculateZoomForFit(fitType);
+      onZoomChange?.(newZoom);
+      if (DEBUG_MODE) {
+        console.log('[ViewerCanvas] fitToView applied:', { fitType, newZoom, bgSize, containerSize });
+      }
+    },
     clear: () => {
       // ★ CRITICAL: Mapはクリアしない（existingShapesは保持）
       // draftShapesのみクリア（comment_idがdraftCommentIdRefのもの）（★★★ 不変更新 ★★★）
