@@ -3484,8 +3484,18 @@ const ViewerCanvas = forwardRef(({
             </Layer>
             )}
         
-        {/* ★ DEBUGオーバーレイ Layer削除（DOM HUDに統合） */}
-      </Stage>
+        {/* ★★★ P0-DEBUG: Stage直下のデバッグLayer（clipの影響を受けない）★★★ */}
+        {typeof window !== 'undefined' && window.localStorage?.getItem('debugPaintLayer') === '1' && (
+          <Layer listening={false}>
+            <Rect x={40} y={40} width={180} height={120} stroke="magenta" strokeWidth={8} fill="rgba(255,0,255,0.3)" />
+            <Text x={50} y={55} text="DEBUG LAYER" fontSize={18} fill="magenta" fontStyle="bold" />
+            <Text x={50} y={80} text={`stage: ${containerSize.width}x${containerSize.height}`} fontSize={12} fill="magenta" />
+            <Text x={50} y={100} text={`bg: ${bgSize.width}x${bgSize.height}`} fontSize={12} fill="magenta" />
+            <Text x={50} y={120} text={`scale: ${contentScale.toFixed(2)}`} fontSize={12} fill="magenta" />
+            <Text x={50} y={140} text={`bgReady: ${bgReady}`} fontSize={12} fill="magenta" />
+          </Layer>
+        )}
+        </Stage>
       
       {/* デバッグオーバーレイ（拡張版） */}
       {DEBUG_MODE && (
