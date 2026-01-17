@@ -3344,7 +3344,23 @@ function ShareViewContent() {
                   title="横幅に合わせる"
                   onClick={() => {
                     const fitZoom = viewerCanvasRef.current?.getFitZoom('width');
-                    if (
+                    if (fitZoom) setZoom(fitZoom);
+                  }}
+                >
+                  横
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs"
+                  title="縦幅に合わせる"
+                  onClick={() => {
+                    const fitZoom = viewerCanvasRef.current?.getFitZoom('height');
+                    if (fitZoom) setZoom(fitZoom);
+                  }}
+                >
+                  縦
+                </Button>
           </div>
 
           {/* 下段：コメント入力（composer） */}
