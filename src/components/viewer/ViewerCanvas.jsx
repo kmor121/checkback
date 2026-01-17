@@ -3196,6 +3196,9 @@ const ViewerCanvas = forwardRef(({
 
   // ★★★ FIX-3: pending中判定（ctx切替でMap空にしない間）★★★
   const isPending = !!pendingCtxRef.current;
+  
+  // ★★★ P0-DIAG: Portal HUD用変数（hooksではないので早期returnに影響しない）★★★
+  const debugPaintLayerEnabled = typeof window !== 'undefined' && window.localStorage?.getItem('debugPaintLayer') === '1';
 
   if (DEBUG_MODE) {
     console.log('[ViewerCanvas] Render:', {
@@ -3208,64 +3211,48 @@ const ViewerCanvas = forwardRef(({
     });
   }
 
-  // ★★★ P0-DIAG: Portal HUD用state（hooks順序を保つため早期returnより前に宣言）★★★
-  const [portalHudData, setPortalHudData] = useState(null);
-
-  // ★★★ P0-DIAG: Portal HUD（debugPaintLayer=1のときのみ）★★★
-  const debugPaintLayerEnabled = typeof window !== 'undefined' && window.localStorage?.getItem('debugPaintLayer') === '1';
+  // Portal HUD（document.bodyに直接描画、z-index最大）- useRefで診断情報を保持（hooksではない）
+  const portalHudDataRef = useRef(null);
   
-  // Portal HUD用の診断情報を収集（useEffectはhooks順序の最後に配置）
-  useEffect(() => {
-    if (!debugPaintLayerEnabled) return;
+  // 診断情報収集（レンダリング時に同期実行、コストが低いので毎回OK）
+  if (debugPaintLayerEnabled && containerRef.current) {
+    const parent = containerRef.current;
+    const stageContainer = stageRef.current?.container?.();
     
-    const collectDiagnostics = () => {
-      const parent = containerRef.current;
-      const stageContainer = stageRef.current?.container?.();
-      
-      const parentRect = parent?.getBoundingClientRect() || { width: 0, height: 0, left: 0, top: 0 };
-      const stageRect = stageContainer?.getBoundingClientRect() || { width: 0, height: 0, left: 0, top: 0 };
-      
-      const parentStyle = parent ? window.getComputedStyle(parent) : null;
-      const stageStyle = stageContainer ? window.getComputedStyle(stageContainer) : null;
-      
-      // Stage中央でelementFromPointを実行
-      const centerX = stageRect.left + stageRect.width / 2;
-      const centerY = stageRect.top + stageRect.height / 2;
-      const topEl = (centerX > 0 && centerY > 0) ? document.elementFromPoint(centerX, centerY) : null;
-      
-      const isStageOnTop = topEl && stageContainer && (topEl === stageContainer || stageContainer.contains(topEl));
-      
-      // 親のtransform（2階層分）
-      const wrapperTransform1 = parent?.parentElement ? window.getComputedStyle(parent.parentElement).transform : 'none';
-      const wrapperTransform2 = parent?.parentElement?.parentElement ? window.getComputedStyle(parent.parentElement.parentElement).transform : 'none';
-      
-      const data = {
-        buildStamp: 'VC_BUILD_2025-01-17b',
-        parentRect: `${Math.round(parentRect.width)}x${Math.round(parentRect.height)}`,
-        stageRect: `${Math.round(stageRect.width)}x${Math.round(stageRect.height)}`,
-        containerSize: `${containerSize.width}x${containerSize.height}`,
-        bgReady: String(bgReady),
-        bgSize: `${bgSize.width}x${bgSize.height}`,
-        parentStyle: `disp:${parentStyle?.display || '?'} vis:${parentStyle?.visibility || '?'} op:${parentStyle?.opacity || '?'}`,
-        stageStyle: `disp:${stageStyle?.display || '?'} vis:${stageStyle?.visibility || '?'} op:${stageStyle?.opacity || '?'}`,
-        topElAtCenter: topEl ? `${topEl.tagName}.${topEl.className?.split?.(' ')?.[0] || ''}#${topEl.id || ''}` : 'null',
-        isStageOnTop: String(!!isStageOnTop),
-        wrapperTransform: `L1:${wrapperTransform1} L2:${wrapperTransform2}`,
-        centerPoint: `${Math.round(centerX)},${Math.round(centerY)}`,
-      };
-      
-      setPortalHudData(data);
-      
-      // コンソールにも1回出力
-      console.log('[VC_DEBUG] Portal HUD Data:', data);
+    const parentRect = parent?.getBoundingClientRect() || { width: 0, height: 0, left: 0, top: 0 };
+    const stageRect = stageContainer?.getBoundingClientRect() || { width: 0, height: 0, left: 0, top: 0 };
+    
+    const parentStyle = parent ? window.getComputedStyle(parent) : null;
+    const stageStyle = stageContainer ? window.getComputedStyle(stageContainer) : null;
+    
+    // Stage中央でelementFromPointを実行
+    const centerX = stageRect.left + stageRect.width / 2;
+    const centerY = stageRect.top + stageRect.height / 2;
+    const topEl = (centerX > 0 && centerY > 0) ? document.elementFromPoint(centerX, centerY) : null;
+    
+    const isStageOnTop = topEl && stageContainer && (topEl === stageContainer || stageContainer.contains(topEl));
+    
+    // 親のtransform（2階層分）
+    const wrapperTransform1 = parent?.parentElement ? window.getComputedStyle(parent.parentElement).transform : 'none';
+    const wrapperTransform2 = parent?.parentElement?.parentElement ? window.getComputedStyle(parent.parentElement.parentElement).transform : 'none';
+    
+    portalHudDataRef.current = {
+      buildStamp: 'VC_BUILD_2025-01-17c',
+      parentRect: `${Math.round(parentRect.width)}x${Math.round(parentRect.height)}`,
+      stageRect: `${Math.round(stageRect.width)}x${Math.round(stageRect.height)}`,
+      containerSize: `${containerSize.width}x${containerSize.height}`,
+      bgReady: String(bgReady),
+      bgSize: `${bgSize.width}x${bgSize.height}`,
+      parentStyle: `disp:${parentStyle?.display || '?'} vis:${parentStyle?.visibility || '?'} op:${parentStyle?.opacity || '?'}`,
+      stageStyle: `disp:${stageStyle?.display || '?'} vis:${stageStyle?.visibility || '?'} op:${stageStyle?.opacity || '?'}`,
+      topElAtCenter: topEl ? `${topEl.tagName}.${topEl.className?.split?.(' ')?.[0] || ''}#${topEl.id || ''}` : 'null',
+      isStageOnTop: String(!!isStageOnTop),
+      wrapperTransform: `L1:${wrapperTransform1} L2:${wrapperTransform2}`,
+      centerPoint: `${Math.round(centerX)},${Math.round(centerY)}`,
     };
-    
-    // 初回 + 500ms後に再収集
-    collectDiagnostics();
-    const timer = setTimeout(collectDiagnostics, 500);
-    
-    return () => clearTimeout(timer);
-  }, [debugPaintLayerEnabled, containerSize.width, containerSize.height, bgReady, bgSize.width, bgSize.height]);
+  }
+  
+  const portalHudData = portalHudDataRef.current;
 
   // Portal HUD（document.bodyに直接描画、z-index最大）
   const portalHud = debugPaintLayerEnabled && typeof document !== 'undefined' && portalHudData ? createPortal(
