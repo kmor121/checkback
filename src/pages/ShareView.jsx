@@ -1211,6 +1211,23 @@ function ShareViewContent() {
     }
   };
 
+  // 初回ロード時にズームを全体フィット
+  const didInitZoomRef = useRef(false);
+  useEffect(() => {
+    if (!token || !shareLink?.file_id) return;
+    if (didInitZoomRef.current) return;
+    
+    // 背景ロード完了を待つ
+    if (!bgReady) return;
+    
+    didInitZoomRef.current = true;
+    
+    // 少し遅延させてフィット適用（レイアウト完了を待つ）
+    setTimeout(() => {
+      viewerCanvasRef.current?.fitToView('all');
+    }, 50);
+  }, [token, shareLink?.file_id, bgReady]);
+
   // 初回ロード時のみ activeCommentId を初期化（URLにcomment指定がある場合のみ選択）
   useEffect(() => {
     if (!token || !shareLink?.file_id) return;
