@@ -22,8 +22,16 @@ export default function AccountSettings() {
     base44.auth.me().then(u => {
       setUser(u);
       setDisplayName(u.full_name || '');
+      // languageは後でprofileから設定するので、ここでは初期値を設定しない
     }).catch(() => {});
   }, []);
+  
+  // profileが読み込まれたらlanguageを設定
+  useEffect(() => {
+    if (profile?.language) {
+      setLanguage(profile.language);
+    }
+  }, [profile]);
 
   const { data: profile } = useQuery({
     queryKey: ['userProfile', user?.id],
