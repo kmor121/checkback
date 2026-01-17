@@ -3208,36 +3208,109 @@ const ViewerCanvas = forwardRef(({
     });
   }
 
-  // ★★★ P0-DIAG: HTML HUD（debugPaintLayer=1のときのみ）★★★
+  // ★★★ P0-DIAG: Portal HUD（debugPaintLayer=1のときのみ、document.bodyへ直接描画）★★★
   const debugPaintLayerEnabled = typeof window !== 'undefined' && window.localStorage?.getItem('debugPaintLayer') === '1';
-  const parentRect = containerRef.current?.getBoundingClientRect?.() || { width: 0, height: 0 };
-  const parentStyle = containerRef.current ? window.getComputedStyle(containerRef.current) : null;
+  
+  // Portal HUD用の診断情報を収集
+  const [portalHudData, setPortalHudData] = useState(null);
+  
+  useEffect(() => {
+    if (!debugPaintLayerEnabled) return;
+    
+    const collectDiagnostics = () => {
+      const parent = containerRef.current;
+      const stageContainer = stageRef.current?.container?.();
+      
+      const parentRect = parent?.getBoundingClientRect() || { width: 0, height: 0, left: 0, top: 0 };
+      const stageRect = stageContainer?.getBoundingClientRect() || { width: 0, height: 0, left: 0, top: 0 };
+      
+      const parentStyle = parent ? window.getComputedStyle(parent) : null;
+      const stageStyle = stageContainer ? window.getComputedStyle(stageContainer) : null;
+      
+      // Stage中央でelementFromPointを実行
+      const centerX = stageRect.left + stageRect.width / 2;
+      const centerY = stageRect.top + stageRect.height / 2;
+      const topEl = (centerX > 0 && centerY > 0) ? document.elementFromPoint(centerX, centerY) : null;
+      
+      const isStageOnTop = topEl && stageContainer && (topEl === stageContainer || stageContainer.contains(topEl));
+      
+      // 親のtransform（2階層分）
+      const wrapperTransform1 = parent?.parentElement ? window.getComputedStyle(parent.parentElement).transform : 'none';
+      const wrapperTransform2 = parent?.parentElement?.parentElement ? window.getComputedStyle(parent.parentElement.parentElement).transform : 'none';
+      
+      const data = {
+        buildStamp: 'VC_BUILD_2025-01-17a',
+        parentRect: `${Math.round(parentRect.width)}x${Math.round(parentRect.height)}`,
+        stageRect: `${Math.round(stageRect.width)}x${Math.round(stageRect.height)}`,
+        containerSize: `${containerSize.width}x${containerSize.height}`,
+        bgReady: String(bgReady),
+        bgSize: `${bgSize.width}x${bgSize.height}`,
+        parentStyle: `disp:${parentStyle?.display || '?'} vis:${parentStyle?.visibility || '?'} op:${parentStyle?.opacity || '?'}`,
+        stageStyle: `disp:${stageStyle?.display || '?'} vis:${stageStyle?.visibility || '?'} op:${stageStyle?.opacity || '?'}`,
+        topElAtCenter: topEl ? `${topEl.tagName}.${topEl.className?.split?.(' ')?.[0] || ''}#${topEl.id || ''}` : 'null',
+        isStageOnTop: String(!!isStageOnTop),
+        wrapperTransform: `L1:${wrapperTransform1} L2:${wrapperTransform2}`,
+        centerPoint: `${Math.round(centerX)},${Math.round(centerY)}`,
+      };
+      
+      setPortalHudData(data);
+      
+      // コンソールにも1回出力（ユーザーが貼れるように）
+      console.log('[VC_DEBUG] Portal HUD Data:', data);
+    };
+    
+    // 初回 + 500ms後に再収集（レイアウト安定後）
+    collectDiagnostics();
+    const timer = setTimeout(collectDiagnostics, 500);
+    
+    return () => clearTimeout(timer);
+  }, [debugPaintLayerEnabled, containerSize.width, containerSize.height, bgReady, bgSize.width, bgSize.height]);
+
+  // Portal HUD（document.bodyに直接描画、z-index最大）
+  const portalHud = debugPaintLayerEnabled && typeof document !== 'undefined' && portalHudData ? createPortal(
+    <div style={{
+      position: 'fixed',
+      top: 8,
+      left: 8,
+      zIndex: 2147483647,
+      background: 'magenta',
+      color: 'white',
+      padding: '10px 14px',
+      fontSize: '11px',
+      fontFamily: 'monospace',
+      fontWeight: 'bold',
+      borderRadius: '6px',
+      maxWidth: '450px',
+      whiteSpace: 'pre-wrap',
+      lineHeight: '1.5',
+      boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+      pointerEvents: 'none',
+    }}>
+      <div style={{ marginBottom: '4px', fontSize: '13px', borderBottom: '1px solid white', paddingBottom: '4px' }}>
+        🔍 VC Portal HUD ({portalHudData.buildStamp})
+      </div>
+      <div>parentRect: {portalHudData.parentRect}</div>
+      <div>stageRect: {portalHudData.stageRect}</div>
+      <div>containerSize: {portalHudData.containerSize}</div>
+      <div>bgReady: {portalHudData.bgReady} | bgSize: {portalHudData.bgSize}</div>
+      <div>parentStyle: {portalHudData.parentStyle}</div>
+      <div>stageStyle: {portalHudData.stageStyle}</div>
+      <div>centerPoint: {portalHudData.centerPoint}</div>
+      <div>topElAtCenter: {portalHudData.topElAtCenter}</div>
+      <div style={{ color: portalHudData.isStageOnTop === 'true' ? '#0f0' : '#f00' }}>
+        isStageOnTop: {portalHudData.isStageOnTop}
+      </div>
+      <div style={{ fontSize: '9px', marginTop: '4px', opacity: 0.8 }}>
+        wrapperTransform: {portalHudData.wrapperTransform}
+      </div>
+    </div>,
+    document.body
+  ) : null;
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative', overflow: 'auto', background: '#e0e0e0' }}>
-      {/* ★★★ P0-DIAG: HTML HUD（Konvaより上、必ず見える）★★★ */}
-      {debugPaintLayerEnabled && (
-        <div style={{
-          position: 'absolute',
-          top: 8,
-          left: 8,
-          zIndex: 999999,
-          background: 'magenta',
-          color: 'white',
-          padding: '8px 12px',
-          fontSize: '12px',
-          fontFamily: 'monospace',
-          fontWeight: 'bold',
-          borderRadius: '4px',
-          pointerEvents: 'none',
-        }}>
-          <div>containerSize: {containerSize.width}x{containerSize.height}</div>
-          <div>parentRect: {Math.round(parentRect.width)}x{Math.round(parentRect.height)}</div>
-          <div>stageProp: {containerSize.width}x{containerSize.height}</div>
-          <div>bgReady: {String(bgReady)} | bgSize: {bgSize.width}x{bgSize.height}</div>
-          <div>opacity: {parentStyle?.opacity || '?'} | visibility: {parentStyle?.visibility || '?'} | display: {parentStyle?.display || '?'}</div>
-        </div>
-      )}
+      {/* ★★★ P0-DIAG: Portal HUDはdocument.bodyに描画済み ★★★ */}
+      {portalHud}
 
       {/* ★★★ FIX-NO-BLANK: pending中は半透明オーバーレイ（背景は透けて見える）★★★ */}
       {isPending && (
