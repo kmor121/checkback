@@ -3533,6 +3533,19 @@ const ViewerCanvas = forwardRef(({
             >
               {!hidePaintOverlay && (
                   <>
+                    {/* ★★★ P0-DIAG: paintLayer内テストRect（常時表示、条件なし）★★★ */}
+                    {/* これが見えない＝paintLayer/Group自体に問題あり（clip/opacity/z順/transform） */}
+                    <Rect
+                      x={20}
+                      y={20}
+                      width={160}
+                      height={100}
+                      stroke="cyan"
+                      strokeWidth={6}
+                      fill="rgba(0,255,255,0.3)"
+                      listening={false}
+                    />
+
                     {/* ★★★ P0-DEBUG: デバッグマーカー（localStorage.debugPaintLayer=1で表示）★★★ */}
                     {typeof localStorage !== 'undefined' && localStorage.getItem('debugPaintLayer') === '1' && (
                       <Rect
