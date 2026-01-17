@@ -546,10 +546,17 @@ const ViewerCanvas = forwardRef(({
   }, [fileIdentity, pageNumber, externalPan]);
 
   // zoom変更時はpanのクランプのみ（shapesは触らない）
-  // ★★★ FIT-FIX: useCallbackで安定化したclampPanを使用 ★★★
+  // ★★★ FIT-FIX: contentScale をインライン計算（TDZ回避）★★★
   useEffect(() => {
-    const currentScaledWidth = bgSize.width * contentScale;
-    const currentScaledHeight = bgSize.height * contentScale;
+    // contentScale をここで計算（定義前に参照できないため）
+    const localFitScale = Math.min(
+      containerSize.width / bgSize.width,
+      containerSize.height / bgSize.height
+    ) || 1;
+    const localContentScale = localFitScale * (zoom / 100);
+    
+    const currentScaledWidth = bgSize.width * localContentScale;
+    const currentScaledHeight = bgSize.height * localContentScale;
     const clamped = clampPan(pan.x, pan.y, currentScaledWidth, currentScaledHeight);
     
     // 同値ガード（無限ループ防止）
@@ -559,7 +566,7 @@ const ViewerCanvas = forwardRef(({
     } else if (DEBUG_MODE) {
       console.log('[FIT] zoom/size changed, pan already clamped (skip setPan)');
     }
-  }, [zoom, containerSize.width, containerSize.height, bgSize.width, bgSize.height, clampPan, contentScale, pan]);
+  }, [zoom, containerSize.width, containerSize.height, bgSize.width, bgSize.height, clampPan, pan, setPan]);
 
   // ★★★ P0: forceClearToken は UI状態のみリセット（Map破壊禁止、Layer key切替で対応）★★★
   const prevForceClearTokenRef = useRef(forceClearToken);
