@@ -39,6 +39,8 @@
 
 | 日付       | 要点                                   | 影響範囲                    | Verify要約                   |
 | :--------- | :------------------------------------- | :-------------------------- | :--------------------------- |
+| 2026-01-17 | ドキュメント本文をDL本文と同期（SPEC/BUGS/VERIFY/STATE） | functions/documentation/*.md | 次: V-01〜V-05 実行 |
+| 2026-01-17 | AdminDocuments ダウンロード機能修正（backend functionに内容埋込） | functions/downloadDocumentation.js | admin権限チェック付き |
 | 2026-01-17 | 4ドキュメント新規作成（Reading成功）    | documentation               | 次: V-01〜V-05 実行          |
 | 2026-01-17 | admin専用ドキュメントダウンロードページ | pages/AdminDocuments.jsx    | -（ドキュメント）            |
 
