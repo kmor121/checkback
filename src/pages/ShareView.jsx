@@ -122,7 +122,7 @@ function ShareViewContent() {
   const [isPasswordVerified, setIsPasswordVerified] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [zoom, setZoom] = useState(100);
-  const [fitMode, setFitMode] = useState('fit'); // 'fit' | 'width' | 'height' | 'manual'
+  const [fitMode, setFitMode] = useState('all'); // 'all' | 'width' | 'height' (P1-FIT: ViewerCanvasのbaseFitScaleを切り替え)
   const [commentFilter, setCommentFilter] = useState('all');
   const [commentSort, setCommentSort] = useState('page');
   const [paintMode, setPaintMode] = useState(false);
@@ -1265,7 +1265,8 @@ function ShareViewContent() {
 
   // ★★★ P0-FIX: onBgLoadコールバックをトップレベルで定義（hooks順序固定）★★★
   const handleBgLoadCallback = React.useCallback((bgSize, containerSize) => {
-    if (fitMode === 'fit' && bgSize && containerSize && bgSize.width > 0 && bgSize.height > 0 && containerSize.width > 0 && containerSize.height > 0) {
+    // ★★★ P1-FIT: 初回ロード時のみ初期化（fitMode='all'のとき）★★★
+    if (fitMode === 'all' && bgSize && containerSize && bgSize.width > 0 && bgSize.height > 0 && containerSize.width > 0 && containerSize.height > 0) {
       console.log('[FIT] Initial fit applied (zoom=100, pan=0):', { bgSize, containerSize });
       setZoom(100);
       setPan({ x: 0, y: 0 });
@@ -1278,12 +1279,11 @@ function ShareViewContent() {
     if (!shareLink?.file_id) return;
     if (prevFileIdForFitRef.current === shareLink.file_id) return;
     prevFileIdForFitRef.current = shareLink.file_id;
-    // ファイル変更時は初期フィット（全体）に戻す
-    setFitMode('fit');
-    // zoom はキャンバスサイズ確定後に計算されるので、ここでは100%にリセット
-    // 実際のフィット適用は ViewerCanvas の bgReady 後に行う
+    // ★★★ P1-FIT: ファイル変更時は全体フィットに戻す ★★★
+    setFitMode('all');
     setZoom(100);
-    console.log('[FIT] File changed, reset to fit mode');
+    setPan({ x: 0, y: 0 });
+    console.log('[FIT] File changed, reset to all mode');
   }, [shareLink?.file_id]);
 
   // CRITICAL: comment_idで絞らず、全shapesをフェッチ（表示フィルタはクライアント側）
@@ -3195,6 +3195,7 @@ function ShareViewContent() {
                           }
                           return shapesForCanvasSafe;
                         })()}
+                fitMode={fitMode}
                 comments={comments.filter(c => c.page_no === currentPage)}
                 activeCommentId={activeCommentId}
                 canvasContextKey={canvasInternalResetKey}
@@ -3335,23 +3336,23 @@ function ShareViewContent() {
             
             {/* ズーム制御 */}
             <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-2 flex items-center gap-2">
-              <Button variant="outline" size="icon" onClick={() => { setZoom(Math.max(25, zoom - 25)); setFitMode('manual'); }}>
+              <Button variant="outline" size="icon" onClick={() => { setZoom(Math.max(25, zoom - 25)); }}>
                 <ZoomOut className="w-4 h-4" />
               </Button>
               <span className="text-sm font-medium w-16 text-center">{zoom}%</span>
-              <Button variant="outline" size="icon" onClick={() => { setZoom(Math.min(400, zoom + 25)); setFitMode('manual'); }}>
+              <Button variant="outline" size="icon" onClick={() => { setZoom(Math.min(400, zoom + 25)); }}>
                 <ZoomIn className="w-4 h-4" />
               </Button>
               <div className="border-l pl-2 ml-1 flex gap-1">
                 <Button 
-                  variant={fitMode === 'fit' ? 'default' : 'outline'} 
+                  variant={fitMode === 'all' ? 'default' : 'outline'} 
                   size="sm" 
                   className="text-xs px-2"
                   onClick={() => {
                     console.log('[FIT] 全体 clicked');
+                    setFitMode('all');
                     setZoom(100);
                     setPan({ x: 0, y: 0 });
-                    setFitMode('fit');
                   }}
                 >
                   全体
@@ -3361,18 +3362,10 @@ function ShareViewContent() {
                   size="sm" 
                   className="text-xs px-2"
                   onClick={() => {
-                    const canvas = viewerCanvasRef.current;
-                    if (!canvas) return;
-                    const bg = canvas.getBgSize?.();
-                    const container = canvas.getContainerSize?.();
-                    if (!bg || !container || bg.width === 0 || bg.height === 0 || container.width === 0) return;
-                    const fitScale = Math.min(container.width / bg.width, container.height / bg.height);
-                    const scaleW = container.width / bg.width;
-                    const newZoom = Math.round((scaleW / fitScale) * 100);
-                    console.log('[FIT] 横幅 clicked:', { containerW: container.width, bgW: bg.width, fitScale: fitScale.toFixed(3), scaleW: scaleW.toFixed(3), newZoom });
-                    setZoom(newZoom);
-                    setPan({ x: 0, y: 0 });
+                    console.log('[FIT] 横幅 clicked');
                     setFitMode('width');
+                    setZoom(100);
+                    setPan({ x: 0, y: 0 });
                   }}
                 >
                   横幅
@@ -3382,18 +3375,10 @@ function ShareViewContent() {
                   size="sm" 
                   className="text-xs px-2"
                   onClick={() => {
-                    const canvas = viewerCanvasRef.current;
-                    if (!canvas) return;
-                    const bg = canvas.getBgSize?.();
-                    const container = canvas.getContainerSize?.();
-                    if (!bg || !container || bg.height === 0 || bg.width === 0 || container.height === 0) return;
-                    const fitScale = Math.min(container.width / bg.width, container.height / bg.height);
-                    const scaleH = container.height / bg.height;
-                    const newZoom = Math.round((scaleH / fitScale) * 100);
-                    console.log('[FIT] 縦幅 clicked:', { containerH: container.height, bgH: bg.height, fitScale: fitScale.toFixed(3), scaleH: scaleH.toFixed(3), newZoom });
-                    setZoom(newZoom);
-                    setPan({ x: 0, y: 0 });
+                    console.log('[FIT] 縦幅 clicked');
                     setFitMode('height');
+                    setZoom(100);
+                    setPan({ x: 0, y: 0 });
                   }}
                 >
                   縦幅

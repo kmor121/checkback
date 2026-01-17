@@ -107,6 +107,7 @@ const ViewerCanvas = forwardRef(({
   strokeColor = '#ff0000',
   strokeWidth = 2,
   zoom = 100,
+  fitMode = 'all', // ★★★ P1-FIT: 'all' | 'width' | 'height' ★★★
   onToolChange,
   onStrokeColorChange,
   onStrokeWidthChange,
@@ -1144,14 +1145,31 @@ const ViewerCanvas = forwardRef(({
     }
   }, []);
   
-  // スケール計算 - 画面に収めるfitScaleとユーザーズーム
-  const fitScale = Math.min(
-    containerSize.width / bgSize.width,
-    containerSize.height / bgSize.height
-  ) || 1;
+  // ★★★ P1-FIT: スケール計算 - fitModeに応じたbaseFitScaleとユーザーズーム ★★★
+  const baseFitScale = useMemo(() => {
+    if (!containerSize.width || !containerSize.height || !bgSize.width || !bgSize.height) {
+      return 1;
+    }
+    if (fitMode === 'width') {
+      // 横幅フィット: 左右ぴったり（余白があっても拡大）
+      return containerSize.width / bgSize.width;
+    }
+    if (fitMode === 'height') {
+      // 縦幅フィット: 上下ぴったり（余白があっても拡大）
+      return containerSize.height / bgSize.height;
+    }
+    // 全体フィット: 全体が収まる（デフォルト）
+    return Math.min(
+      containerSize.width / bgSize.width,
+      containerSize.height / bgSize.height
+    );
+  }, [fitMode, containerSize.width, containerSize.height, bgSize.width, bgSize.height]);
+  
+  // 後方互換用（既存コードで fitScale を参照している箇所用）
+  const fitScale = baseFitScale;
   
   const userScale = zoom / 100;
-  const contentScale = fitScale * userScale;
+  const contentScale = baseFitScale * userScale;
   
   const scaledWidth = bgSize.width * contentScale;
   const scaledHeight = bgSize.height * contentScale;
