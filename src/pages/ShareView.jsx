@@ -122,6 +122,7 @@ function ShareViewContent() {
   const [isPasswordVerified, setIsPasswordVerified] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [zoom, setZoom] = useState(100);
+  const [fitMode, setFitMode] = useState('fit'); // 'fit' | 'width' | 'height' | 'manual'
   const [commentFilter, setCommentFilter] = useState('all');
   const [commentSort, setCommentSort] = useState('page');
   const [paintMode, setPaintMode] = useState(false);
@@ -3307,13 +3308,66 @@ function ShareViewContent() {
             
             {/* ズーム制御 */}
             <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-2 flex items-center gap-2">
-              <Button variant="outline" size="icon" onClick={() => setZoom(Math.max(50, zoom - 25))}>
+              <Button variant="outline" size="icon" onClick={() => { setZoom(Math.max(25, zoom - 25)); setFitMode('manual'); }}>
                 <ZoomOut className="w-4 h-4" />
               </Button>
               <span className="text-sm font-medium w-16 text-center">{zoom}%</span>
-              <Button variant="outline" size="icon" onClick={() => setZoom(Math.min(200, zoom + 25))}>
+              <Button variant="outline" size="icon" onClick={() => { setZoom(Math.min(400, zoom + 25)); setFitMode('manual'); }}>
                 <ZoomIn className="w-4 h-4" />
               </Button>
+              <div className="border-l pl-2 ml-1 flex gap-1">
+                <Button 
+                  variant={fitMode === 'fit' ? 'default' : 'outline'} 
+                  size="sm" 
+                  className="text-xs px-2"
+                  onClick={() => {
+                    const canvas = viewerCanvasRef.current;
+                    if (!canvas) return;
+                    const bg = canvas.getBgSize?.();
+                    const container = canvas.getContainerSize?.();
+                    if (!bg || !container || bg.width === 0 || bg.height === 0) return;
+                    const scale = Math.min(container.width / bg.width, container.height / bg.height);
+                    setZoom(Math.round(scale * 100));
+                    setFitMode('fit');
+                  }}
+                >
+                  全体
+                </Button>
+                <Button 
+                  variant={fitMode === 'width' ? 'default' : 'outline'} 
+                  size="sm" 
+                  className="text-xs px-2"
+                  onClick={() => {
+                    const canvas = viewerCanvasRef.current;
+                    if (!canvas) return;
+                    const bg = canvas.getBgSize?.();
+                    const container = canvas.getContainerSize?.();
+                    if (!bg || !container || bg.width === 0) return;
+                    const scale = container.width / bg.width;
+                    setZoom(Math.round(scale * 100));
+                    setFitMode('width');
+                  }}
+                >
+                  横幅
+                </Button>
+                <Button 
+                  variant={fitMode === 'height' ? 'default' : 'outline'} 
+                  size="sm" 
+                  className="text-xs px-2"
+                  onClick={() => {
+                    const canvas = viewerCanvasRef.current;
+                    if (!canvas) return;
+                    const bg = canvas.getBgSize?.();
+                    const container = canvas.getContainerSize?.();
+                    if (!bg || !container || bg.height === 0) return;
+                    const scale = container.height / bg.height;
+                    setZoom(Math.round(scale * 100));
+                    setFitMode('height');
+                  }}
+                >
+                  縦幅
+                </Button>
+              </div>
             </div>
           </div>
 

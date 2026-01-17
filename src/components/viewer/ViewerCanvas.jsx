@@ -2532,6 +2532,9 @@ const ViewerCanvas = forwardRef(({
 
   // Undo/Redo
   useImperativeHandle(ref, () => ({
+    // ★★★ FIT: 外部からサイズ情報を取得可能にする ★★★
+    getBgSize: () => bgSize,
+    getContainerSize: () => containerSize,
     undo: performUndo,
     redo: performRedo,
     clear: () => {
