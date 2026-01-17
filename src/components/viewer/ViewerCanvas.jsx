@@ -3207,8 +3207,37 @@ const ViewerCanvas = forwardRef(({
     });
   }
 
+  // ★★★ P0-DIAG: HTML HUD（debugPaintLayer=1のときのみ）★★★
+  const debugPaintLayerEnabled = typeof window !== 'undefined' && window.localStorage?.getItem('debugPaintLayer') === '1';
+  const parentRect = containerRef.current?.getBoundingClientRect?.() || { width: 0, height: 0 };
+  const parentStyle = containerRef.current ? window.getComputedStyle(containerRef.current) : null;
+
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative', overflow: 'auto', background: '#e0e0e0' }}>
+      {/* ★★★ P0-DIAG: HTML HUD（Konvaより上、必ず見える）★★★ */}
+      {debugPaintLayerEnabled && (
+        <div style={{
+          position: 'absolute',
+          top: 8,
+          left: 8,
+          zIndex: 999999,
+          background: 'magenta',
+          color: 'white',
+          padding: '8px 12px',
+          fontSize: '12px',
+          fontFamily: 'monospace',
+          fontWeight: 'bold',
+          borderRadius: '4px',
+          pointerEvents: 'none',
+        }}>
+          <div>containerSize: {containerSize.width}x{containerSize.height}</div>
+          <div>parentRect: {Math.round(parentRect.width)}x{Math.round(parentRect.height)}</div>
+          <div>stageProp: {containerSize.width}x{containerSize.height}</div>
+          <div>bgReady: {String(bgReady)} | bgSize: {bgSize.width}x{bgSize.height}</div>
+          <div>opacity: {parentStyle?.opacity || '?'} | visibility: {parentStyle?.visibility || '?'} | display: {parentStyle?.display || '?'}</div>
+        </div>
+      )}
+
       {/* ★★★ FIX-NO-BLANK: pending中は半透明オーバーレイ（背景は透けて見える）★★★ */}
       {isPending && (
         <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.7)', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
