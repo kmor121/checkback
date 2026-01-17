@@ -517,17 +517,24 @@ const ViewerCanvas = forwardRef(({
     setCurrentShape(null);
     setUndoStack([]);
     setRedoStack([]);
-    setPan({ x: 0, y: 0 });
+    // ★★★ FIT-FIX: pan リセットは親制御時のみローカルに適用（外部制御なら親が責任を持つ）★★★
+    if (!externalPan) {
+      setLocalPan({ x: 0, y: 0 });
+    }
     setBgReady(false); // P2 FIX: ファイル変更時に背景ロード状態をリセット
-  }, [fileIdentity, pageNumber]);
+  }, [fileIdentity, pageNumber, externalPan]);
 
   // zoom変更時はpanのクランプのみ（shapesは触らない）
+  // ★★★ FIT-FIX: clampPan結果が同値ならsetPanしない（無限ループ防止）★★★
   useEffect(() => {
-    if (DEBUG_MODE) {
-      console.log('[ViewerCanvas] zoom changed:', zoom);
+    const clamped = clampPan(pan.x, pan.y);
+    if (clamped.x !== pan.x || clamped.y !== pan.y) {
+      console.log('[FIT] zoom changed, clamping pan:', { from: pan, to: clamped });
+      setPan(clamped);
+    } else if (DEBUG_MODE) {
+      console.log('[FIT] zoom changed, pan already clamped (skip setPan)');
     }
-    setPan(p => clampPan(p.x, p.y));
-  }, [zoom]);
+  }, [zoom, containerSize.width, containerSize.height, scaledWidth, scaledHeight]);
 
   // ★★★ P0: forceClearToken は UI状態のみリセット（Map破壊禁止、Layer key切替で対応）★★★
   const prevForceClearTokenRef = useRef(forceClearToken);

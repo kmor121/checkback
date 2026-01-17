@@ -3,9 +3,9 @@
 ## TL;DR
 
 -   **フェーズ:** ビューア/コメント/描画 の基本機能 + 複数FIX・設計確立済み。修正メイン（新規4：修正6）。
--   **コア課題:** ズーム/フィット不具合（全体/横/縦がはみ出す/小さすぎる）とパン回帰（ドラッグ移動不可）を修正完了。temp→realハンドオフ時のちらつき（P0）とペイントモード切替時のズーム飛び（P1）が **Investigating**。
+-   **コア課題:** ズーム/フィット実装後のパンクラッシュ（Maximum update depth）を修正完了。横幅/縦幅の"余白時でも効く"UX改善は次スコープ。temp→realハンドオフ時のちらつき（P0）とペイントモード切替時のズーム飛び（P1）が **Investigating**。
 -   **重要:** Selection suppressed、Composer textarea操作時の`activeCommentId` null化、ViewerCanvas常時レンダリング（Layer key切替）は **絶対維持**。
--   **Next:** V-01〜V-05 を実行→VERIFY実行記録→BUGS/STATE整合更新。
+-   **Next:** 横幅/縦幅の余白時UX改善（fitMode反映）→ V-01〜V-05 回帰テスト実行。
 
 ---
 
@@ -13,7 +13,7 @@
 
 ### 短期（1-2週間）
 
--   ズーム/フィット/パンの挙動を安定させる（今回修正完了）。
+-   ズーム/フィット/パンの挙動を安定させる（パンクラッシュ修正完了、fitMode契約は次）。
 -   P0バグ（B-0003: handoff/freeze）の原因特定と修正。
 -   P1バグ（B-0002: paintMode ズーム飛び）の原因検査。
 -   VERIFY.md の最低5点テストを全点 OK に。
@@ -40,9 +40,9 @@
 
 | 日付       | 要点                                   | 影響範囲                    | Verify要約                   |
 | :--------- | :------------------------------------- | :-------------------------- | :--------------------------- |
+| 2026-01-17 | パンクラッシュ修正（clampPan同値ガード） | ViewerCanvas                | zoom useEffect の無限ループ解消 |
 | 2026-01-17 | ズーム/フィット不具合修正＋パン復活       | ViewerCanvas, ShareView      | zoom契約一本化（二重適用解消）、canPan条件緩和 |
 | 2026-01-17 | AdminDocuments ダウンロード機能修正（backend functionに内容埋込） | functions/downloadDocumentation.js | admin権限チェック付き |
-| 2026-01-17 | 4ドキュメント新規作成（Reading成功）    | documentation               | 次: V-01〜V-05 実行          |
 
 ---
 
@@ -77,12 +77,15 @@
    - ShareView: `zoom = 100` が全体フィット基準、横幅/縦幅は `(scaleW or scaleH / fitScale) * 100`
    - 二重適用禁止（fitScaleを両側で掛けない）
 
+7. **パンの同値ガード（2026-01-17追加）**
+   - `clampPan` 結果が現在値と同一なら `setPan` をスキップ（無限更新防止）
+   - 依存配列に `containerSize.width/height`, `scaledWidth/Height` を追加（再クランプのトリガー）
+
 ---
 
 ## 次の最小ステップ（1つ）
 
-1. **V-01〜V-05 回帰テスト実行** (P0)
-   - ShareView で V-01→V-05 を1周実行
-   - 各テストの OK/NG と観測ログ要点を VERIFY.md「実行記録」に追記
-   - V-03 結果で B-0002、V-05 結果で B-0003 のステータスを更新
-   - STATE.md の「バグTOP3」を検証結果と一致させる
+1. **横幅/縦幅の余白時UX改善（fitMode完全反映）**
+   - ViewerCanvas で fitMode を受け取り、baseFitScale を計算（fit/width/height別）
+   - 余白がある素材でも「横幅」「縦幅」を押すと表示が変化するように
+   - 完了後、V-01〜V-05 回帰テスト実行
