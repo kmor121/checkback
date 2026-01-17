@@ -12,7 +12,16 @@ function generateUUID() {
   });
 }
 
-const DEBUG_MODE = import.meta.env.VITE_DEBUG === 'true';
+// ★★★ DEBUG: 通常時はOFF、URLパラメータ ?diag=1 または localStorage.debugPaintLayer=1 で有効化 ★★★
+const getDebugEnabled = () => {
+  if (typeof window === 'undefined') return false;
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('diag') === '1') return true;
+  if (localStorage.getItem('debugPaintLayer') === '1') return true;
+  if (import.meta.env.VITE_DEBUG === 'true') return true;
+  return false;
+};
+const DEBUG_MODE = getDebugEnabled();
 
 // ★ CRITICAL: fileUrlを正規化（クエリ違いを同一ファイルとして扱う）
 function normalizeFileUrl(url) {
@@ -3504,11 +3513,13 @@ const ViewerCanvas = forwardRef(({
           touchAction: 'none'
         }}
       >
-        {/* ★★★ P0-DIAG: 常時表示デバッグRect（Konva可視確認用、条件なし）★★★ */}
-        <Layer listening={false}>
-          <Rect x={10} y={10} width={100} height={50} fill="magenta" opacity={0.8} />
-          <Text x={15} y={20} text={`Stage:${containerSize.width}x${containerSize.height}`} fontSize={10} fill="white" />
-        </Layer>
+        {/* ★★★ DEBUG: デバッグRect（diag=1時のみ表示）★★★ */}
+        {DEBUG_MODE && (
+          <Layer listening={false}>
+            <Rect x={10} y={10} width={100} height={50} fill="magenta" opacity={0.8} />
+            <Text x={15} y={20} text={`Stage:${containerSize.width}x${containerSize.height}`} fontSize={10} fill="white" />
+          </Layer>
+        )}
 
         {/* 背景Layer（非インタラクティブ） - 常に表示 */}
         <Layer listening={false}>
@@ -3543,21 +3554,22 @@ const ViewerCanvas = forwardRef(({
             >
               {!hidePaintOverlay && (
                   <>
-                    {/* ★★★ P0-DIAG: paintLayer内テストRect（常時表示、条件なし）★★★ */}
-                    {/* これが見えない＝paintLayer/Group自体に問題あり（clip/opacity/z順/transform） */}
-                    <Rect
-                      x={20}
-                      y={20}
-                      width={160}
-                      height={100}
-                      stroke="cyan"
-                      strokeWidth={6}
-                      fill="rgba(0,255,255,0.3)"
-                      listening={false}
-                    />
+                    {/* ★★★ DEBUG: paintLayer内テストRect（diag=1時のみ表示）★★★ */}
+                    {DEBUG_MODE && (
+                      <Rect
+                        x={20}
+                        y={20}
+                        width={160}
+                        height={100}
+                        stroke="cyan"
+                        strokeWidth={6}
+                        fill="rgba(0,255,255,0.3)"
+                        listening={false}
+                      />
+                    )}
 
-                    {/* ★★★ P0-DEBUG: デバッグマーカー（localStorage.debugPaintLayer=1で表示）★★★ */}
-                    {typeof localStorage !== 'undefined' && localStorage.getItem('debugPaintLayer') === '1' && (
+                    {/* ★★★ DEBUG: デバッグマーカー（diag=1時のみ表示）★★★ */}
+                    {DEBUG_MODE && (
                       <Rect
                         x={40}
                         y={40}
@@ -3570,8 +3582,8 @@ const ViewerCanvas = forwardRef(({
                       />
                     )}
 
-                    {/* ★★★ P0-DIAG: 描画直前の詳細ログ ★★★ */}
-                    {console.log('[ViewerCanvas] RENDER:', {
+                    {/* ★★★ DEBUG: 描画直前の詳細ログ（diag=1時のみ）★★★ */}
+                    {DEBUG_MODE && console.log('[ViewerCanvas] RENDER:', {
                       renderedShapesFinalCount: renderedShapesFinal.length,
                       currentShapeExists: !!currentShape,
                       currentShapeId: currentShape?.id?.substring(0, 8) || 'null',
@@ -3592,21 +3604,8 @@ const ViewerCanvas = forwardRef(({
                     {/* ★★★ CRITICAL: 確定済みshapeのみ描画（currentShapeとの重複は既に除外済み）★★★ */}
                     {renderedShapesFinal.map(s => renderShape(s, true))}
 
-                    {/* ★★★ P0-FIX: 描画中のcurrentShapeは常に描画（フィルタ無関係、即時フィードバック必須）★★★ */}
-                    {/* currentShapeはユーザーが今まさに描いているものなので、ID一致不問で必ず表示 */}
-                    {currentShape && (() => {
-                      // ★★★ P0-DIAG: currentShape描画直前の確認ログ ★★★
-                      console.log('[ViewerCanvas] RENDER currentShape:', {
-                        id: currentShape.id?.substring(0, 8),
-                        tool: currentShape.tool,
-                        comment_id: currentShape.comment_id?.substring(0, 12) || 'null',
-                        hasPoints: !!currentShape.points,
-                        pointsLen: currentShape.points?.length || 0,
-                        hasXY: currentShape.x !== undefined,
-                        hasRadius: currentShape.radius !== undefined,
-                      });
-                      return renderShape(currentShape, false);
-                    })()}
+                    {/* ★★★ CRITICAL: 描画中のcurrentShapeは常に描画（フィルタ無関係、即時フィードバック必須）★★★ */}
+                    {currentShape && renderShape(currentShape, false)}
 
                     <Transformer ref={transformerRef} name="paintOverlay" />
                   </>
@@ -3614,8 +3613,8 @@ const ViewerCanvas = forwardRef(({
             </Group>
         </Layer>
         
-        {/* ★★★ P0-DEBUG: Stage直下のデバッグLayer（clipの影響を受けない）★★★ */}
-        {typeof window !== 'undefined' && window.localStorage?.getItem('debugPaintLayer') === '1' && (
+        {/* ★★★ DEBUG: Stage直下のデバッグLayer（diag=1時のみ表示）★★★ */}
+        {DEBUG_MODE && (
           <Layer listening={false}>
             <Rect x={40} y={40} width={180} height={120} stroke="magenta" strokeWidth={8} fill="rgba(255,0,255,0.3)" />
             <Text x={50} y={55} text="DEBUG LAYER" fontSize={18} fill="magenta" fontStyle="bold" />
