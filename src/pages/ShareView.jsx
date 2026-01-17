@@ -3306,13 +3306,23 @@ function ShareViewContent() {
               )}
             
             {/* ズーム制御 */}
-            <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-2 flex items-center gap-2">
+            <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-2 flex items-center gap-2 flex-wrap justify-center max-w-xs">
               <Button variant="outline" size="icon" onClick={() => setZoom(Math.max(50, zoom - 25))}>
                 <ZoomOut className="w-4 h-4" />
               </Button>
-              <span className="text-sm font-medium w-16 text-center">{zoom}%</span>
+              <span className="text-xs font-medium w-12 text-center">{zoom}%</span>
               <Button variant="outline" size="icon" onClick={() => setZoom(Math.min(200, zoom + 25))}>
                 <ZoomIn className="w-4 h-4" />
+              </Button>
+              <div className="w-full border-t border-gray-200" />
+              <Button variant="ghost" size="sm" onClick={() => viewerCanvasRef.current?.fitToView('all')} className="text-xs py-0 px-2 h-auto">
+                全体
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => viewerCanvasRef.current?.fitToView('width')} className="text-xs py-0 px-2 h-auto">
+                横
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => viewerCanvasRef.current?.fitToView('height')} className="text-xs py-0 px-2 h-auto">
+                縦
               </Button>
             </div>
           </div>
