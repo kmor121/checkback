@@ -1263,6 +1263,15 @@ function ShareViewContent() {
     localStorage.setItem(key, activeCommentId);
   }, [activeCommentId, token, shareLink?.file_id, currentPage]);
 
+  // ★★★ P0-FIX: onBgLoadコールバックをトップレベルで定義（hooks順序固定）★★★
+  const handleBgLoadCallback = React.useCallback((bgSize, containerSize) => {
+    if (fitMode === 'fit' && bgSize && containerSize && bgSize.width > 0 && bgSize.height > 0 && containerSize.width > 0 && containerSize.height > 0) {
+      console.log('[FIT] Initial fit applied (zoom=100, pan=0):', { bgSize, containerSize });
+      setZoom(100);
+      setPan({ x: 0, y: 0 });
+    }
+  }, [fitMode]);
+
   // ★★★ FIT: ファイル変更時に初期フィットを適用 ★★★
   const prevFileIdForFitRef = useRef(null);
   useEffect(() => {
@@ -3178,14 +3187,7 @@ function ShareViewContent() {
                         pageNumber={currentPage}
                         externalPan={pan}
                         onPanChange={setPan}
-                        onBgLoad={React.useCallback((bgSize, containerSize) => {
-                          // ★★★ FIT: 初期フィット適用（ファイル変更時のみ） ★★★
-                          if (fitMode === 'fit' && bgSize && containerSize && bgSize.width > 0 && bgSize.height > 0 && containerSize.width > 0 && containerSize.height > 0) {
-                            console.log('[FIT] Initial fit applied (zoom=100, pan=0):', { bgSize, containerSize });
-                            setZoom(100);
-                            setPan({ x: 0, y: 0 });
-                          }
-                        }, [fitMode])}
+                        onBgLoad={handleBgLoadCallback}
                         existingShapes={(() => {
                           // ★★★ P0-FIX: existingShapes決定（上のログと同一ロジック）★★★
                           if (freezeActiveRef.current && freezeRef.current?.shapesForCanvas?.length > 0) {
