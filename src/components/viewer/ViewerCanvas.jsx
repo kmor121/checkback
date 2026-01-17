@@ -3553,12 +3553,14 @@ const ViewerCanvas = forwardRef(({
                       currentShapeExists: !!currentShape,
                       currentShapeId: currentShape?.id?.substring(0, 8) || 'null',
                       currentShapeTool: currentShape?.tool || 'null',
+                      currentShapeCommentId: currentShape?.comment_id?.substring(0, 12) || 'null',
                       currentShapePoints: currentShape?.points?.length || 0,
                       currentShapeX: currentShape?.x,
                       currentShapeY: currentShape?.y,
                       currentShapeWidth: currentShape?.width,
                       currentShapeHeight: currentShape?.height,
                       currentShapeRadius: currentShape?.radius,
+                      renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
                       viewX,
                       viewY,
                       contentScale,
@@ -3567,8 +3569,21 @@ const ViewerCanvas = forwardRef(({
                     {/* ★★★ CRITICAL: 確定済みshapeのみ描画（currentShapeとの重複は既に除外済み）★★★ */}
                     {renderedShapesFinal.map(s => renderShape(s, true))}
 
-                    {/* ★★★ CRITICAL: 描画中のcurrentShapeは最後に独立して描画 ★★★ */}
-                    {currentShape && renderShape(currentShape, false)}
+                    {/* ★★★ P0-FIX: 描画中のcurrentShapeは常に描画（フィルタ無関係、即時フィードバック必須）★★★ */}
+                    {/* currentShapeはユーザーが今まさに描いているものなので、ID一致不問で必ず表示 */}
+                    {currentShape && (() => {
+                      // ★★★ P0-DIAG: currentShape描画直前の確認ログ ★★★
+                      console.log('[ViewerCanvas] RENDER currentShape:', {
+                        id: currentShape.id?.substring(0, 8),
+                        tool: currentShape.tool,
+                        comment_id: currentShape.comment_id?.substring(0, 12) || 'null',
+                        hasPoints: !!currentShape.points,
+                        pointsLen: currentShape.points?.length || 0,
+                        hasXY: currentShape.x !== undefined,
+                        hasRadius: currentShape.radius !== undefined,
+                      });
+                      return renderShape(currentShape, false);
+                    })()}
 
                     <Transformer ref={transformerRef} name="paintOverlay" />
                   </>
