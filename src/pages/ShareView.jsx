@@ -137,7 +137,6 @@ function ShareViewContent() {
   const [showAllPaint, setShowAllPaint] = useState(false);
   const [isNewCommentInputActive, setIsNewCommentInputActive] = useState(false); // 新規コメント入力中フラグ
   const [isDockOpen, setIsDockOpen] = useState(false);
-  const [bgReady, setBgReady] = useState(false);
 
   // ★★★ P1 FIX: activeCommentId がある場合は showAllPaint を強制的に false にする不変条件 ★★★
   const effectiveShowAllPaint = showAllPaint && !activeCommentId;
@@ -1212,33 +1211,10 @@ function ShareViewContent() {
     }
   };
 
-  // 初回ロード時にズームを全体フィット
-  const didInitZoomRef = useRef(false);
-  useEffect(() => {
-    if (!token || !shareLink?.file_id) return;
-    if (didInitZoomRef.current) return;
-    
-    // 背景ロード完了を待つ
-    if (!bgReady) return;
-    
-    didInitZoomRef.current = true;
-    
-    // 少し遅延させてフィット適用（レイアウト完了を待つ）
-    setTimeout(() => {
-      viewerCanvasRef.current?.fitToView('all');
-    }, 50);
-  }, [token, shareLink?.file_id, bgReady]);
-
   // 初回ロード時のみ activeCommentId を初期化（URLにcomment指定がある場合のみ選択）
   useEffect(() => {
     if (!token || !shareLink?.file_id) return;
     if (didInitActiveRef.current) return;
-
-    if (bgReady) {
-      setTimeout(() => {
-        viewerCanvasRef.current?.fitToView('all');
-      }, 50);
-    }
 
     const params = new URLSearchParams(window.location.search);
     const commentIdFromUrl = params.get('comment');
@@ -3298,8 +3274,6 @@ function ShareViewContent() {
                 strokeColor={strokeColor}
                 strokeWidth={strokeWidth}
                 zoom={zoom}
-                onZoomChange={setZoom}
-                onBgReady={setBgReady}
                 showBoundingBoxes={showBoundingBoxes}
                 showAllPaint={effectiveShowAllPaint}
                 forceClearToken={forceClearToken}
@@ -3332,27 +3306,13 @@ function ShareViewContent() {
               )}
             
             {/* ズーム制御 */}
-            <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-2 flex items-center gap-2 flex-wrap justify-center max-w-xs">
+            <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-2 flex items-center gap-2">
               <Button variant="outline" size="icon" onClick={() => setZoom(Math.max(50, zoom - 25))}>
                 <ZoomOut className="w-4 h-4" />
               </Button>
-              <span className="text-xs font-medium w-12 text-center">{zoom}%</span>
-              <Button variant="outline" size="icon" onClick={() => setZoom(Math.min(400, zoom + 25))}>
+              <span className="text-sm font-medium w-16 text-center">{zoom}%</span>
+              <Button variant="outline" size="icon" onClick={() => setZoom(Math.min(200, zoom + 25))}>
                 <ZoomIn className="w-4 h-4" />
-              </Button>
-              <div className="w-full mt-1 mb-1 border-t border-gray-200"></div>
-              <Button variant="ghost" size="sm" onClick={() => viewerCanvasRef.current?.fitToView('all')} className="text-xs h-6 px-2">全体</Button>
-              <Button variant="ghost" size="sm" onClick={() => viewerCanvasRef.current?.fitToView('width')} className="text-xs h-6 px-2">横幅</Button>
-              <Button variant="ghost" size="sm" onClick={() => viewerCanvasRef.current?.fitToView('height')} className="text-xs h-6 px-2">縦幅</Button>
-              <div className="w-full border-t border-gray-200" />
-              <Button variant="ghost" size="sm" onClick={() => viewerCanvasRef.current?.fitToView('all')} className="text-xs py-0 px-2 h-auto">
-                全体
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => viewerCanvasRef.current?.fitToView('width')} className="text-xs py-0 px-2 h-auto">
-                横
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => viewerCanvasRef.current?.fitToView('height')} className="text-xs py-0 px-2 h-auto">
-                縦
               </Button>
             </div>
           </div>
