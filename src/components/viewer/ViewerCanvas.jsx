@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useImperativeHandle, forwardRef, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Stage, Layer, Line, Rect, Circle, Arrow, Image as KonvaImage, Group, Transformer, Text } from 'react-konva';
 import useImage from 'use-image';
 
