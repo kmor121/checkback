@@ -1103,7 +1103,8 @@ const ViewerCanvas = forwardRef(({
   const handleBgLoad = useCallback((size) => {
     setBgSize(size);
     setBgReady(true);
-  }, []);
+    onBgReady?.(true);
+  }, [onBgReady]);
   
   // CRITICAL: パンは select ツール時のみ（描画ツールとの競合回避）
   const canPan = paintMode && tool === 'select' && zoom > 100;
@@ -2561,7 +2562,32 @@ const ViewerCanvas = forwardRef(({
   }, [bgSize, containerSize]);
 
   // Undo/Redo
-  useImperativeHandle(ref, () => ({
+  const calculateZoomForFit = React.useCallback((fitType = 'all') => {
+    if (!bgSize.width || !bgSize.height || !containerSize.width || !containerSize.height) {
+      return 100;
+    }
+    
+    let fitScaleValue;
+    if (fitType === 'all') {
+      fitScaleValue = Math.min(
+        containerSize.width / bgSize.width,
+        containerSize.height / bgSize.height
+      );
+    } else if (fitType === 'width') {
+      fitScaleValue = containerSize.width / bgSize.width;
+    } else if (fitType === 'height') {
+      fitScaleValue = containerSize.height / bgSize.height;
+    } else {
+      fitScaleValue = Math.min(
+        containerSize.width / bgSize.width,
+        containerSize.height / bgSize.height
+      );
+    }
+    
+    return Math.round(Math.max(10, Math.min(fitScaleValue * 100, 400)));
+  }, [bgSize, containerSize]);
+
+  useImperativeHandle(ref, () => ({ fitToView: (fitType = 'all') => { const newZoom = calculateZoomForFit(fitType); onZoomChange?.(newZoom); },
     undo: performUndo,
     redo: performRedo,
     fitToView: (fitType = 'all') => {

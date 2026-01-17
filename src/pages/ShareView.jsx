@@ -137,6 +137,7 @@ function ShareViewContent() {
   const [showAllPaint, setShowAllPaint] = useState(false);
   const [isNewCommentInputActive, setIsNewCommentInputActive] = useState(false); // 新規コメント入力中フラグ
   const [isDockOpen, setIsDockOpen] = useState(false);
+  const [bgReady, setBgReady] = useState(false);
 
   // ★★★ P1 FIX: activeCommentId がある場合は showAllPaint を強制的に false にする不変条件 ★★★
   const effectiveShowAllPaint = showAllPaint && !activeCommentId;
@@ -1232,6 +1233,12 @@ function ShareViewContent() {
   useEffect(() => {
     if (!token || !shareLink?.file_id) return;
     if (didInitActiveRef.current) return;
+
+    if (bgReady) {
+      setTimeout(() => {
+        viewerCanvasRef.current?.fitToView('all');
+      }, 50);
+    }
 
     const params = new URLSearchParams(window.location.search);
     const commentIdFromUrl = params.get('comment');
@@ -3291,6 +3298,8 @@ function ShareViewContent() {
                 strokeColor={strokeColor}
                 strokeWidth={strokeWidth}
                 zoom={zoom}
+                onZoomChange={setZoom}
+                onBgReady={setBgReady}
                 showBoundingBoxes={showBoundingBoxes}
                 showAllPaint={effectiveShowAllPaint}
                 forceClearToken={forceClearToken}
@@ -3328,9 +3337,13 @@ function ShareViewContent() {
                 <ZoomOut className="w-4 h-4" />
               </Button>
               <span className="text-xs font-medium w-12 text-center">{zoom}%</span>
-              <Button variant="outline" size="icon" onClick={() => setZoom(Math.min(200, zoom + 25))}>
+              <Button variant="outline" size="icon" onClick={() => setZoom(Math.min(400, zoom + 25))}>
                 <ZoomIn className="w-4 h-4" />
               </Button>
+              <div className="w-full mt-1 mb-1 border-t border-gray-200"></div>
+              <Button variant="ghost" size="sm" onClick={() => viewerCanvasRef.current?.fitToView('all')} className="text-xs h-6 px-2">全体</Button>
+              <Button variant="ghost" size="sm" onClick={() => viewerCanvasRef.current?.fitToView('width')} className="text-xs h-6 px-2">横幅</Button>
+              <Button variant="ghost" size="sm" onClick={() => viewerCanvasRef.current?.fitToView('height')} className="text-xs h-6 px-2">縦幅</Button>
               <div className="w-full border-t border-gray-200" />
               <Button variant="ghost" size="sm" onClick={() => viewerCanvasRef.current?.fitToView('all')} className="text-xs py-0 px-2 h-auto">
                 全体
