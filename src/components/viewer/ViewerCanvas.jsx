@@ -331,24 +331,27 @@ const ViewerCanvas = forwardRef(({
     const mapShapes = getAllShapes();
     let sourceShapes = mapShapes;
 
-    // 描画中のshapeは常に除外
+    // 描画中のshapeは常に除外（後で別途描画するため）
     if (currentShape?.id) {
       sourceShapes = sourceShapes.filter(s => s.id !== currentShape.id);
     }
 
     const targetId = renderTargetCommentId ? String(renderTargetCommentId) : '';
 
-    if (DEBUG_MODE) {
-      console.log('[ViewerCanvas] renderedShapes UMEMO:', {
-        shapesVersion,
-        showAllPaint,
-        renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
-        targetId: targetId?.substring(0, 12) || 'null',
-        mapShapesCount: mapShapes.length,
-        sourceShapesCount: sourceShapes.length,
-        currentShapeId: currentShape?.id?.substring(0, 12) || 'null',
-      });
-    }
+    console.log('[ViewerCanvas] renderedShapes UMEMO:', {
+      shapesVersion,
+      showAllPaint,
+      renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
+      targetId: targetId?.substring(0, 12) || 'null',
+      mapShapesCount: mapShapes.length,
+      sourceShapesCount: sourceShapes.length,
+      currentShapeId: currentShape?.id?.substring(0, 12) || 'null',
+      // ★★★ P0-DIAG: Map内の各shapeのcomment_idを出力 ★★★
+      mapShapeCommentIds: mapShapes.slice(0, 5).map(s => ({
+        id: s.id?.substring(0, 8),
+        cid: resolveCommentId(s)?.substring(0, 12) || 'null',
+      })),
+    });
 
     // P1.2 FIX: targetIdが指定されている場合は、showAllPaintに関わらず常にフィルタリングを優先する
     if (targetId) {
@@ -362,18 +365,27 @@ const ViewerCanvas = forwardRef(({
         }
       });
       const result = Array.from(dedupedMap.values());
-      if (DEBUG_MODE) console.log('[ViewerCanvas] renderedShapes UMEMO: Filtered by targetId', { targetId, filteredCount: result.length });
+      console.log('[ViewerCanvas] renderedShapes UMEMO: Filtered by targetId', { 
+        targetId: targetId?.substring(0, 12), 
+        filteredCount: result.length,
+        sourceCount: sourceShapes.length,
+        // ★★★ P0-DIAG: フィルタ落ちしたshapeのcomment_idを出力 ★★★
+        droppedShapes: sourceShapes.filter(s => resolveCommentId(s) !== targetId).slice(0, 3).map(s => ({
+          id: s.id?.substring(0, 8),
+          cid: resolveCommentId(s)?.substring(0, 12) || 'null',
+        })),
+      });
       return result;
     }
 
     // P1.2 FIX: targetIdがない場合にのみ、showAllPaintを考慮する
     if (showAllPaint) {
-      if (DEBUG_MODE) console.log('[ViewerCanvas] renderedShapes UMEMO: showAllPaint=TRUE, returning all sourceShapes', { count: sourceShapes.length });
+      console.log('[ViewerCanvas] renderedShapes UMEMO: showAllPaint=TRUE, returning all sourceShapes', { count: sourceShapes.length });
       return sourceShapes;
     }
 
     // デフォルトは空配列
-    if (DEBUG_MODE) console.log('[ViewerCanvas] renderedShapes UMEMO: Default to empty (no targetId, showAllPaint=false)');
+    console.log('[ViewerCanvas] renderedShapes UMEMO: Default to empty (no targetId, showAllPaint=false)');
     return [];
   }, [shapesVersion, showAllPaint, renderTargetCommentId, currentShape]);
 
