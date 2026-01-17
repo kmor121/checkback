@@ -213,21 +213,31 @@ const ViewerCanvas = forwardRef(({
   const panStartRef = useRef({ x: 0, y: 0, px: 0, py: 0 });
 
   // ★★★ FIT-FIX: clampPan をここで定義（TDZ回避のため useEffect より前に配置）★★★
-  const clampPan = useCallback((nx, ny, currentScaledW, currentScaledH) => {
-    if (currentScaledW <= containerSize.width) {
-      nx = 0;
+  // ★★★ P1-FIX: 同値ガード追加（無限更新防止）、prevPan引数追加 ★★★
+  const clampPan = useCallback((nx, ny, currentScaledW, currentScaledH, prevPan = null) => {
+    // overflow判定（1px epsilon で揺れ防止）
+    const overflowX = currentScaledW > containerSize.width + 1;
+    const overflowY = currentScaledH > containerSize.height + 1;
+    
+    if (!overflowX) {
+      nx = 0; // 中央寄せ（はみ出していない軸は固定）
     } else {
       const minX = containerSize.width - currentScaledW;
       const maxX = 0;
       nx = Math.min(maxX, Math.max(minX, nx));
     }
     
-    if (currentScaledH <= containerSize.height) {
-      ny = 0;
+    if (!overflowY) {
+      ny = 0; // 中央寄せ（はみ出していない軸は固定）
     } else {
       const minY = containerSize.height - currentScaledH;
       const maxY = 0;
       ny = Math.min(maxY, Math.max(minY, ny));
+    }
+    
+    // ★★★ 同値ガード: 変化がなければ同じ参照を返す（無限更新防止）★★★
+    if (prevPan && nx === prevPan.x && ny === prevPan.y) {
+      return prevPan;
     }
     
     return { x: nx, y: ny };
@@ -1411,12 +1421,28 @@ const ViewerCanvas = forwardRef(({
     if (isPanning) {
       const p = stage.getPointerPosition();
       if (!p) return;
-      const dx = p.x - panStartRef.current.px;
-      const dy = p.y - panStartRef.current.py;
+      
+      // ★★★ P1-FIX: overflow判定を先に行い、はみ出していない軸のdeltaは0にする ★★★
       const currentScaledWidth = bgSize.width * contentScale;
       const currentScaledHeight = bgSize.height * contentScale;
-      const next = clampPan(panStartRef.current.x + dx, panStartRef.current.y + dy, currentScaledWidth, currentScaledHeight);
-      setPan(next);
+      const overflowX = currentScaledWidth > containerSize.width + 1;
+      const overflowY = currentScaledHeight > containerSize.height + 1;
+      
+      // はみ出していない軸はdeltaを0にして不要な計算/ガタつきを防止
+      const dx = overflowX ? (p.x - panStartRef.current.px) : 0;
+      const dy = overflowY ? (p.y - panStartRef.current.py) : 0;
+      
+      // 両軸とも動かないならスキップ
+      if (dx === 0 && dy === 0) return;
+      
+      const nextX = panStartRef.current.x + dx;
+      const nextY = panStartRef.current.y + dy;
+      const next = clampPan(nextX, nextY, currentScaledWidth, currentScaledHeight, pan);
+      
+      // ★★★ 同値ガード: clampPanが同じ参照を返したらsetPanしない ★★★
+      if (next !== pan) {
+        setPan(next);
+      }
       return;
     }
 
