@@ -3493,6 +3493,12 @@ const ViewerCanvas = forwardRef(({
           touchAction: 'none'
         }}
       >
+        {/* ★★★ P0-DIAG: 常時表示デバッグRect（Konva可視確認用、条件なし）★★★ */}
+        <Layer listening={false}>
+          <Rect x={10} y={10} width={100} height={50} fill="magenta" opacity={0.8} />
+          <Text x={15} y={20} text={`Stage:${containerSize.width}x${containerSize.height}`} fontSize={10} fill="white" />
+        </Layer>
+
         {/* 背景Layer（非インタラクティブ） - 常に表示 */}
         <Layer listening={false}>
           <Group
