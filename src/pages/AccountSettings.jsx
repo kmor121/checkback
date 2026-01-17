@@ -14,7 +14,7 @@ import { Shield, Mail } from 'lucide-react';
 export default function AccountSettings() {
   const [user, setUser] = useState(null);
   const [displayName, setDisplayName] = useState('');
-  const [language, setLanguage] = useState('ja');
+  const [language, setLanguage] = useState('');
   const [showNotificationSettings, setShowNotificationSettings] = useState(false);
   const queryClient = useQueryClient();
 
