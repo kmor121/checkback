@@ -392,6 +392,16 @@ const ViewerCanvas = forwardRef(({
   // ★★★ Hunk1: hidePaintOverlay時は描画を確実に空にする（表示レイヤー制御）★★★
   const renderedShapesFinal = hidePaintOverlay ? [] : renderedShapes;
   
+  // ★★★ P0-DIAG: 最終表示配列のログ ★★★
+  console.log('[ViewerCanvas] renderedShapesFinal:', {
+    hidePaintOverlay,
+    renderedShapesCount: renderedShapes.length,
+    renderedShapesFinalCount: renderedShapesFinal.length,
+    currentShapeExists: !!currentShape,
+    currentShapeId: currentShape?.id?.substring(0, 8) || 'null',
+    currentShapeTool: currentShape?.tool || 'null',
+  });
+  
   // ★ CRITICAL: activeShapes を existingShapes から抽出（comment_id統一判定）
   const activeShapes = useMemo(() => {
     if (!existingShapes?.length) return [];
