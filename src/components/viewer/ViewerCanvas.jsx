@@ -3211,10 +3211,8 @@ const ViewerCanvas = forwardRef(({
     });
   }
 
-  // Portal HUD（document.bodyに直接描画、z-index最大）- useRefで診断情報を保持（hooksではない）
-  const portalHudDataRef = useRef(null);
-  
-  // 診断情報収集（レンダリング時に同期実行、コストが低いので毎回OK）
+  // ★★★ P0-DIAG: Portal HUD診断情報（純粋な変数、hookなし）★★★
+  let portalHudData = null;
   if (debugPaintLayerEnabled && containerRef.current) {
     const parent = containerRef.current;
     const stageContainer = stageRef.current?.container?.();
@@ -3236,8 +3234,8 @@ const ViewerCanvas = forwardRef(({
     const wrapperTransform1 = parent?.parentElement ? window.getComputedStyle(parent.parentElement).transform : 'none';
     const wrapperTransform2 = parent?.parentElement?.parentElement ? window.getComputedStyle(parent.parentElement.parentElement).transform : 'none';
     
-    portalHudDataRef.current = {
-      buildStamp: 'VC_BUILD_2025-01-17c',
+    portalHudData = {
+      buildStamp: 'VC_BUILD_2025-01-17d',
       parentRect: `${Math.round(parentRect.width)}x${Math.round(parentRect.height)}`,
       stageRect: `${Math.round(stageRect.width)}x${Math.round(stageRect.height)}`,
       containerSize: `${containerSize.width}x${containerSize.height}`,
@@ -3251,8 +3249,6 @@ const ViewerCanvas = forwardRef(({
       centerPoint: `${Math.round(centerX)},${Math.round(centerY)}`,
     };
   }
-  
-  const portalHudData = portalHudDataRef.current;
 
   // Portal HUD（document.bodyに直接描画、z-index最大）
   const portalHud = debugPaintLayerEnabled && typeof document !== 'undefined' && portalHudData ? createPortal(
