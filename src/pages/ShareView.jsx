@@ -1262,6 +1262,20 @@ function ShareViewContent() {
     localStorage.setItem(key, activeCommentId);
   }, [activeCommentId, token, shareLink?.file_id, currentPage]);
 
+  // ★★★ FIT: ファイル変更時に初期フィットを適用 ★★★
+  const prevFileIdForFitRef = useRef(null);
+  useEffect(() => {
+    if (!shareLink?.file_id) return;
+    if (prevFileIdForFitRef.current === shareLink.file_id) return;
+    prevFileIdForFitRef.current = shareLink.file_id;
+    // ファイル変更時は初期フィット（全体）に戻す
+    setFitMode('fit');
+    // zoom はキャンバスサイズ確定後に計算されるので、ここでは100%にリセット
+    // 実際のフィット適用は ViewerCanvas の bgReady 後に行う
+    setZoom(100);
+    console.log('[FIT] File changed, reset to fit mode');
+  }, [shareLink?.file_id]);
+
   // CRITICAL: comment_idで絞らず、全shapesをフェッチ（表示フィルタはクライアント側）
   const { data: paintShapes = [], isFetching: shapesFetching, isSuccess: shapesLoaded } = useQuery({
     queryKey: ['paintShapes', token, shareLink?.file_id, currentPage],
@@ -3161,6 +3175,15 @@ function ShareViewContent() {
                         fileUrl={file?.file_url}
                         mimeType={file?.mime_type}
                         pageNumber={currentPage}
+                        onBgLoad={(bgSize, containerSize) => {
+                          // ★★★ FIT: 初期フィット適用（ファイル変更時のみ） ★★★
+                          if (fitMode === 'fit' && bgSize && containerSize && bgSize.width > 0 && bgSize.height > 0 && containerSize.width > 0 && containerSize.height > 0) {
+                            const scale = Math.min(containerSize.width / bgSize.width, containerSize.height / bgSize.height);
+                            const newZoom = Math.round(scale * 100);
+                            console.log('[FIT] Initial fit applied:', { bgSize, containerSize, scale, newZoom });
+                            setZoom(newZoom);
+                          }
+                        }}
                         existingShapes={(() => {
                           // ★★★ P0-FIX: existingShapes決定（上のログと同一ロジック）★★★
                           if (freezeActiveRef.current && freezeRef.current?.shapesForCanvas?.length > 0) {

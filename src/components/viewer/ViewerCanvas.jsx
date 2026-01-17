@@ -120,6 +120,7 @@ const ViewerCanvas = forwardRef(({
   canvasContextKey = null, // ★★★ P1: 内部リセット用キー（paintContextId含む）★★★
   isCanvasTransitioning = false, // ★★★ D: 遷移中フラグ（incoming empty時のMap保持用）★★★
   hidePaintOverlay = false, // ★★★ 案B: 新規コメント入力中は描画を非表示 ★★★
+  onBgLoad = null, // ★★★ FIT: 背景ロード完了時のコールバック ★★★
 }, ref) => {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
@@ -1100,10 +1101,16 @@ const ViewerCanvas = forwardRef(({
   const viewY = offsetY + pan.y;
 
   // P2 FIX: 背景画像のロードが完了したときに呼ばれ、bgReadyフラグを立てる
+  // ★★★ FIT: onBgLoadコールバックを追加（親に通知）★★★
   const handleBgLoad = useCallback((size) => {
     setBgSize(size);
     setBgReady(true);
-  }, []);
+    console.log('[FIT] bgLoad:', { width: size.width, height: size.height, containerWidth: containerSize.width, containerHeight: containerSize.height });
+    // 親に通知（初期フィット計算用）
+    if (onBgLoad) {
+      onBgLoad(size, containerSize);
+    }
+  }, [containerSize, onBgLoad]);
   
   // CRITICAL: パンは select ツール時のみ（描画ツールとの競合回避）
   const canPan = paintMode && tool === 'select' && zoom > 100;
