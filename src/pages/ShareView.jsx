@@ -3178,14 +3178,14 @@ function ShareViewContent() {
                         pageNumber={currentPage}
                         externalPan={pan}
                         onPanChange={setPan}
-                        onBgLoad={(bgSize, containerSize) => {
+                        onBgLoad={React.useCallback((bgSize, containerSize) => {
                           // ★★★ FIT: 初期フィット適用（ファイル変更時のみ） ★★★
                           if (fitMode === 'fit' && bgSize && containerSize && bgSize.width > 0 && bgSize.height > 0 && containerSize.width > 0 && containerSize.height > 0) {
                             console.log('[FIT] Initial fit applied (zoom=100, pan=0):', { bgSize, containerSize });
                             setZoom(100);
                             setPan({ x: 0, y: 0 });
                           }
-                        }}
+                        }, [fitMode])}
                         existingShapes={(() => {
                           // ★★★ P0-FIX: existingShapes決定（上のログと同一ロジック）★★★
                           if (freezeActiveRef.current && freezeRef.current?.shapesForCanvas?.length > 0) {
