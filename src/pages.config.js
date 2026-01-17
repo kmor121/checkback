@@ -10,6 +10,7 @@ import Projects from './pages/Projects';
 import QuickCheck from './pages/QuickCheck';
 import ShareView from './pages/ShareView';
 import public_ from './pages/_public';
+import AdminDocuments from './pages/AdminDocuments';
 import __Layout from './Layout.jsx';
 
 
@@ -26,6 +27,7 @@ export const PAGES = {
     "QuickCheck": QuickCheck,
     "ShareView": ShareView,
     "_public": public_,
+    "AdminDocuments": AdminDocuments,
 }
 
 export const pagesConfig = {
