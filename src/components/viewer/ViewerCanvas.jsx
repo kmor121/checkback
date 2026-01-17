@@ -211,6 +211,27 @@ const ViewerCanvas = forwardRef(({
   const setPan = onPanChange || setLocalPan;
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0, px: 0, py: 0 });
+
+  // ★★★ FIT-FIX: clampPan をここで定義（TDZ回避のため useEffect より前に配置）★★★
+  const clampPan = useCallback((nx, ny, currentScaledW, currentScaledH) => {
+    if (currentScaledW <= containerSize.width) {
+      nx = 0;
+    } else {
+      const minX = containerSize.width - currentScaledW;
+      const maxX = 0;
+      nx = Math.min(maxX, Math.max(minX, nx));
+    }
+    
+    if (currentScaledH <= containerSize.height) {
+      ny = 0;
+    } else {
+      const minY = containerSize.height - currentScaledH;
+      const maxY = 0;
+      ny = Math.min(maxY, Math.max(minY, ny));
+    }
+    
+    return { x: nx, y: ny };
+  }, [containerSize.width, containerSize.height]);
   
   // テキスト入力用
   const [textEditor, setTextEditor] = useState({
@@ -1131,26 +1152,7 @@ const ViewerCanvas = forwardRef(({
   // ★★★ FIT: zoom>=100 なら常にパン可能（はみ出し時の移動を復活）★★★
   const canPan = (!paintMode || tool === 'select') && !textEditor.visible && !isDrawing;
   
-  // パン範囲のクランプ（★★★ FIT-FIX: useCallback で安定化、scaledWidth/Height を引数で受け取る ★★★）
-  const clampPan = useCallback((nx, ny, currentScaledW, currentScaledH) => {
-    if (currentScaledW <= containerSize.width) {
-      nx = 0;
-    } else {
-      const minX = containerSize.width - currentScaledW;
-      const maxX = 0;
-      nx = Math.min(maxX, Math.max(minX, nx));
-    }
-    
-    if (currentScaledH <= containerSize.height) {
-      ny = 0;
-    } else {
-      const minY = containerSize.height - currentScaledH;
-      const maxY = 0;
-      ny = Math.min(maxY, Math.max(minY, ny));
-    }
-    
-    return { x: nx, y: ny };
-  }, [containerSize.width, containerSize.height]);
+  // ★★★ clampPan は useEffect より前（L219付近）で定義済み ★★★
   
 
 
