@@ -1,97 +1,134 @@
-# VERIFY.md
+# VERIFY.md - 回帰テスト手順書
 
-## 回帰テスト手順
+## 運用ルール
+- 修正後は関連テストを必ず実施し、末尾の「実行記録」に結果を追記する。
+- 全関連テストが OK になるまで Done にしない（NGは差し戻し）。
+- 推測でOK/NGを付けない（実際に手操作して確認）。
+
+---
+
+## 必須テスト項目（最低5点）
 
 ### V-01: 既存コメント選択と描画表示
-- **手順**:
-  1. ShareView を開く（既存ファイル・既存コメントあり）
-  2. コメントパネルで既存コメントを選択
-  3. 描画が表示されることを確認
-- **観測ポイント**:
-  - `activeCommentId` が選択したコメントのIDに設定されている
-  - `renderedShapes` が空配列ではない（描画が表示されている）
-  - コンソールに `[ViewerCanvas] renderedShapes UMEMO: Filtered by targetId` のログが出ている
-- **NG時の切り分け**:
-  - `activeCommentId` が null のままなら選択ロジックの不具合
-  - `renderedShapes` が空なら ViewerCanvas のフィルタリング不具合
+
+**手順:**
+1. ShareView でファイルを開く（既存コメント・描画あり）
+2. 右パネルのコメントをクリックして選択
+3. Canvas 上に対応するピンと描画が表示されるか確認
+
+**期待結果:**
+- 選択したコメントのピンがハイライト
+- 紐付く描画（PaintShape）が Canvas 上に表示される
+- ズーム/パンが保持されている
+
+**観測ポイント:**
+- `activeCommentId` の値
+- Canvas 上の描画レイヤーの表示状態
+- Console に描画関連エラーがないか
+
+**NG時切り分け:**
+- 描画が表示されない → PaintCanvas の mount/unmount タイミング確認
+- ピンが表示されない → CommentPin の条件分岐確認
 
 ---
 
-### V-02: 新規コメント入力時の選択抑制
-- **手順**:
-  1. ShareView を開く（既存コメントあり）
-  2. 「新規コメント」ボタンをクリック
-  3. 入力欄にフォーカスが移り、既存コメントの選択が解除されることを確認
-  4. 既存コメントをクリックしても選択されない（選択抑制）ことを確認
-- **観測ポイント**:
-  - 新規コメント入力開始時に `activeCommentId` が null になっている
-  - `hidePaintOverlay` が true になっている（描画が非表示）
-  - 既存コメントをクリックしても `activeCommentId` が変わらない（選択抑制）
-- **NG時の切り分け**:
-  - `activeCommentId` が null にならないなら handleNewCommentStart の不具合
-  - `hidePaintOverlay` が false のままなら計算ロジックの不具合
-  - 既存コメントが選択できてしまうなら選択抑制の実装漏れ
+### V-02: 新規コメント入力中の選択抑制
+
+**手順:**
+1. ShareView でファイルを開く
+2. Canvas 上の任意の位置で「テキストのみ」新規コメント入力開始
+3. 入力中（Textarea フォーカス中）に右パネルの別コメントをクリック
+
+**期待結果:**
+- クリックしても選択が切り替わらない
+- Textarea のフォーカスが保持される
+- 入力内容が失われない
+
+**観測ポイント:**
+- `onPointerDownCapture` が発火しているか（Console ログ）
+- `isNewCommentInputActive` の値
+- `activeCommentId` が null 維持されているか
+
+**NG時切り分け:**
+- 選択が切り替わる → `onPointerDownCapture` の条件確認
+- Textarea のフォーカスが外れる → `stopPropagation()` / `preventDefault()` の実装確認
 
 ---
 
-### V-03: ペイントON/OFF時のズーム/パン維持・ちらつき無し
-- **手順**:
-  1. ShareView を開く（既存ファイル・既存コメントあり）
-  2. ズームを 150% に設定し、パンで画像を右下に移動
-  3. ペイントモードを ON にする
-  4. ズーム倍率とパン位置が維持されていることを確認
-  5. ペイントモードを OFF にする
-  6. 再度ズーム倍率とパン位置が維持されていることを確認
-- **観測ポイント**:
-  - paintMode 切替前後で `zoom` と `pan` の値が変わらない
-  - ViewerCanvas/Stage が key で強制再マウントされていない（コンソールに `[ViewerCanvas] Component MOUNTED` が paintMode 切替時に出ない）
-  - 描画がちらつかない（一瞬消えて再表示されない）
-- **NG時の切り分け**:
-  - ズーム/パンがリセットされるなら ViewerCanvas の key 使用を確認
-  - ちらつくなら Map クリアのタイミング不具合
+### V-03: ペイントモード切替時のズーム/パン保持
+
+**手順:**
+1. ShareView でファイルを開く
+2. ズームイン（拡大）し、パン（移動）する
+3. ペイントモードをONにする
+4. ペイントモードをOFFにする
+
+**期待結果:**
+- ペイントモード切替前後でズーム/パンが保持される
+- Canvas の表示位置が変わらない
+
+**観測ポイント:**
+- Stage の `scaleX`/`scaleY`/`x`/`y` の値（切替前後で比較）
+- ViewerCanvas の再マウント有無（Console の mount/unmount ログ）
+- useEffect の依存配列に `paintMode` が含まれているか
+
+**NG時切り分け:**
+- ズーム/パンがリセットされる → Stage の key 確認、useEffect 依存配列確認
+- Canvas が再マウントされる → ViewerCanvas の親コンポーネント確認
 
 ---
 
-### V-04: 描画下書きがモード往復で消えない
-- **手順**:
-  1. ShareView を開く（既存コメントあり）
-  2. ペイントモードを ON にして、既存コメントを選択
-  3. ペンツールで適当に描画（まだ確定しない）
-  4. ペイントモードを OFF にする
-  5. 再度ペイントモードを ON にして、同じコメントを選択
-  6. 手順3の下書きが残っていることを確認
-- **観測ポイント**:
-  - paintMode OFF→ON 時に localStorage の draftShapes が読み込まれている
-  - `shapesMapRef.current.size` が 0 にリセットされていない
-  - コンソールに `[draftPaintStorage] Loaded draft:` のログが出ている
-- **NG時の切り分け**:
-  - localStorage に保存されていないなら saveDraftShapes の不具合
-  - 読み込まれていないなら loadDraftShapes の呼び出し漏れ
-  - Map がクリアされているなら canvasContextKey 変化の副作用
+### V-04: 描画下書き（localStorage）のモード往復
+
+**手順:**
+1. ShareView でファイルを開く
+2. 既存コメントを選択し、ペイントモードをONにする
+3. 描画を追加（pen/rectなど）
+4. ペイントモードをOFFにする（localStorage に保存される）
+5. 再度ペイントモードをONにする
+
+**期待結果:**
+- 手順5で描画が復元される（localStorage から読み込まれる）
+- 描画が消えていない
+
+**観測ポイント:**
+- localStorage の `draft_paint_*` キーの有無
+- PaintCanvas の `loadDraft()` 呼び出しログ
+- 復元された shapes の数
+
+**NG時切り分け:**
+- 描画が消える → localStorage 保存タイミング確認
+- 復元されない → loadDraft() の条件分岐確認
 
 ---
 
-### V-05: 送信中〜temp→real後も描画が消えない/ちらつかない
-- **手順**:
-  1. ShareView を開く
-  2. ネットワークを Slow 3G に設定（DevTools → Network → Throttling）
-  3. 新規コメントを作成し、ペンツールで描画
-  4. コメントを送信（Submit）
-  5. 送信中〜送信完了後も描画が消えない/ちらつかないことを確認
-- **観測ポイント**:
-  - 送信中に `isFreezing` が true になっている（handoff 中）
-  - `lockPaintContextIdRef.current` が temp→real の ID 遷移を記録している
-  - refetch で `incoming=[]` になる瞬間があっても、`[P0-FLICKER] SYNC SKIP: transient empty` のログが出て Map が保持されている
-  - 送信完了後、`lastNonEmptyShapesRef.current` が non-empty の描画を保持している
-- **NG時の切り分け**:
-  - `isFreezing` が false のままなら handoff ロジックの不具合
-  - Map がクリアされているなら P0-FLICKER パッチの条件不足
-  - temp→real 遷移で描画が消えるなら canvasContextKey の不適切な変化
+### V-05: temp → real 遷移時の描画保持（handoff/freeze）
+
+**手順:**
+1. ShareView でファイルを開く
+2. Canvas 上の任意の位置で新規コメント入力開始（描画あり）
+3. 描画を追加（pen/rect/circleなど）
+4. テキストを入力し、送信ボタンをクリック
+
+**期待結果:**
+- 送信中（react-query refetch中）も描画が表示され続ける
+- temp → real 遷移時にちらつかない
+- 新規コメント作成後、描画が正しく表示される
+
+**観測ポイント:**
+- `handoffRef.snapshot` の内容（送信直前）
+- `freezeRef.shapesForCanvas` の内容（freeze中）
+- `lockPaintContextIdRef.current` の値（temp/real ID）
+- Console の "handoff" / "freeze" / "unlock" ログ
+
+**NG時切り分け:**
+- 描画が消える → handoffRef/freezeRef のタイミング確認
+- ちらつく → freeze 解除タイミング確認（isFetching=false の確認）
 
 ---
 
 ## 実行記録
 
-| 実行日 | 実行者 | 結果 | メモ |
-|--------|--------|------|------|
-| 2026-01-17 | - | 未実行 | 次スコープで V-01〜V-05 を1周実行予定 |
+| 日付       | 実行者 | V-01 | V-02 | V-03 | V-04 | V-05 | メモ |
+| :--------- | :----- | :--- | :--- | :--- | :--- | :--- | :--- |
+| 2026-01-17 | -      | -    | -    | -    | -    | -    | 次スコープで実行予定 |

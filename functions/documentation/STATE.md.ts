@@ -1,40 +1,81 @@
-# STATE.md
+# STATE.md - プロジェクト現在地
 
-## 現在の状態（2026-01-17）
+## TL;DR
 
-### バグ TOP3
+-   **フェーズ:** ビューア/コメント/描画 の基本機能 + 複数FIX・設計確立済み。修正メイン（新規4：修正6）。
+-   **コア課題:** temp→real ハンドオフ時のちらつき（P0）と、ペイントモード切替時のズーム飛び（P1）が **Investigating**。
+-   **重要:** Selection suppressed、Composer textarea操作時の`activeCommentId` null化、ViewerCanvas常時レンダリング（Layer key切替）は **絶対維持**。
+-   **Next:** V-01〜V-05 を実行→VERIFY実行記録→BUGS/STATE整合更新。
 
-| ID | 概要 | 優先度 | 現状 |
-|----|------|--------|------|
-| B-0001 | temp→real 遷移時の描画消失 | P1 | Done(Verified) - V-05 OK（2026-01-17） |
-| B-0002 | ペイントON/OFF切替時にズーム/パンがリセット | P1 | Investigating - V-03 未実行 |
-| B-0003 | 描画下書きがモード往復で消える | P2 | Investigating - V-04 未実行 |
+---
 
-### 直近の変更（7日分）
+## 今のゴール
 
-| 日付 | 変更内容 | Verify | メモ |
-|------|----------|--------|------|
-| 2026-01-17 | admin専用ドキュメントダウンロードページ作成（pages/AdminDocuments.jsx） | - | 4ドキュメントファイルをadminユーザーのみがダウンロード可能 |
-| 2026-01-17 | ドキュメント4ファイル新規作成（SPEC/BUGS/VERIFY/STATE.md） | - | functions/documentation/*.md を見出し1行で作成、Reading成功を確認 |
+### 短期（1-2週間）
 
-### 次の最小ステップ（1つ）
+-   P0バグ（B-0003: handoff/freeze）の原因特定と修正。
+-   P1バグ（B-0002: paintMode ズーム飛び）の原因検査。
+-   VERIFY.md の最低5点テストを全点 OK に。
+
+### 中期（1ヶ月）
+
+-   追加推奨テスト 5項（V-A01〜A05）の実装・検証。
+-   大量データ・例外系の負荷テスト。
+-   手操作テスト記録の蓄積（実行記録セクション埋め）。
+
+---
+
+## バグTOP3
+
+| ID     | 症状                                      | 優先度 | 現状            | 次アクション                           |
+| :----- | :---------------------------------------- | :----- | :-------------- | :------------------------------------- |
+| B-0003 | temp→real後、描画がちらつく/消える        | **P0** | Investigating   | V-05実行→根拠確定→修正                  |
+| B-0002 | ペイント ON/OFF時、ズーム/パンが飛ぶ        | **P1** | Investigating   | V-03実行→根拠確定→修正                  |
+| B-0001 | テキスト入力中、他コメントが再選択される   | **P1** | Done (Verified) | V-02 PASS - リグレッション監視のみ      |
+
+---
+
+## 直近の変更（7日分）
+
+| 日付       | 要点                                   | 影響範囲                    | Verify要約                   |
+| :--------- | :------------------------------------- | :-------------------------- | :--------------------------- |
+| 2026-01-17 | 4ドキュメント新規作成（Reading成功）    | documentation               | 次: V-01〜V-05 実行          |
+| 2026-01-17 | admin専用ドキュメントダウンロードページ | pages/AdminDocuments.jsx    | -（ドキュメント）            |
+
+---
+
+## 重要な設計方針（必ず守る）
+
+1. **Selection Suppressed（選択抑制）**
+   - 新規コメント入力中（`isNewCommentInputActive=true` または Textarea フォーカス中）は、右パネルのコメント選択を `onPointerDownCapture` で完全ブロック。
+   - `stopPropagation()` + `preventDefault()` で二重保険。
+   - 解除タイミング: 入力キャンセル時 or 送信完了時。
+
+2. **activeCommentId null化（新規入力時）**
+   - `enterNewTextOnlyComposer()` が呼び出された瞬間に `activeCommentId` を `null` に。
+   - これにより Canvas は "新規描画モード（temp_XXX ID）" に切り替わる。
+   - テキスト送信後、新規コメントが作成され `activeCommentId` が real_YYYY に更新される。
+
+3. **ViewerCanvas 常時レンダリング（Layer key 制御）**
+   - `ViewerCanvas` コンポーネント自体は **再マウント禁止**（ズーム/パン保持のため）。
+   - 代わりに、内部の `<Layer>` に `key={hidePaintOverlay ? 'hide' : 'show'}` を付与。
+   - 隠示/表示時に Layer のみ再マウント→前フレームの描画幽霊を確実に消去。
+
+4. **temp → real handoff/freeze**
+   - コメント送信時、`handoffRef.snapshot` と `freezeRef.shapesForCanvas` で描画を二重保護。
+   - `react-query` 再フェッチ中も描画が消えない。
+   - freeze 解除タイミング: `react-query` の `isFetching=false` 確認後。
+
+5. **Map 方式での不変更新**
+   - `shapesMapRef.current = new Map(...)` で新しい参照を作成。
+   - 既存 Map をミューテートしない（参照の入れ替わりが検知されない）。
+
+---
+
+## 次の最小ステップ（1つ）
 
 1. **V-01〜V-05 回帰テスト実行** (P0)
    - ShareView で V-01→V-05 を1周実行
    - 各テストの OK/NG と観測ログ要点を VERIFY.md「実行記録」に追記
    - V-03 結果で B-0002、V-05 結果で B-0003 のステータスを更新
    - STATE.md の「バグTOP3」を検証結果と一致させる
-
-### アーキテクチャ（変更禁止）
-
-- **Selection Suppression**: 新規コメント入力中は activeCommentId=null、選択抑制
-- **Handoff/Freeze**: temp→real 遷移時に handoffRef/freezeRef でコンテキスト凍結
-- **ViewerCanvas 常時レンダリング**: Stage/ViewerCanvas は key で強制再マウントしない
-- **Paint Layer 制御的 key 使用**: hidePaintOverlay/forceClearToken/canvasContextKey の変化時のみ Paint Layer を再マウント可
-
-### 運用ルール
-
-- **推測修正禁止**: 根拠なしで変更しない（Verify 結果を元に判断）
-- **最小差分**: 無関係な変更を混入させない
-- **Verify 通過が完了条件**: Done(Verified) は Verify OK を根拠に記載
-- **1スコープ=1バグ/1機能**: 範囲を広げない
