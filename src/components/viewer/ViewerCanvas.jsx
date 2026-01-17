@@ -121,6 +121,8 @@ const ViewerCanvas = forwardRef(({
   isCanvasTransitioning = false, // ★★★ D: 遷移中フラグ（incoming empty時のMap保持用）★★★
   hidePaintOverlay = false, // ★★★ 案B: 新規コメント入力中は描画を非表示 ★★★
   onBgLoad = null, // ★★★ FIT: 背景ロード完了時のコールバック ★★★
+  externalPan = null, // ★★★ FIT: 親からのpan制御 ★★★
+  onPanChange = null, // ★★★ FIT: pan変更を親に通知 ★★★
 }, ref) => {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
@@ -203,8 +205,10 @@ const ViewerCanvas = forwardRef(({
     currentShapeRef2.current = currentShape;
   }, [currentShape]);
   
-  // パン状態
-  const [pan, setPan] = useState({ x: 0, y: 0 });
+  // パン状態（★★★ FIT: 親制御とローカル制御の統合 ★★★）
+  const [localPan, setLocalPan] = useState({ x: 0, y: 0 });
+  const pan = externalPan || localPan;
+  const setPan = onPanChange || setLocalPan;
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0, px: 0, py: 0 });
   
@@ -1112,8 +1116,9 @@ const ViewerCanvas = forwardRef(({
     }
   }, [containerSize, onBgLoad]);
   
-  // CRITICAL: パンは select ツール時のみ（描画ツールとの競合回避）
-  const canPan = paintMode && tool === 'select' && zoom > 100;
+  // CRITICAL: パンは非ペイント時 or selectツール時（描画ツールとの競合回避）
+  // ★★★ FIT: zoom>=100 なら常にパン可能（はみ出し時の移動を復活）★★★
+  const canPan = (!paintMode || tool === 'select') && !textEditor.visible && !isDrawing;
   
   // パン範囲のクランプ
   const clampPan = (nx, ny) => {

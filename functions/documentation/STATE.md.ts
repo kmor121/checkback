@@ -3,7 +3,7 @@
 ## TL;DR
 
 -   **フェーズ:** ビューア/コメント/描画 の基本機能 + 複数FIX・設計確立済み。修正メイン（新規4：修正6）。
--   **コア課題:** temp→real ハンドオフ時のちらつき（P0）と、ペイントモード切替時のズーム飛び（P1）が **Investigating**。
+-   **コア課題:** ズーム/フィット不具合（全体/横/縦がはみ出す/小さすぎる）とパン回帰（ドラッグ移動不可）を修正完了。temp→realハンドオフ時のちらつき（P0）とペイントモード切替時のズーム飛び（P1）が **Investigating**。
 -   **重要:** Selection suppressed、Composer textarea操作時の`activeCommentId` null化、ViewerCanvas常時レンダリング（Layer key切替）は **絶対維持**。
 -   **Next:** V-01〜V-05 を実行→VERIFY実行記録→BUGS/STATE整合更新。
 
@@ -13,6 +13,7 @@
 
 ### 短期（1-2週間）
 
+-   ズーム/フィット/パンの挙動を安定させる（今回修正完了）。
 -   P0バグ（B-0003: handoff/freeze）の原因特定と修正。
 -   P1バグ（B-0002: paintMode ズーム飛び）の原因検査。
 -   VERIFY.md の最低5点テストを全点 OK に。
@@ -39,10 +40,9 @@
 
 | 日付       | 要点                                   | 影響範囲                    | Verify要約                   |
 | :--------- | :------------------------------------- | :-------------------------- | :--------------------------- |
-| 2026-01-17 | ドキュメント本文をDL本文と同期（SPEC/BUGS/VERIFY/STATE） | functions/documentation/*.md | 次: V-01〜V-05 実行 |
+| 2026-01-17 | ズーム/フィット不具合修正＋パン復活       | ViewerCanvas, ShareView      | zoom契約一本化（二重適用解消）、canPan条件緩和 |
 | 2026-01-17 | AdminDocuments ダウンロード機能修正（backend functionに内容埋込） | functions/downloadDocumentation.js | admin権限チェック付き |
 | 2026-01-17 | 4ドキュメント新規作成（Reading成功）    | documentation               | 次: V-01〜V-05 実行          |
-| 2026-01-17 | admin専用ドキュメントダウンロードページ | pages/AdminDocuments.jsx    | -（ドキュメント）            |
 
 ---
 
@@ -71,6 +71,11 @@
 5. **Map 方式での不変更新**
    - `shapesMapRef.current = new Map(...)` で新しい参照を作成。
    - 既存 Map をミューテートしない（参照の入れ替わりが検知されない）。
+
+6. **ズーム値の契約（2026-01-17追加）**
+   - ViewerCanvas: `contentScale = fitScale * (zoom / 100)`
+   - ShareView: `zoom = 100` が全体フィット基準、横幅/縦幅は `(scaleW or scaleH / fitScale) * 100`
+   - 二重適用禁止（fitScaleを両側で掛けない）
 
 ---
 

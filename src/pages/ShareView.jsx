@@ -126,6 +126,7 @@ function ShareViewContent() {
   const [commentFilter, setCommentFilter] = useState('all');
   const [commentSort, setCommentSort] = useState('page');
   const [paintMode, setPaintMode] = useState(false);
+  const [pan, setPan] = useState({ x: 0, y: 0 }); // ★★★ FIT: pan state を ShareView に追加 ★★★
   const [tool, setTool] = useState('select');
   const lastDrawToolRef = useRef('pen'); // 最後に使った描画ツール
   const [strokeColor, setStrokeColor] = useState('#ff0000');
@@ -3175,13 +3176,14 @@ function ShareViewContent() {
                         fileUrl={file?.file_url}
                         mimeType={file?.mime_type}
                         pageNumber={currentPage}
+                        externalPan={pan}
+                        onPanChange={setPan}
                         onBgLoad={(bgSize, containerSize) => {
                           // ★★★ FIT: 初期フィット適用（ファイル変更時のみ） ★★★
                           if (fitMode === 'fit' && bgSize && containerSize && bgSize.width > 0 && bgSize.height > 0 && containerSize.width > 0 && containerSize.height > 0) {
-                            const scale = Math.min(containerSize.width / bgSize.width, containerSize.height / bgSize.height);
-                            const newZoom = Math.round(scale * 100);
-                            console.log('[FIT] Initial fit applied:', { bgSize, containerSize, scale, newZoom });
-                            setZoom(newZoom);
+                            console.log('[FIT] Initial fit applied (zoom=100, pan=0):', { bgSize, containerSize });
+                            setZoom(100);
+                            setPan({ x: 0, y: 0 });
                           }
                         }}
                         existingShapes={(() => {
@@ -3344,13 +3346,9 @@ function ShareViewContent() {
                   size="sm" 
                   className="text-xs px-2"
                   onClick={() => {
-                    const canvas = viewerCanvasRef.current;
-                    if (!canvas) return;
-                    const bg = canvas.getBgSize?.();
-                    const container = canvas.getContainerSize?.();
-                    if (!bg || !container || bg.width === 0 || bg.height === 0) return;
-                    const scale = Math.min(container.width / bg.width, container.height / bg.height);
-                    setZoom(Math.round(scale * 100));
+                    console.log('[FIT] 全体 clicked');
+                    setZoom(100);
+                    setPan({ x: 0, y: 0 });
                     setFitMode('fit');
                   }}
                 >
@@ -3365,9 +3363,13 @@ function ShareViewContent() {
                     if (!canvas) return;
                     const bg = canvas.getBgSize?.();
                     const container = canvas.getContainerSize?.();
-                    if (!bg || !container || bg.width === 0) return;
-                    const scale = container.width / bg.width;
-                    setZoom(Math.round(scale * 100));
+                    if (!bg || !container || bg.width === 0 || bg.height === 0 || container.width === 0) return;
+                    const fitScale = Math.min(container.width / bg.width, container.height / bg.height);
+                    const scaleW = container.width / bg.width;
+                    const newZoom = Math.round((scaleW / fitScale) * 100);
+                    console.log('[FIT] 横幅 clicked:', { containerW: container.width, bgW: bg.width, fitScale: fitScale.toFixed(3), scaleW: scaleW.toFixed(3), newZoom });
+                    setZoom(newZoom);
+                    setPan({ x: 0, y: 0 });
                     setFitMode('width');
                   }}
                 >
@@ -3382,9 +3384,13 @@ function ShareViewContent() {
                     if (!canvas) return;
                     const bg = canvas.getBgSize?.();
                     const container = canvas.getContainerSize?.();
-                    if (!bg || !container || bg.height === 0) return;
-                    const scale = container.height / bg.height;
-                    setZoom(Math.round(scale * 100));
+                    if (!bg || !container || bg.height === 0 || bg.width === 0 || container.height === 0) return;
+                    const fitScale = Math.min(container.width / bg.width, container.height / bg.height);
+                    const scaleH = container.height / bg.height;
+                    const newZoom = Math.round((scaleH / fitScale) * 100);
+                    console.log('[FIT] 縦幅 clicked:', { containerH: container.height, bgH: bg.height, fitScale: fitScale.toFixed(3), scaleH: scaleH.toFixed(3), newZoom });
+                    setZoom(newZoom);
+                    setPan({ x: 0, y: 0 });
                     setFitMode('height');
                   }}
                 >
