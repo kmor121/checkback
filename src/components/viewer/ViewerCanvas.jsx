@@ -3440,6 +3440,18 @@ const ViewerCanvas = forwardRef(({
             >
               {!hidePaintOverlay && (
                 <>
+                  {/* ★★★ P0-DIAG: 描画直前の詳細ログ ★★★ */}
+                  {console.log('[ViewerCanvas] RENDER:', {
+                    renderedShapesFinalCount: renderedShapesFinal.length,
+                    currentShapeExists: !!currentShape,
+                    currentShapeId: currentShape?.id?.substring(0, 8) || 'null',
+                    currentShapeTool: currentShape?.tool || 'null',
+                    currentShapePoints: currentShape?.points?.length || 0,
+                    viewX,
+                    viewY,
+                    contentScale,
+                  }) || null}
+
                   {/* ★★★ CRITICAL: 確定済みshapeのみ描画（currentShapeとの重複は既に除外済み）★★★ */}
                   {renderedShapesFinal.map(s => renderShape(s, true))}
 
