@@ -14,6 +14,7 @@
 
 | 日付 | 変更内容 | Verify | メモ |
 |------|----------|--------|------|
+| 2026-01-17 | admin専用ドキュメントダウンロードページ作成（pages/AdminDocuments.jsx） | - | 4ドキュメントファイルをadminユーザーのみがダウンロード可能 |
 | 2026-01-17 | ドキュメント4ファイル新規作成（SPEC/BUGS/VERIFY/STATE.md） | - | functions/documentation/*.md を見出し1行で作成、Reading成功を確認 |
 
 ### 次の最小ステップ（1つ）
