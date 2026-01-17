@@ -3,7 +3,7 @@
 ## TL;DR
 
 -   **フェーズ:** ビューア/コメント/描画 の基本機能 + 複数FIX・設計確立済み。修正メイン（新規4：修正6）。
--   **コア課題:** TDZ（scaledWidth参照エラー）修正完了。横幅/縦幅の"余白時でも効く"UX改善は次スコープ。temp→realハンドオフ時のちらつき（P0）とペイントモード切替時のズーム飛び（P1）が **Investigating**。
+-   **コア課題:** 無限ループ修正完了（clampPan useCallback化 + pan依存配列追加で循環setState根絶）。横幅/縦幅の"余白時でも効く"UX改善は次スコープ。temp→realハンドオフ時のちらつき（P0）とペイントモード切替時のズーム飛び（P1）が **Investigating**。
 -   **重要:** Selection suppressed、Composer textarea操作時の`activeCommentId` null化、ViewerCanvas常時レンダリング（Layer key切替）は **絶対維持**。
 -   **Next:** 横幅/縦幅の余白時UX改善（fitMode反映）→ V-01〜V-05 回帰テスト実行。
 
@@ -13,7 +13,7 @@
 
 ### 短期（1-2週間）
 
--   ズーム/フィット/パンの挙動を安定させる（TDZ修正完了、fitMode契約は次）。
+-   ズーム/フィット/パンの挙動を安定させる（無限ループ修正完了、fitMode契約は次）。
 -   P0バグ（B-0003: handoff/freeze）の原因特定と修正。
 -   P1バグ（B-0002: paintMode ズーム飛び）の原因検査。
 -   VERIFY.md の最低5点テストを全点 OK に。
@@ -40,9 +40,9 @@
 
 | 日付       | 要点                                   | 影響範囲                    | Verify要約                   |
 | :--------- | :------------------------------------- | :-------------------------- | :--------------------------- |
+| 2026-01-17 | 無限ループ修正（clampPan useCallback化、pan依存配列追加） | ViewerCanvas | setPan連鎖を同値ガード + 安定化で根絶 |
 | 2026-01-17 | TDZ修正（scaledWidth参照エラー）、clampPanインライン展開で循環参照解消 | ViewerCanvas | useEffect内でscaledWidth直接計算、依存配列からscaledWidth除去 |
 | 2026-01-17 | パンクラッシュ修正（clampPan同値ガード） | ViewerCanvas                | zoom useEffect の無限ループ解消 |
-| 2026-01-17 | ズーム/フィット不具合修正＋パン復活       | ViewerCanvas, ShareView      | zoom契約一本化（二重適用解消）、canPan条件緩和 |
 
 ---
 
@@ -77,9 +77,9 @@
    - ShareView: `zoom = 100` が全体フィット基準、横幅/縦幅は `(scaleW or scaleH / fitScale) * 100`
    - 二重適用禁止（fitScaleを両側で掛けない）
 
-7. **パンの同値ガード（2026-01-17追加）**
-   - clampPan はインライン展開（関数呼び出しで循環参照を回避）
-   - zoom useEffect 内で scaledWidth/Height を直接計算、依存配列には入れない
+7. **clampPan 安定化（2026-01-17追加）**
+   - useCallback で参照固定、scaledWidth/Height は引数で渡す（循環依存回避）
+   - zoom useEffect の依存配列に pan を追加（同値ガードで無限ループ防止）
 
 ---
 

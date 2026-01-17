@@ -525,39 +525,20 @@ const ViewerCanvas = forwardRef(({
   }, [fileIdentity, pageNumber, externalPan]);
 
   // zoom変更時はpanのクランプのみ（shapesは触らない）
-  // ★★★ FIT-FIX: clampPan をインライン計算（scaledWidth/Height の循環参照回避）★★★
+  // ★★★ FIT-FIX: useCallbackで安定化したclampPanを使用 ★★★
   useEffect(() => {
-    // ★ clampPan をインライン展開（関数呼び出しせず、直接計算）
     const currentScaledWidth = bgSize.width * contentScale;
     const currentScaledHeight = bgSize.height * contentScale;
-    
-    let clampedX = pan.x;
-    let clampedY = pan.y;
-    
-    if (currentScaledWidth <= containerSize.width) {
-      clampedX = 0;
-    } else {
-      const minX = containerSize.width - currentScaledWidth;
-      const maxX = 0;
-      clampedX = Math.min(maxX, Math.max(minX, pan.x));
-    }
-    
-    if (currentScaledHeight <= containerSize.height) {
-      clampedY = 0;
-    } else {
-      const minY = containerSize.height - currentScaledHeight;
-      const maxY = 0;
-      clampedY = Math.min(maxY, Math.max(minY, pan.y));
-    }
+    const clamped = clampPan(pan.x, pan.y, currentScaledWidth, currentScaledHeight);
     
     // 同値ガード（無限ループ防止）
-    if (clampedX !== pan.x || clampedY !== pan.y) {
-      console.log('[FIT] zoom/size changed, clamping pan:', { from: pan, to: { x: clampedX, y: clampedY } });
-      setPan({ x: clampedX, y: clampedY });
+    if (clamped.x !== pan.x || clamped.y !== pan.y) {
+      console.log('[FIT] zoom/size changed, clamping pan:', { from: pan, to: clamped });
+      setPan(clamped);
     } else if (DEBUG_MODE) {
       console.log('[FIT] zoom/size changed, pan already clamped (skip setPan)');
     }
-  }, [zoom, containerSize.width, containerSize.height, bgSize.width, bgSize.height]);
+  }, [zoom, containerSize.width, containerSize.height, bgSize.width, bgSize.height, clampPan, contentScale, pan]);
 
   // ★★★ P0: forceClearToken は UI状態のみリセット（Map破壊禁止、Layer key切替で対応）★★★
   const prevForceClearTokenRef = useRef(forceClearToken);
@@ -1150,26 +1131,26 @@ const ViewerCanvas = forwardRef(({
   // ★★★ FIT: zoom>=100 なら常にパン可能（はみ出し時の移動を復活）★★★
   const canPan = (!paintMode || tool === 'select') && !textEditor.visible && !isDrawing;
   
-  // パン範囲のクランプ
-  const clampPan = (nx, ny) => {
-    if (scaledWidth <= containerSize.width) {
+  // パン範囲のクランプ（★★★ FIT-FIX: useCallback で安定化、scaledWidth/Height を引数で受け取る ★★★）
+  const clampPan = useCallback((nx, ny, currentScaledW, currentScaledH) => {
+    if (currentScaledW <= containerSize.width) {
       nx = 0;
     } else {
-      const minX = containerSize.width - scaledWidth;
+      const minX = containerSize.width - currentScaledW;
       const maxX = 0;
       nx = Math.min(maxX, Math.max(minX, nx));
     }
     
-    if (scaledHeight <= containerSize.height) {
+    if (currentScaledH <= containerSize.height) {
       ny = 0;
     } else {
-      const minY = containerSize.height - scaledHeight;
+      const minY = containerSize.height - currentScaledH;
       const maxY = 0;
       ny = Math.min(maxY, Math.max(minY, ny));
     }
     
     return { x: nx, y: ny };
-  };
+  }, [containerSize.width, containerSize.height]);
   
 
 
@@ -1412,7 +1393,9 @@ const ViewerCanvas = forwardRef(({
       if (!p) return;
       const dx = p.x - panStartRef.current.px;
       const dy = p.y - panStartRef.current.py;
-      const next = clampPan(panStartRef.current.x + dx, panStartRef.current.y + dy);
+      const currentScaledWidth = bgSize.width * contentScale;
+      const currentScaledHeight = bgSize.height * contentScale;
+      const next = clampPan(panStartRef.current.x + dx, panStartRef.current.y + dy, currentScaledWidth, currentScaledHeight);
       setPan(next);
       return;
     }
