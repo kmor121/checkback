@@ -2592,28 +2592,6 @@ const ViewerCanvas = forwardRef(({
     delete: handleDelete,
     canUndo: undoStack.length > 0,
     canRedo: redoStack.length > 0,
-    // ★★★ FIT ZOOM: フィット倍率を計算（ref経由で ShareView から取得） ★★★
-    getFitZoom: (fitMode) => {
-      // fitMode: 'all', 'width', 'height'
-      if (fitMode === 'all') return 100;
-      
-      const w_ratio = containerSize.width / bgSize.width;
-      const h_ratio = containerSize.height / bgSize.height;
-      const fitScale_current = Math.min(w_ratio, h_ratio) || 1;
-      
-      if (fitMode === 'width') {
-        // contentScale = fitScale * userScale = w_ratio
-        // fitScale * (zoom/100) = w_ratio
-        // zoom = 100 * w_ratio / fitScale
-        return Math.round(100 * w_ratio / fitScale_current);
-      }
-      if (fitMode === 'height') {
-        // contentScale = fitScale * userScale = h_ratio
-        // zoom = 100 * h_ratio / fitScale
-        return Math.round(100 * h_ratio / fitScale_current);
-      }
-      return 100;
-    },
   }));
   
   // Shape描画（正規化座標から復元）

@@ -211,14 +211,6 @@ function ShareViewContent() {
   };
   
   const viewerCanvasRef = useRef(null);
-  
-  // ★★★ INITIAL FIT: ファイル/ページ変更時に zoom を初期値（全体フィット）に設定 ★★★
-  useEffect(() => {
-    // ファイルが読み込まれたら zoom をリセット（初期フィット）
-    if (shareLink?.file_id) {
-      setZoom(100);
-    }
-  }, [shareLink?.file_id, currentPage]);
   const queryClient = useQueryClient();
   const didInitActiveRef = useRef(false);
   const stablePaintContextIdRef = useRef(null); // A: 一瞬もnullにしない安定ID
@@ -3313,54 +3305,16 @@ function ShareViewContent() {
             </>
               )}
             
-            {/* ズーム制御 + フィット */}
+            {/* ズーム制御 */}
             <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-2 flex items-center gap-2">
-              <Button variant="outline" size="icon" onClick={() => setZoom(Math.max(50, zoom - 25))} title="拡大">
+              <Button variant="outline" size="icon" onClick={() => setZoom(Math.max(50, zoom - 25))}>
                 <ZoomOut className="w-4 h-4" />
               </Button>
               <span className="text-sm font-medium w-16 text-center">{zoom}%</span>
-              <Button variant="outline" size="icon" onClick={() => setZoom(Math.min(200, zoom + 25))} title="縮小">
+              <Button variant="outline" size="icon" onClick={() => setZoom(Math.min(200, zoom + 25))}>
                 <ZoomIn className="w-4 h-4" />
               </Button>
-              
-              {/* ★★★ フィットボタン ★★★ */}
-              <div className="border-l border-gray-200 pl-2 ml-2 flex gap-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-xs"
-                  title="全体に合わせる"
-                  onClick={() => {
-                    const fitZoom = viewerCanvasRef.current?.getFitZoom('all');
-                    if (fitZoom) setZoom(fitZoom);
-                  }}
-                >
-                  全体
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-xs"
-                  title="横幅に合わせる"
-                  onClick={() => {
-                    const fitZoom = viewerCanvasRef.current?.getFitZoom('width');
-                    if (fitZoom) setZoom(fitZoom);
-                  }}
-                >
-                  横
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-xs"
-                  title="縦幅に合わせる"
-                  onClick={() => {
-                    const fitZoom = viewerCanvasRef.current?.getFitZoom('height');
-                    if (fitZoom) setZoom(fitZoom);
-                  }}
-                >
-                  縦
-                </Button>
+            </div>
           </div>
 
           {/* 下段：コメント入力（composer） */}

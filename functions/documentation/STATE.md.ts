@@ -2,10 +2,10 @@
 
 ## TL;DR
 
--   **フェーズ:** ViewerCanvasにズーム/フィット機能を追加。
--   **コア課題:** なし（P0/P1バグは全てDone(Verified)）。
+-   **フェーズ:** ビューア/コメント/描画 の基本機能 + 複数FIX・設計確立済み。修正メイン（新規4：修正6）。
+-   **コア課題:** temp→real ハンドオフ時のちらつき（P0）と、ペイントモード切替時のズーム飛び（P1）が **Investigating**。
 -   **重要:** Selection suppressed、Composer textarea操作時の`activeCommentId` null化、ViewerCanvas常時レンダリング（Layer key切替）は **絶対維持**。
--   **Next:** リグレッション監視 / 追加推奨テスト実装（別スコープ）。
+-   **Next:** V-01〜V-05 を実行→VERIFY実行記録→BUGS/STATE整合更新。
 
 ---
 
@@ -13,8 +13,9 @@
 
 ### 短期（1-2週間）
 
--   ViewerCanvasのズーム/フィット機能の安定化。
--   VERIFY.md のテスト項目を全点 OK に。
+-   P0バグ（B-0003: handoff/freeze）の原因特定と修正。
+-   P1バグ（B-0002: paintMode ズーム飛び）の原因検査。
+-   VERIFY.md の最低5点テストを全点 OK に。
 
 ### 中期（1ヶ月）
 
@@ -28,9 +29,9 @@
 
 | ID     | 症状                                      | 優先度 | 現状            | 次アクション                           |
 | :----- | :---------------------------------------- | :----- | :-------------- | :------------------------------------- |
-| B-0003 | temp→real後、描画がちらつく/消える        | **P0** | Done (Verified) | V-05 OK - リグレッション監視のみ        |
-| B-0002 | ペイント ON/OFF時、ズーム/パンが飛ぶ        | **P1** | Done (Verified) | V-03 OK - リグレッション監視のみ        |
-| B-0001 | テキスト入力中、他コメントが再選択される   | **P1** | Done (Verified) | V-02 OK - リグレッション監視のみ        |
+| B-0003 | temp→real後、描画がちらつく/消える        | **P0** | Investigating   | V-05実行→根拠確定→修正                  |
+| B-0002 | ペイント ON/OFF時、ズーム/パンが飛ぶ        | **P1** | Investigating   | V-03実行→根拠確定→修正                  |
+| B-0001 | テキスト入力中、他コメントが再選択される   | **P1** | Done (Verified) | V-02 PASS - リグレッション監視のみ      |
 
 ---
 
@@ -38,8 +39,10 @@
 
 | 日付       | 要点                                   | 影響範囲                    | Verify要約                   |
 | :--------- | :------------------------------------- | :-------------------------- | :--------------------------- |
-| 2026-01-17 | ViewerCanvasにズーム/フィット機能追加     | ShareView, ViewerCanvas    | V-F01追加（後述）            |
-| 2026-01-17 | V-01〜V-05 全てOK（Slow 3G含む）        | -（テスト記録のみ）         | P0/P1バグ全てDone(Verified) |
+| 2026-01-17 | ドキュメント本文をDL本文と同期（SPEC/BUGS/VERIFY/STATE） | functions/documentation/*.md | 次: V-01〜V-05 実行 |
+| 2026-01-17 | AdminDocuments ダウンロード機能修正（backend functionに内容埋込） | functions/downloadDocumentation.js | admin権限チェック付き |
+| 2026-01-17 | 4ドキュメント新規作成（Reading成功）    | documentation               | 次: V-01〜V-05 実行          |
+| 2026-01-17 | admin専用ドキュメントダウンロードページ | pages/AdminDocuments.jsx    | -（ドキュメント）            |
 
 ---
 
@@ -73,6 +76,8 @@
 
 ## 次の最小ステップ（1つ）
 
-1.  **V-F01 ズーム/フィット機能テスト** (P1)
-    -   ShareViewでV-F01を実行
-    -   結果をVERIFY.md「実行記録」に追記
+1. **V-01〜V-05 回帰テスト実行** (P0)
+   - ShareView で V-01→V-05 を1周実行
+   - 各テストの OK/NG と観測ログ要点を VERIFY.md「実行記録」に追記
+   - V-03 結果で B-0002、V-05 結果で B-0003 のステータスを更新
+   - STATE.md の「バグTOP3」を検証結果と一致させる
