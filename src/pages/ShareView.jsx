@@ -189,12 +189,6 @@ function ShareViewContent() {
   const [tempCommentId, setTempCommentId] = useState(null);
   const saveDraftTimeoutRef = useRef(null);
   
-  // ★★★ P0-V8-FIX: hasTempDraft を tempCommentId 直後に配置（TDZ回避）★★★
-  const hasTempDraft = React.useMemo(() => {
-    if (!tempCommentId) return false;
-    return draftShapes.some(s => resolveCommentId(s) === tempCommentId);
-  }, [tempCommentId, draftShapes]);
-  
   // Composer mode (new or edit or reply)
   const [composerMode, setComposerMode] = useState('new');
   const [composerTargetCommentId, setComposerTargetCommentId] = useState(null);
@@ -535,6 +529,24 @@ function ShareViewContent() {
   // ★★★ CRITICAL: mode判定（TDZ回避のため、computedPaintContextIdより先に定義）★★★
   const isEditMode = composerMode === 'edit' && !!composerTargetCommentId;
   const isNewMode = composerMode === 'new' && !!tempCommentId;
+  
+  // ★★★ P0-V9: getTempDraftCount（localStorage直接参照、draftShapes依存排除）★★★
+  const getTempDraftCount = React.useCallback(() => {
+    if (!tempCommentId || !shareLink?.file_id) return 0;
+    const tempDraftKey = getDraftKey(shareLink.file_id, null, tempCommentId, 'new');
+    const draft = loadDraft(tempDraftKey);
+    return draft?.shapes?.length || 0;
+  }, [tempCommentId, shareLink?.file_id]);
+  
+  // ★★★ P0-V9: hasTempDraft（localStorage直接参照、draftShapes依存排除）★★★
+  const hasTempDraft = React.useMemo(() => {
+    if (!tempCommentId) return false;
+    // localStorage から直接読み取り（draftShapes が空でも判定成立）
+    const count = getTempDraftCount();
+    if (count > 0) return true;
+    // フォールバック: メモリにあれば true
+    return draftShapes.some(s => resolveCommentId(s) === tempCommentId);
+  }, [tempCommentId, getTempDraftCount, draftShapes]);
 
   // ★★★ CRITICAL: Draft state logic moved here to resolve TDZ
   const hydratedKeyRef = useRef(null);
@@ -658,6 +670,11 @@ function ShareViewContent() {
   const targetKey = React.useMemo(() => {
     // ★★★ P0-V6: 未選択（view+unselected）の時は new scope の temp_ draft を参照 ★★★
     if (!shareLink?.file_id) return null;
+    
+    // ★★★ P0-V9: tempプレビュー時も必ず tempDraftKey を返す（hydrate切断防止）★★★
+    if (isTempDraftPreview && tempCommentId) {
+      return getDraftKey(shareLink.file_id, null, tempCommentId, 'new');
+    }
     
     if (composerMode === 'view' && isUnselected && tempCommentId) {
       // 未選択時は new scope の draft を常に参照（下書き消失防止）
@@ -2044,7 +2061,7 @@ function ShareViewContent() {
     setIsDockOpen(true);
     setShowAllPaint(false);
 
-    // ★★★ P0-V8: temp下書きプレビューOFF（コメント選択でプレビュー解除）★★★
+    // ★★★ P0-V9: temp下書きプレビューOFF（コメント選択でプレビュー解除）★★★
     setIsTempDraftPreview(false);
 
     // ★★★ P0-FINAL: 必ず view に遷移（new状態から復帰できるように）★★★
@@ -3595,27 +3612,30 @@ function ShareViewContent() {
                           ) : null;
                         })()}
                       </div>
-                    ) : hasTempDraft ? (
-                      <div className="text-xs text-gray-500 flex items-center gap-2">
-                        <Badge 
-                          className="bg-blue-600 text-white cursor-pointer hover:bg-blue-700"
-                          onClick={() => {
-                            setActiveCommentId(null);
-                            setIsTempDraftPreview(true);
-                            setComposerMode('view');
-                            setComposerTargetCommentId(null);
-                            setShowAllPaint(false);
-                            setPaintMode(false);
-                            setIsDockOpen(false);
-                            addDebugLog(`[P0-V8] bottom temp draft badge clicked: preview ON`);
-                          }}
-                          title="クリックして新規下書きをプレビュー"
-                        >
-                          📝 新規下書き {draftShapes.filter(s => resolveCommentId(s) === tempCommentId).length}個
-                        </Badge>
-                        <span>クリックしてプレビュー</span>
-                      </div>
-                    ) : (
+                    ) : (() => {
+                      const tempDraftCount = getTempDraftCount();
+                      return tempDraftCount > 0 ? (
+                        <div className="text-xs text-gray-500 flex items-center gap-2">
+                          <Badge 
+                            className="bg-blue-600 text-white cursor-pointer hover:bg-blue-700"
+                            onClick={() => {
+                              setActiveCommentId(null);
+                              setIsTempDraftPreview(true);
+                              setComposerMode('view');
+                              setComposerTargetCommentId(null);
+                              setShowAllPaint(false);
+                              setPaintMode(false);
+                              setIsDockOpen(false);
+                              addDebugLog(`[P0-V9] bottom temp draft badge clicked: preview ON`);
+                            }}
+                            title="クリックして新規下書きをプレビュー"
+                          >
+                            📝 新規下書き {tempDraftCount}個
+                          </Badge>
+                          <span>クリックしてプレビュー</span>
+                        </div>
+                      ) : null;
+                    })() || (
                       <div className="opacity-0 pointer-events-none">placeholder</div>
                     )}
                   </div>
@@ -3663,32 +3683,35 @@ function ShareViewContent() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {/* ★★★ P0-V8: temp下書き共通バッジ（常時表示、クリックで未選択＋プレビュー）★★★ */}
-              {hasTempDraft && (
-                <div 
-                  className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 cursor-pointer hover:bg-blue-100 transition-colors"
-                  onClick={() => {
-                    setActiveCommentId(null);
-                    setIsTempDraftPreview(true);
-                    setComposerMode('view');
-                    setComposerTargetCommentId(null);
-                    setShowAllPaint(false);
-                    setPaintMode(false);
-                    setIsDockOpen(false);
-                    addDebugLog(`[P0-V8] temp draft badge clicked: preview ON`);
-                  }}
-                  title="クリックして新規下書きをプレビュー"
-                >
-                  <div className="flex items-center gap-2 text-sm">
-                    <Badge className="bg-blue-600 text-white">
-                      📝 新規下書き
-                    </Badge>
-                    <span className="text-blue-800">
-                      {draftShapes.filter(s => resolveCommentId(s) === tempCommentId).length}個の描画
-                    </span>
+              {/* ★★★ P0-V9: temp下書き共通バッジ（localStorage直接判定、draftShapes依存排除）★★★ */}
+              {(() => {
+                const tempDraftCount = getTempDraftCount();
+                return tempDraftCount > 0 && (
+                  <div 
+                    className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 cursor-pointer hover:bg-blue-100 transition-colors"
+                    onClick={() => {
+                      setActiveCommentId(null);
+                      setIsTempDraftPreview(true);
+                      setComposerMode('view');
+                      setComposerTargetCommentId(null);
+                      setShowAllPaint(false);
+                      setPaintMode(false);
+                      setIsDockOpen(false);
+                      addDebugLog(`[P0-V9] top temp draft badge clicked: preview ON`);
+                    }}
+                    title="クリックして新規下書きをプレビュー"
+                  >
+                    <div className="flex items-center gap-2 text-sm">
+                      <Badge className="bg-blue-600 text-white">
+                        📝 新規下書き
+                      </Badge>
+                      <span className="text-blue-800">
+                        {tempDraftCount}個の描画
+                      </span>
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
               
               {/* P0-FINAL: comments は freeze しない（即時反映優先） */}
               {sortedComments.length === 0 ? (
