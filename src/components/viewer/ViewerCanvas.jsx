@@ -149,8 +149,8 @@ const ViewerCanvas = forwardRef(({
   const [error, setError] = useState(null);
   const [bgReady, setBgReady] = useState(false); // P2 FIX: 背景ロード完了フラグ
   
-  // ★★★ P0-FIX: contentReady判定（bgSize確定ベース、bgReadyフラグ揺れに依存しない）★★★
-  const contentReady = bgSize.width > 0 && bgSize.height > 0;
+  // ★★★ P0-V5: contentReady判定（bgReady フラグベース、リロード時フラッシュ防止）★★★
+  const contentReady = bgReady && bgSize.width > 0 && bgSize.height > 0;
 
   
   // 描画状態（CRITICAL: Map方式で置換禁止）
@@ -607,7 +607,8 @@ const ViewerCanvas = forwardRef(({
     if (!prev && !next) return;
     if (!prev && next) {
       prevFileIdentityRef.current = next;
-      console.log('[P0-FIX] fileIdentity first set, NO reset:', next?.substring(0, 30));
+      prevFileIdentityRef.pageNumber = pageNumber;
+      console.log('[P0-V5] fileIdentity first set, NO reset (pageNumber also saved):', { fileId: next?.substring(0, 30), pageNumber });
       return;
     }
     
@@ -1231,13 +1232,17 @@ const ViewerCanvas = forwardRef(({
   const viewX = offsetX + pan.x;
   const viewY = offsetY + pan.y;
 
-  // P2 FIX: 背景画像のロードが完了したときに呼ばれ、bgReadyフラグを立てる
-  // ★★★ FIT: onBgLoadコールバックを追加（親に通知）★★★
+  // ★★★ P0-V5: bgLoad完了時に確実にフラグをONし、親に通知（初回のみ）★★★
+  const bgLoadCalledRef = useRef(false);
   const handleBgLoad = useCallback((size) => {
+    if (bgLoadCalledRef.current) {
+      console.log('[P0-V5] bgLoad already called, skipping duplicate');
+      return;
+    }
+    bgLoadCalledRef.current = true;
     setBgSize(size);
     setBgReady(true);
-    console.log('[P0-FIX] bgLoad SUCCESS, bgReady=true:', { width: size.width, height: size.height, containerWidth: containerSize.width, containerHeight: containerSize.height });
-    // 親に通知（初期フィット計算用）
+    console.log('[P0-V5] bgLoad SUCCESS, bgReady=true:', { width: size.width, height: size.height });
     if (onBgLoad) {
       onBgLoad(size, containerSize);
     }
@@ -3652,11 +3657,13 @@ const ViewerCanvas = forwardRef(({
                       contentScale,
                     }) || null}
 
-                    {/* ★★★ P0-FIX: 確定shape は contentReady 時のみ描画（リロード時フラッシュ防止）★★★ */}
-                    {contentReady && renderedShapesFinal.map(s => renderShape(s, true))}
-
-                    {/* ★★★ CRITICAL: 描画中のcurrentShapeは常に描画（contentReady不問、プレビュー必須）★★★ */}
-                    {currentShape && renderShape(currentShape, false)}
+                    {/* ★★★ P0-V5: 確定shapeも描画中shapeも contentReady 時のみ描画（リロード時フラッシュ完全防止）★★★ */}
+                    {contentReady && (
+                      <>
+                        {renderedShapesFinal.map(s => renderShape(s, true))}
+                        {currentShape && renderShape(currentShape, false)}
+                      </>
+                    )}
 
                     <Transformer ref={transformerRef} name="paintOverlay" />
                   </>
