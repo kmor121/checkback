@@ -373,13 +373,7 @@ const ViewerCanvas = forwardRef(({
       })),
     });
 
-    // ★★★ P0-FIX: showAllPaint を最優先（targetId より先にチェック、未選択時全表示UX）★★★
-    if (showAllPaint) {
-      console.log('[ViewerCanvas] renderedShapes UMEMO: showAllPaint=TRUE, returning all sourceShapes (priority)', { count: sourceShapes.length });
-      return sourceShapes;
-    }
-
-    // ★★★ P0-FIX: showAllPaint=false かつ targetId有効 → フィルタリング ★★★
+    // ★★★ P0-V2: targetId 優先（activeCommentId ベース、選択時のみフィルタ）★★★
     if (targetId) {
       const filtered = sourceShapes.filter(s => resolveCommentId(s) === targetId);
 
@@ -404,9 +398,25 @@ const ViewerCanvas = forwardRef(({
       return result;
     }
 
-    // ★★★ P0-FIX: targetId空 かつ showAllPaint=false → 全表示（未選択時UX）★★★
-    console.log('[ViewerCanvas] renderedShapes UMEMO: No targetId + no showAllPaint, returning all sourceShapes (unselected UX)', { count: sourceShapes.length });
-    return sourceShapes;
+    // ★★★ P0-V2: targetId なし → showAllPaint 優先、draft判定 ★★★
+    if (showAllPaint) {
+      console.log('[ViewerCanvas] renderedShapes UMEMO: No targetId, showAllPaint=TRUE, returning all', { count: sourceShapes.length });
+      return sourceShapes;
+    }
+
+    // ★★★ P0-V2: targetId なし + showAllPaint=false → draft のみ表示（未選択UX）★★★
+    // isDraft 判定: temp_ で始まる comment_id を持つ shape、または _dirty=true のもの
+    const draftsOnly = sourceShapes.filter(s => {
+      const cid = resolveCommentId(s);
+      const isTemp = cid && String(cid).startsWith('temp_');
+      const isDirty = s._dirty === true;
+      return isTemp || isDirty;
+    });
+    console.log('[ViewerCanvas] renderedShapes UMEMO: No targetId, showAllPaint=false, returning drafts only', {
+      sourceCount: sourceShapes.length,
+      draftCount: draftsOnly.length,
+    });
+    return draftsOnly;
   }, [shapesVersion, showAllPaint, renderTargetCommentId, currentShape]);
 
   // ★★★ Hunk1: hidePaintOverlay時は描画を確実に空にする（表示レイヤー制御）★★★
@@ -721,24 +731,8 @@ const ViewerCanvas = forwardRef(({
     // ★★★ Hunk2: 空判定は filtered (incoming) 基準 ★★★
     const incomingEmpty = incoming.length === 0;
 
-    // ★★★ 案B2-修正: temp_新規コメントで「空」を意図している時は、SYNC_GUARDより先に必ず空表示にする ★★★
-    const isTempCtx = String(renderTargetCommentId || '').startsWith('temp_');
-    if (!showAllPaint && isTempCtx && incomingEmpty && !hidePaintOverlay) {
-      console.log('[案B2] Intentional empty BEFORE SYNC_GUARD: clearing Map for temp_ ctx', {
-        ctx: ctx?.substring(0, 20) || 'null',
-        prevMapSize,
-        isTempCtx,
-        paintMode,
-        showAllPaint,
-      });
-      // Map / lastNonEmpty / emptyStreak を全部リセット（残像防止）
-      shapesMapRef.current = new Map();
-      lastNonEmptyShapesRef.current = { key: null, shapes: null };
-      emptyStreakCountRef.current = 0;
-      bump();
-      console.log('[案B2] shapesVersion bumped after Intentional empty clear');
-      return;
-      }
+    // ★★★ P0-V2: 案B2ガード削除（renderTargetCommentId が activeCommentId なので temp_ で過剰クリア不要）★★★
+    // REMOVED: 案B2 Intentional empty block (過剰Map clear の元凶)
 
     // ★★★ P0-FLICKER: 非空shapesを記録（コンテキストキー付き）★★★
     if (!incomingEmpty) {
@@ -777,29 +771,8 @@ const ViewerCanvas = forwardRef(({
       }
     }
     
-    // ★★★ 案B: allowIntentionalEmpty時は即座にMapクリア（前コメント描画を消す）★★★
-    if (incomingEmpty && allowIntentionalEmpty) {
-      // ★★★ P0-FIX: Mapが空のときだけskip、復活後は再クリア可能に ★★★
-      if (lastEmptyAppliedCtxRef.current === ctx && shapesMapRef.current.size === 0) {
-        console.log('[案B] Intentional empty: already applied and Map empty, skipping', { ctx });
-        return;
-      }
-      lastEmptyAppliedCtxRef.current = ctx;
-
-      console.log('[案B] Intentional empty: clearing Map for temp_ new comment', {
-        ctx,
-        prevMapSize,
-        isTempCtx,
-        paintMode,
-        showAllPaint,
-      });
-      shapesMapRef.current = new Map();
-      lastNonEmptyShapesRef.current = { key: null, shapes: null };
-      emptyStreakCountRef.current = 0;
-      bump();
-      console.log('[Hunk2] shapesVersion bumped after transitioning clear (intent)');
-      return;
-      }
+    // ★★★ P0-V2: 案B allowIntentionalEmpty 削除（renderTargetCommentId=activeCommentId なので不要）★★★
+    // REMOVED: allowIntentionalEmpty block (過剰Map clear の元凶)
 
     // ★★★ FIX-PENDING: pending中のincomingEmpty は何もしない（旧Map保持）★★★
     if (isPending && incomingEmpty) {

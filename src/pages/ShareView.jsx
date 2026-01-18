@@ -616,9 +616,10 @@ function ShareViewContent() {
   
   const paintContextId = stablePaintContextId;
 
-  // ★★★ CRITICAL: renderTargetCommentId は paintContextId と完全同一（Single Source of Truth）★★★
-  const renderTargetCommentId = paintContextId;
-  const viewContextId = paintContextId;
+  // ★★★ P0-V2: renderTargetCommentId は activeCommentId に統一（表示フィルタは選択に追従）★★★
+  // paintContextId は保存先ID、renderTargetCommentId は表示フィルタID として分離
+  const renderTargetCommentId = normalizedActiveCommentId;
+  const viewContextId = normalizedActiveCommentId;
 
   // ★★★ CRITICAL: draftScope（TDZ回避のため単純const、useMemoより先に定義）★★★
   const draftScope = 

@@ -1,36 +1,36 @@
 # STATE.md - Current System State
 
-**Last Updated:** 2026-01-18 (P0 Final v2)
+**Last Updated:** 2026-01-18 (P0 Final v3)
 
-## P0 Fix: Paint Visibility & Persistence (Complete)
+## P0 Fix v3: Paint Visibility & Persistence (renderTargetCommentId統一版)
 **Problem:**
-- ペイントが「ドラッグ中は見えるが、離すと残らない」
-- リロード時に「下書きが一瞬出てすぐ消える」フラッシュ
-- コメント未選択で下書きが消える（消えた誤認）
-- **Root: activeCommentId='null' 文字列化 → truthy誤判定 → effectiveShowAllPaint=false → targetIdフィルタ誤発火 → 空配列**
+- リロード時に下書きが「一瞬出て消える」（Map過剰クリア）
+- コメント未選択で下書き/描画が消える（フィルタ誤発火）
+- コメント選択→未選択に戻したとき、そのコメント紐づき描画が"残り続ける"（表示ルール不安定）
 
 **Root Cause:**
-- localStorage に `'null'` 文字列を書き込み → 読み込み時に `normalizeNullableId` せず String() → `'null'` が truthy扱い
-- `effectiveShowAllPaint = showAllPaint && !activeCommentId` で `'null'` が `!= null` なので false → 全表示が無効化
-- ViewerCanvas: `if (targetId) ... else if (showAllPaint) ...` の順序で targetId 優先 → 未選択でもフィルタが発火
-- `bgReady` フラグが不安定（onLoad重複呼び出し等）→ paintLayer の opacity/listening が揺れる
-- 確定shape（renderedShapesFinal）が背景より先に描画されてフラッシュ
+- **renderTargetCommentId = paintContextId (temp_)** → 未選択でも temp_ でフィルタ、全表示されない
+- **案B2/案B ブロック:** temp_ ctx で「Intentional empty」が繰り返し発火 → Map過剰クリア → 描画消失
+- **activeCommentId='null' 文字列化 → truthy 誤判定** → effectiveShowAllPaint=false
 
-**Fix Applied:**
-1. **ID正規化（P0）:** `normalizeNullableId(v)` で `'null'/'undefined'/''` を真の `null` に戻す
-2. **localStorage 'null' 排除:** activeCommentId/tempCommentId が null のとき `removeItem`（'null' を setItem しない）
-3. **effectiveShowAllPaint:** 正規化後の activeCommentId を使用（`showAllPaint || !normalizedActiveCommentId`）
-4. **ViewerCanvas フィルタ優先順位:** `if (showAllPaint)` を最優先（targetId より先、未選択時全表示UX）
-5. **ViewerCanvas targetId正規化:** `normalizeNullableId(renderTargetCommentId)` で 'null' 文字列を除外
-6. `contentReady = bgSize.width > 0 && bgSize.height > 0` で安定判定（bgReadyフラグ依存を削除）
-7. paintLayer: `opacity={(contentReady || paintMode || !!currentShape) ? 1 : 0}` で常時表示
-8. 確定shape描画: `contentReady &&` で背景後のみ表示（フラッシュ防止）
-9. currentShape（プレビュー）: contentReady不問で常時描画（ユーザー体験優先）
-10. BackgroundImage: `onLoadCalledRef` で重複呼び出し防止
-11. window pointerup: `commitInFlightRef` で二重commit防止
+**Fix Applied (3 core hunks):**
+1. **Hunk1 (ShareView):** `renderTargetCommentId = normalizedActiveCommentId` に変更（paintContextId から分離）
+   - 表示フィルタは「UIの選択(activeCommentId)」に追従、paintContextId は「保存先ID」として別用途
+2. **Hunk2 (ViewerCanvas):** 案B2/案B ブロック削除（renderTargetCommentId が activeCommentId なので temp_ 過剰クリア不要）
+3. **Hunk3 (ViewerCanvas):** 未選択時デフォルトを「draftのみ」に変更（temp_ または _dirty=true）
+   - showAllPaint=true → 全表示
+   - targetId あり → targetId 一致のみ
+   - targetId なし + showAllPaint=false → draft のみ（temp_ または _dirty）
 
-**Status:** ✅ Fixed (All hunks applied)
-**Verify Required:** Z-01〜Z-03 + 回帰テスト
+**Previous fixes (maintained):**
+- ID正規化（'null'/'undefined'/''→null）
+- localStorage 'null' 排除
+- contentReady 判定（bgSize ベース）
+- paintLayer opacity 制御
+- 確定shape は contentReady 後のみ描画
+
+**Status:** ✅ Fixed (All 3 core hunks applied)
+**Verify Required:** Z-01〜Z-05 + 回帰テスト
 
 ---
 
