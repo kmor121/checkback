@@ -343,8 +343,7 @@ const ViewerCanvas = forwardRef(({
   // ★ CRITICAL: Mapが唯一の真実（mergedShapesはMap由来）
   const mergedShapes = useMemo(() => getAllShapes(), [shapesVersion]);
   
-  // CRITICAL: 実際に描画するshape配列
-  // ★★★ ROOT FIX: fallback完全禁止、effectiveActiveIdのみ使用 ★★★
+  // ★★★ P0-V5: 表示対象決定（統一ルール固定：showDraftOnly 最優先）★★★
   const renderedShapes = useMemo(() => {
     const mapShapes = getAllShapes();
     let sourceShapes = mapShapes;
@@ -354,76 +353,45 @@ const ViewerCanvas = forwardRef(({
       sourceShapes = sourceShapes.filter(s => s.id !== currentShape.id);
     }
 
-    // ★★★ P0-FIX: ID正規化（'null'/'undefined'/''を真のnullへ戻す）★★★
+    // ★★★ P0-V5: showDraftOnly 最優先（未選択時 draft のみ表示、確定描画は出さない）★★★
+    if (showDraftOnly) {
+      const draftsOnly = sourceShapes.filter(s => {
+        if (s.isDraft === true) return true;
+        const cid = resolveCommentId(s);
+        return cid && String(cid).startsWith('temp_');
+      });
+      console.log('[ViewerCanvas] renderedShapes: showDraftOnly=TRUE, returning drafts only', {
+        sourceCount: sourceShapes.length,
+        draftCount: draftsOnly.length,
+      });
+      return draftsOnly;
+    }
+
+    // ★★★ P0-V5: ID正規化（入口で1回だけ）★★★
     const normalizeNullableId = (v) => (v == null || v === 'null' || v === 'undefined' || v === '' ? null : v);
     const targetId = normalizeNullableId(renderTargetCommentId);
 
-    console.log('[ViewerCanvas] renderedShapes UMEMO:', {
-      shapesVersion,
-      showAllPaint,
-      renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
-      targetIdRaw: String(renderTargetCommentId ?? 'null'),
-      targetIdNormalized: targetId?.substring(0, 12) || 'null',
-      mapShapesCount: mapShapes.length,
-      sourceShapesCount: sourceShapes.length,
-      currentShapeId: currentShape?.id?.substring(0, 12) || 'null',
-      // ★★★ P0-DIAG: Map内の各shapeのcomment_idを出力 ★★★
-      mapShapeCommentIds: mapShapes.slice(0, 5).map(s => ({
-        id: s.id?.substring(0, 8),
-        cid: resolveCommentId(s)?.substring(0, 12) || 'null',
-      })),
-    });
-
-    // ★★★ P0-V2: targetId 優先（activeCommentId ベース、選択時のみフィルタ）★★★
-    if (targetId) {
-      const filtered = sourceShapes.filter(s => resolveCommentId(s) === targetId);
-
-      // Dedupe
-      const dedupedMap = new Map();
-      filtered.forEach(shape => {
-        if (shape.id) {
-          dedupedMap.set(shape.id, shape);
-        }
-      });
-      const result = Array.from(dedupedMap.values());
-      console.log('[ViewerCanvas] renderedShapes UMEMO: Filtered by targetId (showAllPaint=false)', { 
-        targetId: targetId?.substring(0, 12), 
-        filteredCount: result.length,
-        sourceCount: sourceShapes.length,
-        // ★★★ P0-DIAG: フィルタ落ちしたshapeのcomment_idを出力 ★★★
-        droppedShapes: sourceShapes.filter(s => resolveCommentId(s) !== targetId).slice(0, 3).map(s => ({
-          id: s.id?.substring(0, 8),
-          cid: resolveCommentId(s)?.substring(0, 12) || 'null',
-        })),
-      });
-      return result;
-    }
-
-    // ★★★ P0-V4: showAllPaint 優先（targetId より先、未選択でも明示ON時は全表示）★★★
+    // ★★★ P0-V5: showAllPaint 優先（選択中でも全表示ON時は全描画）★★★
     if (showAllPaint) {
-      console.log('[ViewerCanvas] renderedShapes UMEMO: showAllPaint=TRUE (priority), returning all', { count: sourceShapes.length });
+      console.log('[ViewerCanvas] renderedShapes: showAllPaint=TRUE, returning all', { count: sourceShapes.length });
       return sourceShapes;
     }
 
-    // ★★★ P0-V4: targetId なし（未選択）→ draft のみ表示（下書き消失防止＋確定shape残留防止）★★★
-    // isDraft 判定: shape.isDraft=true OR temp_ で始まる comment_id
-    const draftsOnly = sourceShapes.filter(s => {
-      if (s.isDraft === true) return true;
-      const cid = resolveCommentId(s);
-      return cid && String(cid).startsWith('temp_');
-    });
-    console.log('[ViewerCanvas] renderedShapes UMEMO: No targetId, showAllPaint=false, returning drafts only', {
-      sourceCount: sourceShapes.length,
-      draftCount: draftsOnly.length,
-      // ★★★ P0-V4-DIAG: draft判定の内訳 ★★★
-      isDraftFlagCount: sourceShapes.filter(s => s.isDraft === true).length,
-      tempCidCount: sourceShapes.filter(s => {
-        const cid = resolveCommentId(s);
-        return cid && String(cid).startsWith('temp_');
-      }).length,
-    });
-    return draftsOnly;
-  }, [shapesVersion, showAllPaint, renderTargetCommentId, currentShape]);
+    // ★★★ P0-V5: targetId あり（選択中）→ 選択コメント紐づきのみ ★★★
+    if (targetId) {
+      const filtered = sourceShapes.filter(s => resolveCommentId(s) === targetId);
+      console.log('[ViewerCanvas] renderedShapes: targetId set, filtered by commentId', { 
+        targetId: targetId.substring(0, 12), 
+        filteredCount: filtered.length,
+        sourceCount: sourceShapes.length,
+      });
+      return filtered;
+    }
+
+    // ★★★ P0-V5: targetId なし + showDraftOnly=false → 空（フォールバック）★★★
+    console.log('[ViewerCanvas] renderedShapes: fallback to empty', { sourceCount: sourceShapes.length });
+    return [];
+  }, [shapesVersion, showAllPaint, renderTargetCommentId, currentShape, showDraftOnly]);
 
   // ★★★ Hunk1: hidePaintOverlay時は描画を確実に空にする（表示レイヤー制御）★★★
   const renderedShapesFinal = hidePaintOverlay ? [] : renderedShapes;
