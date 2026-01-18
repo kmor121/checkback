@@ -531,7 +531,11 @@ function ShareViewContent() {
   const hydratedKeyRef = useRef(null);
   const [hydratedKeyState, setHydratedKeyState] = useState(null);
   const storageDraftReady = !!(hydratedKeyState); // Ready when hydrate completes
-  const shouldShowDraft = composerMode === 'new' || composerMode === 'edit';
+  // ★★★ P0-V6: 未選択時（view+unselected）でも draft を表示（new/edit scope の temp_ draft を常時表示）★★★
+  const shouldShowDraft = 
+    composerMode === 'new' || 
+    composerMode === 'edit' ||
+    (composerMode === 'view' && isUnselected);
 
   // ★★★ FIX-2: computed版（通常計算）- Original logic restored
   const computedPaintContextId = React.useMemo(() => {
@@ -643,7 +647,16 @@ function ShareViewContent() {
   // ★★★ CRITICAL: targetKey（scope分離版、view時はnullで表示しない）★★★
   // ★★★ P0-5: commentId/tempId が無ければ null を返す（無効キー生成防止）★★★
   const targetKey = React.useMemo(() => {
-    if (!shareLink?.file_id || !paintContextId || !draftScope) return null;
+    // ★★★ P0-V6: 未選択（view+unselected）の時は new scope の temp_ draft を参照 ★★★
+    if (!shareLink?.file_id) return null;
+    
+    if (composerMode === 'view' && isUnselected && tempCommentId) {
+      // 未選択時は new scope の draft を常に参照（下書き消失防止）
+      return getDraftKey(shareLink.file_id, null, tempCommentId, 'new');
+    }
+    
+    // 従来ロジック（edit/new の時だけ targetKey を返す）
+    if (!paintContextId || !draftScope) return null;
     
     if (draftScope === 'edit') {
       // ★★★ P0-5: paintContextIdが空文字や無効値ならnull ★★★
@@ -876,7 +889,9 @@ function ShareViewContent() {
       hydratedKeyState: 'SET',
     }));
     
-    if (normalizedShapes.length > 0) {
+    // ★★★ P0-V6: 未選択時（view+unselected）は「復元」トーストを出さない（常時表示なので）★★★
+    const shouldShowRestoreToast = !(composerMode === 'view' && isUnselected);
+    if (normalizedShapes.length > 0 && shouldShowRestoreToast) {
       showToast(`${normalizedShapes.length}個の下書きを復元しました`, 'info');
     }
 
@@ -3658,12 +3673,24 @@ function ShareViewContent() {
                                     {shapesCount}
                                   </Badge>
                                 )}
-                                {/* ★★★ P5: 下書き表示（ドット）★★★ */}
-                                {draftCount > 0 && (
-                                  <Badge variant="outline" className="text-xs flex items-center gap-1 bg-blue-50 text-blue-700 border-blue-300">
-                                    📝 下書き {draftCount}
-                                  </Badge>
-                                )}
+                                {/* ★★★ P0-V6: 下書きバッジ（edit + new scope 両対応）★★★ */}
+                                {(() => {
+                                  // edit scope: draftCountByCommentId から取得
+                                  const editDraftCount = draftCountByCommentId[comment.id] || 0;
+                                  
+                                  // ★★★ P0-V6: 未選択時の new scope (temp_) draft も表示 ★★★
+                                  const newDraftCount = (isUnselected && tempCommentId) 
+                                    ? (draftShapes.filter(s => resolveCommentId(s) === tempCommentId).length)
+                                    : 0;
+                                  
+                                  const totalDraftCount = editDraftCount + newDraftCount;
+                                  
+                                  return totalDraftCount > 0 && (
+                                    <Badge variant="outline" className="text-xs flex items-center gap-1 bg-blue-50 text-blue-700 border-blue-300">
+                                      📝 下書き {totalDraftCount}
+                                    </Badge>
+                                  );
+                                })()}
                                 {isEditing && (
                                   <Badge className="text-xs bg-green-600 text-white">
                                     編集中
