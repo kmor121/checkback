@@ -2130,7 +2130,8 @@ const ViewerCanvas = forwardRef(({
       delete normalizedShape.height;
       delete normalizedShape.radius;
 
-      // ★★★ Hunk Q (P0): 新規shape確定は canCommitNew && draftReady で判定 ★★★
+      // ★★★ P0-FIX: 新規shape確定は canCommitNew のみで判定（draftReady不要）★★★
+      // draftReady は「既存shape編集」の権限であり、新規描画の確定には不要
       console.log('[🎨 DRAW_DIAG] commit check:', {
         canCommitNew,
         paintMode,
@@ -2139,10 +2140,9 @@ const ViewerCanvas = forwardRef(({
         shapeTool,
       });
 
-      if (!canCommitNew || !draftReady) {
-        console.warn('[🎨 DRAW_DIAG] COMMIT BLOCKED: canCommitNew=false or draftReady=false', { 
+      if (!canCommitNew) {
+        console.warn('[🎨 DRAW_DIAG] COMMIT BLOCKED: canCommitNew=false', { 
           paintMode, 
-          draftReady, 
           canCommitNew,
           tool: shapeTool,
         });
