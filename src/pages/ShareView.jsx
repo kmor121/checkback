@@ -706,8 +706,10 @@ function ShareViewContent() {
   
   // ★★★ CRITICAL: 下書きをcanvasに混ぜるか（storage準備完了 && mode判定）★★★
   const includeDraftInCanvas = React.useMemo(() => {
+    // ★★★ P0-V7: showDraftOnly（未選択）時は必ず draft を混ぜる（composerMode 依存排除）★★★
+    if (isUnselected) return true;
     return shouldShowDraft && storageDraftReady;
-  }, [shouldShowDraft, storageDraftReady]);
+  }, [shouldShowDraft, storageDraftReady, isUnselected]);
 
   // ★★★ CRITICAL: draftReady フラグ（hydrate完了判定、state化で再レンダー保証）★★★
   const draftReady = storageDraftReady;
@@ -3622,6 +3624,20 @@ function ShareViewContent() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {/* ★★★ P0-V7: 未選択時の新規下書き共通バッジ（全コメントに混ぜない）★★★ */}
+              {isUnselected && tempCommentId && draftShapes.filter(s => resolveCommentId(s) === tempCommentId).length > 0 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Badge className="bg-blue-600 text-white">
+                      📝 新規下書き
+                    </Badge>
+                    <span className="text-blue-800">
+                      {draftShapes.filter(s => resolveCommentId(s) === tempCommentId).length}個の描画
+                    </span>
+                  </div>
+                </div>
+              )}
+              
               {/* P0-FINAL: comments は freeze しない（即時反映優先） */}
               {sortedComments.length === 0 ? (
                 <div className="text-center text-gray-500 py-8">
@@ -3673,21 +3689,12 @@ function ShareViewContent() {
                                     {shapesCount}
                                   </Badge>
                                 )}
-                                {/* ★★★ P0-V6: 下書きバッジ（edit + new scope 両対応）★★★ */}
+                                {/* ★★★ P0-V7: edit scope のみ表示（全コメントに加算しない）★★★ */}
                                 {(() => {
-                                  // edit scope: draftCountByCommentId から取得
                                   const editDraftCount = draftCountByCommentId[comment.id] || 0;
-                                  
-                                  // ★★★ P0-V6: 未選択時の new scope (temp_) draft も表示 ★★★
-                                  const newDraftCount = (isUnselected && tempCommentId) 
-                                    ? (draftShapes.filter(s => resolveCommentId(s) === tempCommentId).length)
-                                    : 0;
-                                  
-                                  const totalDraftCount = editDraftCount + newDraftCount;
-                                  
-                                  return totalDraftCount > 0 && (
+                                  return editDraftCount > 0 && (
                                     <Badge variant="outline" className="text-xs flex items-center gap-1 bg-blue-50 text-blue-700 border-blue-300">
-                                      📝 下書き {totalDraftCount}
+                                      📝 下書き {editDraftCount}
                                     </Badge>
                                   );
                                 })()}
