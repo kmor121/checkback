@@ -73,8 +73,16 @@ const resolveCommentId = (s) => {
   return v == null ? null : String(v);
 };
 
-// ★★★ P0-FIX: ID正規化（'null'/'undefined'/''を真のnullへ戻す、truthy誤判定防止）★★★
-const normalizeNullableId = (v) => (v == null || v === 'null' || v === 'undefined' || v === '' ? null : v);
+// ★★★ P0-V9-FIX: ID正規化の一本化（'null'文字列混入による未選択判定破壊を根絶）★★★
+const normId = (v) => {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  if (!s || s === 'null' || s === 'undefined') return null;
+  return s;
+};
+
+// 後方互換エイリアス
+const normalizeNullableId = normId;
 
 // ★★★ CRITICAL: shape正規化（入れ子を平坦化、comment_id を canonical 化）★★★
 // defaultCommentId: shapeにcomment_idが無い場合のみ使用（既存値は上書きしない）
@@ -145,11 +153,11 @@ function ShareViewContent() {
   const [isDockOpen, setIsDockOpen] = useState(false);
   const [isTempDraftPreview, setIsTempDraftPreview] = useState(false); // ★★★ P0-V8: 新規下書きプレビューフラグ ★★★
 
-  // ★★★ P0-V2-FIX: normalizedActiveCommentId を先に定義（TDZ回避）★★★
-  const normalizedActiveCommentId = normalizeNullableId(activeCommentId);
+  // ★★★ P0-V9-FIX: normalizedActiveCommentId（normId強制適用）★★★
+  const normalizedActiveCommentId = normId(activeCommentId);
 
-  // ★★★ P0-V5: 未選択フラグを正規化（統一ルール適用用）★★★
-  const isUnselected = !normalizedActiveCommentId;
+  // ★★★ P0-V9-FIX: 未選択判定（正規化後IDで厳密判定）★★★
+  const isUnselected = normalizedActiveCommentId === null;
   
   // ★★★ P0-V5: 未選択時は showAllPaint 強制 false（draft のみ表示）★★★
   const effectiveShowAllPaint = !isUnselected && showAllPaint;
@@ -485,12 +493,12 @@ function ShareViewContent() {
       return;
     }
     
-    // ★★★ P0-FIX: 既存のtempCommentIdがあれば復元（正規化版）★★★
+    // ★★★ P0-V9-FIX: 既存のtempCommentIdがあれば復元（normId強制適用）★★★
     const savedTempIdRaw = localStorage.getItem(`tempCommentId:${shareLink.file_id}`);
-    const savedTempId = normalizeNullableId(savedTempIdRaw);
+    const savedTempId = normId(savedTempIdRaw);
     
     if (savedTempId) {
-      if (tempCommentId !== savedTempId) {
+      if (normId(tempCommentId) !== savedTempId) {
         setTempCommentId(savedTempId);
         console.log('[ShareView] ✓ Restored tempCommentId:', {
           scopeId: shareLink.file_id.substring(0, 12),
@@ -513,11 +521,11 @@ function ShareViewContent() {
     }
   }, [shareLink?.file_id, composerMode]);
 
-  // ★★★ P0-FIX: tempCommentIdの永続化（'null'/'undefined'/''のときは削除）★★★
+  // ★★★ P0-V9-FIX: tempCommentIdの永続化（normId強制＋null時removeItem）★★★
   useEffect(() => {
     if (!shareLink?.file_id) return;
-    const normalized = normalizeNullableId(tempCommentId);
-    if (!normalized) {
+    const normalized = normId(tempCommentId);
+    if (normalized === null) {
       localStorage.removeItem(`tempCommentId:${shareLink.file_id}`);
       console.log('[ShareView] Removed tempCommentId from localStorage (was null/invalid)');
       return;
@@ -1323,14 +1331,14 @@ function ShareViewContent() {
     }
   };
 
-  // ★★★ P0-FIX: 初回ロード時の activeCommentId 初期化（正規化版）★★★
+  // ★★★ P0-V9-FIX: 初回ロード時の activeCommentId 初期化（normId強制適用）★★★
   useEffect(() => {
     if (!token || !shareLink?.file_id) return;
     if (didInitActiveRef.current) return;
 
     const params = new URLSearchParams(window.location.search);
     const commentIdFromUrlRaw = params.get('comment');
-    const commentIdFromUrl = normalizeNullableId(commentIdFromUrlRaw);
+    const commentIdFromUrl = normId(commentIdFromUrlRaw);
 
     // comment指定がない共有リンクは未選択のまま（下書き全表示UX優先）
     if (!commentIdFromUrl) {
@@ -1347,7 +1355,7 @@ function ShareViewContent() {
     const target = comments.find(c => c.id === commentIdFromUrl);
     if (target) {
       setCurrentPage(target.page_no);
-      setActiveCommentId(target.id);
+      setActiveCommentId(normId(target.id)); // ★★★ P0-V9-FIX: normId強制 ★★★
     } else {
       setActiveCommentId(null);
     }
@@ -1358,11 +1366,12 @@ function ShareViewContent() {
   useEffect(() => {
     if (!token || !shareLink?.file_id) return;
     const key = `lastActiveCommentId:${token}:${shareLink.file_id}:${currentPage}`;
-    // ★★★ P0-FIX: activeCommentId=null のときは removeItem（'null' を書かない）★★★
-    if (!activeCommentId) {
+    // ★★★ P0-V9-FIX: normId適用＋null時はremoveItem（'null'文字列保存防止）★★★
+    const normalized = normId(activeCommentId);
+    if (normalized === null) {
       localStorage.removeItem(key);
     } else {
-      localStorage.setItem(key, activeCommentId);
+      localStorage.setItem(key, normalized);
     }
   }, [activeCommentId, token, shareLink?.file_id, currentPage]);
 
@@ -2081,26 +2090,28 @@ function ShareViewContent() {
       setTool('select');
     }
 
-    // ★★★ P0-V9: 同じコメント再クリック → 未選択＋temp下書きプレビューON（localStorage直接判定）★★★
-    if (activeCommentId === comment.id) {
+    // ★★★ P0-V9-FIX: 同じコメント再クリック → 未選択＋tempプレビューON（normId強制＋localStorage直接判定）★★★
+    if (normId(activeCommentId) === normId(comment.id)) {
       addDebugLog(`[C] deselect same (toggle off, draft preview ON)`);
-      setActiveCommentId(null);
+      setActiveCommentId(null); // normId不要（nullはそのまま）
       setComposerMode('view');
       setComposerTargetCommentId(null);
       setComposerText('');
       setPendingFiles([]);
       setReplyingThreadId(null);
-      // ★★★ P0-V9: localStorage直接判定（hasTempDraft揺れ対策）★★★
+      // ★★★ P0-V9-FIX: localStorage直接判定（hasTempDraft揺れ完全排除）★★★
       const currentTempDraftCount = getTempDraftCountForPreview();
+      console.log('[Z-03] deselect: tempDraftCount=', currentTempDraftCount);
       if (currentTempDraftCount > 0) {
         setIsTempDraftPreview(true);
+        console.log('[Z-03] isTempDraftPreview set to true');
       }
       return;
     }
 
     // ★★★ P0-FINAL: 別のコメントをクリック → 必ず view に遷移（new/edit からも復帰）★★★
     setCurrentPage(comment.page_no);
-    setActiveCommentId(String(comment.id));
+    setActiveCommentId(normId(comment.id)); // ★★★ P0-V9-FIX: normId強制 ★★★
     setPaintSessionCommentId(null);
     setIsDockOpen(true);
     setShowAllPaint(false);
@@ -3110,6 +3121,24 @@ function ShareViewContent() {
 
   return (
   <div className="max-w-full mx-auto h-screen flex flex-col">
+    {/* ★★★ P0-V9-FIX: 診断HUD（?diag=1 で状態見える化）★★★ */}
+    {(new URLSearchParams(window.location.search).get('diag') === '1') && (
+      <div className="fixed top-16 left-4 z-[9998] bg-black/90 text-white text-xs font-mono p-3 rounded shadow-lg max-w-xs">
+        <div className="font-bold text-yellow-400 mb-2">🔍 診断HUD (Z-03)</div>
+        <div>normalizedActiveCommentId: <span className={normalizedActiveCommentId ? 'text-cyan-400' : 'text-red-400'}>{normalizedActiveCommentId?.substring(0, 12) || 'null'}</span></div>
+        <div>isUnselected: <span className={isUnselected ? 'text-green-400' : 'text-red-400'}>{isUnselected.toString()}</span></div>
+        <div>isTempDraftPreview: <span className={isTempDraftPreview ? 'text-green-400' : 'text-red-400'}>{isTempDraftPreview.toString()}</span></div>
+        <div>tempDraftCount: <span className="text-yellow-400">{tempDraftCount}</span></div>
+        <div>hasTempDraft: <span className={hasTempDraft ? 'text-green-400' : 'text-red-400'}>{hasTempDraft.toString()}</span></div>
+        <div>showDraftOnly: <span className={((isUnselected || isTempDraftPreview) && hasTempDraft) ? 'text-green-400' : 'text-red-400'}>{((isUnselected || isTempDraftPreview) && hasTempDraft).toString()}</span></div>
+        <div className="border-t border-gray-600 mt-2 pt-2">
+          <div>composerMode: <span className="text-cyan-400">{composerMode}</span></div>
+          <div>paintContextId: <span className="text-cyan-400">{paintContextId?.substring(0, 12) || 'null'}</span></div>
+          <div>targetKey: <span className="text-cyan-400">{targetKey?.substring(0, 30) || 'null'}</span></div>
+        </div>
+      </div>
+    )}
+    
     {/* Debugボタン（固定表示、isReady不問） */}
     {(debugParam === '1' || (typeof window !== 'undefined' && localStorage.getItem('forceDebug') === '1') || DEBUG_MODE) && (
       <div style={{ position: 'fixed', top: '12px', right: '12px', zIndex: 99999, pointerEvents: 'auto' }}>
@@ -3661,6 +3690,7 @@ function ShareViewContent() {
                         <Badge 
                           className="bg-blue-600 text-white cursor-pointer hover:bg-blue-700"
                           onClick={() => {
+                            console.log('[Z-03c] bottom badge clicked, setting preview ON');
                             setActiveCommentId(null);
                             setIsTempDraftPreview(true);
                             setComposerMode('view');
@@ -3668,7 +3698,7 @@ function ShareViewContent() {
                             setShowAllPaint(false);
                             setPaintMode(false);
                             setIsDockOpen(false);
-                            addDebugLog(`[P0-V9] bottom temp draft badge clicked: preview ON`);
+                            addDebugLog(`[P0-V9-FIX] bottom temp draft badge clicked: preview ON`);
                           }}
                           title="クリックして新規下書きをプレビュー"
                         >
@@ -3724,13 +3754,14 @@ function ShareViewContent() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {/* ★★★ P0-V9: temp下書き共通バッジ（localStorage直接判定＋削除UI）★★★ */}
+              {/* ★★★ P0-V9-FIX: temp下書き共通バッジ（localStorage直接判定＋削除UI）★★★ */}
               {tempDraftCount > 0 && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
                   <div className="flex items-center gap-2 justify-between">
                     <div 
                       className="flex items-center gap-2 text-sm flex-1 cursor-pointer hover:opacity-80 transition-opacity"
                       onClick={() => {
+                        console.log('[Z-03b] top badge clicked, setting preview ON');
                         setActiveCommentId(null);
                         setIsTempDraftPreview(true);
                         setComposerMode('view');
@@ -3738,7 +3769,7 @@ function ShareViewContent() {
                         setShowAllPaint(false);
                         setPaintMode(false);
                         setIsDockOpen(false);
-                        addDebugLog(`[P0-V9] top temp draft badge clicked: preview ON`);
+                        addDebugLog(`[P0-V9-FIX] top temp draft badge clicked: preview ON`);
                       }}
                       title="クリックして新規下書きをプレビュー"
                     >
@@ -3759,17 +3790,20 @@ function ShareViewContent() {
                           return;
                         }
                         const previewKey = getTempDraftKeyForPreview();
+                        console.log('[DELETE] Deleting temp draft:', previewKey?.substring(0, 40));
                         if (previewKey) {
                           deleteDraft(previewKey);
                           draftCacheRef.current.delete(previewKey);
                           // メモリから temp_ shapes のみ削除（edit下書き巻き込み防止）
                           setDraftShapes(prev => prev.filter(s => {
-                            const cid = resolveCommentId(s);
-                            return !(cid && (cid.startsWith('temp_') || cid === tempCommentId));
+                            const cid = normId(resolveCommentId(s));
+                            const tempCid = normId(tempCommentId);
+                            return !(cid && (cid.startsWith('temp_') || cid === tempCid));
                           }));
                           draftShapesRef.current = draftShapesRef.current.filter(s => {
-                            const cid = resolveCommentId(s);
-                            return !(cid && (cid.startsWith('temp_') || cid === tempCommentId));
+                            const cid = normId(resolveCommentId(s));
+                            const tempCid = normId(tempCommentId);
+                            return !(cid && (cid.startsWith('temp_') || cid === tempCid));
                           });
                           // tempCommentId クリア
                           setTempCommentId(null);
