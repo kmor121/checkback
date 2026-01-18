@@ -66,17 +66,20 @@ const sameId = (a, b) => String(a ?? '') === String(b ?? '');
 function BackgroundImage({ src, onLoad }) {
   const [image, status] = useImage(src, 'anonymous');
   const lastImageRef = useRef(null);
+  const onLoadCalledRef = useRef(false);
   
   useEffect(() => {
     console.log('[BackgroundImage] Load status:', { src: src?.substring(0, 50), status, hasImage: !!image });
     
     if (status === 'failed') {
       console.error('[BackgroundImage] Failed to load image:', src);
+      onLoadCalledRef.current = false;
     }
     
-    if (image) {
+    if (image && !onLoadCalledRef.current) {
       lastImageRef.current = image;
-      console.log('[BackgroundImage] Image loaded successfully:', { width: image.width, height: image.height });
+      onLoadCalledRef.current = true;
+      console.log('[P0-FIX] BackgroundImage onLoad CALLED:', { width: image.width, height: image.height });
       if (onLoad) {
         onLoad({ width: image.width, height: image.height });
       }
@@ -584,6 +587,7 @@ const ViewerCanvas = forwardRef(({
     if (!prev && !next) return;
     if (!prev && next) {
       prevFileIdentityRef.current = next;
+      console.log('[P0-FIX] fileIdentity first set, NO reset:', next?.substring(0, 30));
       return;
     }
     
@@ -593,7 +597,7 @@ const ViewerCanvas = forwardRef(({
     prevFileIdentityRef.current = next;
     prevFileIdentityRef.pageNumber = pageNumber;
     
-    console.log('[ViewerCanvas] fileIdentity/pageNumber changed, resetting state (INTENDED)', { prev, next, pageNumber, mapSizeBefore: shapesMapRef.current.size });
+    console.log('[P0-FIX] fileIdentity/pageNumber CHANGED, resetting state:', { prev: prev?.substring(0, 30), next: next?.substring(0, 30), pageNumber, mapSizeBefore: shapesMapRef.current.size });
     shapesMapRef.current = new Map(); // ★ Mapをクリア（ファイル/ページ変更時のみ）
     bump();
     setSelectedId(null);
@@ -605,6 +609,7 @@ const ViewerCanvas = forwardRef(({
       setLocalPan({ x: 0, y: 0 });
     }
     setBgReady(false); // P2 FIX: ファイル変更時に背景ロード状態をリセット
+    console.log('[P0-FIX] bgReady reset to false (file changed)');
   }, [fileIdentity, pageNumber, externalPan]);
 
   // zoom変更時はpanのクランプのみ（shapesは触らない）
@@ -1248,7 +1253,7 @@ const ViewerCanvas = forwardRef(({
   const handleBgLoad = useCallback((size) => {
     setBgSize(size);
     setBgReady(true);
-    console.log('[FIT] bgLoad:', { width: size.width, height: size.height, containerWidth: containerSize.width, containerHeight: containerSize.height });
+    console.log('[P0-FIX] bgLoad SUCCESS, bgReady=true:', { width: size.width, height: size.height, containerWidth: containerSize.width, containerHeight: containerSize.height });
     // 親に通知（初期フィット計算用）
     if (onBgLoad) {
       onBgLoad(size, containerSize);
@@ -3251,6 +3256,16 @@ const ViewerCanvas = forwardRef(({
   // ★★★ P0-DIAG: Portal HUD用変数（hooksではないので早期returnに影響しない）★★★
   const debugPaintLayerEnabled = typeof window !== 'undefined' && window.localStorage?.getItem('debugPaintLayer') === '1';
 
+  // ★★★ P0-FIX: 描画可視性の重要ログ（常時出力）★★★
+  console.log('[P0-VISIBILITY] paintLayer state:', {
+    bgReady,
+    paintMode,
+    currentShapeExists: !!currentShape,
+    hidePaintOverlay,
+    willBeVisible: bgReady || paintMode || !!currentShape,
+    willBeInteractive: !hidePaintOverlay && (bgReady || paintMode || !!currentShape),
+  });
+
   if (DEBUG_MODE) {
     console.log('[ViewerCanvas] Render:', {
       renderedShapesCount: renderedShapes.length,
@@ -3567,14 +3582,14 @@ const ViewerCanvas = forwardRef(({
         </Layer>
 
         {/* 注釈Layer（contentGroup内に配置） */}
-        {/* P0-FIX: 描画中（currentShape存在）は bgReady 不問で opacity=1（プレビュー表示必須） */}
+        {/* P0-FIX: paintMode ON または currentShape 存在時は常に表示（bgReady不問） */}
         {/* CONTRACT (P0): Paint layer may remount ONLY as a controlled mechanism to remove ghosting
 // when hidePaintOverlay/canvasContextKey changes. Do NOT move this remounting to Stage. */}
         <Layer 
           key={`paint:${hidePaintOverlay ? 'hide' : 'show'}:${forceClearToken}:${canvasContextKey || 'none'}`}
           ref={paintLayerRef}
-          listening={!hidePaintOverlay && (bgReady || !!currentShape)}
-          opacity={(bgReady || !!currentShape) ? 1 : 0}
+          listening={!hidePaintOverlay && (bgReady || paintMode || !!currentShape)}
+          opacity={(bgReady || paintMode || !!currentShape) ? 1 : 0}
         >
             <Group
               ref={contentGroupRef}
