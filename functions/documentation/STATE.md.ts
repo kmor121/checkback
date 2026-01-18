@@ -1,6 +1,15 @@
 # STATE.md - Current System State
 
-**Last Updated:** 2026-01-18 (P0 Final v3)
+**Last Updated:** 2026-01-18 (P0 Hotfix)
+
+## P0 Hotfix: normalizedActiveCommentId TDZ Error
+**Problem:** `normalizedActiveCommentId is not defined` → 参照が定義より前
+
+**Fix:** normalizedActiveCommentId を activeCommentId state 直後に定義（L147→L148）
+
+**Status:** ✅ Fixed
+
+---
 
 ## P0 Fix v3: Paint Visibility & Persistence (renderTargetCommentId統一版)
 **Problem:**
@@ -29,12 +38,5 @@
 - paintLayer opacity 制御
 - 確定shape は contentReady 後のみ描画
 
-**Status:** ✅ Fixed (All 3 core hunks applied)
+**Status:** ✅ Fixed (All 3 core hunks + hotfix applied)
 **Verify Required:** Z-01〜Z-05 + 回帰テスト
-
----
-
-## Previous State (P0/P1 fixes)
-- デバッグ表示を通常時OFFに整理（?diag=1 で有効化）
-- fitMode操作での描画消失を修正（fileIdentity変化検知を厳格化）
-- 右上%表示を実表示倍率に変更
