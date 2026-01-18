@@ -3327,8 +3327,9 @@ function ShareViewContent() {
                 showAllPaint={effectiveShowAllPaint}
                 forceClearToken={forceClearToken}
                 draftCommentId={paintContextId}
-                renderTargetCommentId={normalizedActiveCommentId}
+                renderTargetCommentId={isUnselected ? null : normalizedActiveCommentId}
                 activeCommentId={normalizedActiveCommentId}
+                showDraftOnly={isUnselected}
                 hidePaintOverlay={(() => {
                   // ★★★ P0: 新規テキスト入力中かつ描画なしの時のみhide（描画ある時は表示維持）★★★
                   const hasAnyShapes = (shapesForCanvasSafe?.length || 0) > 0;
