@@ -1614,15 +1614,9 @@ const ViewerCanvas = forwardRef(({
       return;
     }
 
-    // ★★★ Hunk Q (P0): draft準備中は描画開始をブロック ★★★
-    if (paintMode && !draftReady && tool !== 'text') {
-      console.log('[🎨 DRAW_DIAG] PointerDown BLOCKED: draftReady=false (waiting for draft hydration)', { 
-        paintMode, 
-        draftReady, 
-        tool 
-      });
-      return;
-    }
+    // ★★★ P0-FIX: draftReadyチェックを削除（paintMode ON なら描画開始を許可）★★★
+    // draftReady は「既存shape編集」の権限であり、新規描画には不要
+    // 描画開始後の commit 時に draftReady をチェックする（L2148）
 
     // ★★★ CRITICAL: 描画開始時に古いcurrentShapeを強制クリア（前コメントのdraft残り防止）★★★
     // currentShapeのcomment_idがactiveCommentIdと異なる場合は古いdraftなので破棄
@@ -3573,14 +3567,14 @@ const ViewerCanvas = forwardRef(({
         </Layer>
 
         {/* 注釈Layer（contentGroup内に配置） */}
-        {/* P0-FIT: bgReady まで opacity=0 で非表示（remount禁止、フラッシュ防止） */}
+        {/* P0-FIX: 描画中（currentShape存在）は bgReady 不問で opacity=1（プレビュー表示必須） */}
         {/* CONTRACT (P0): Paint layer may remount ONLY as a controlled mechanism to remove ghosting
 // when hidePaintOverlay/canvasContextKey changes. Do NOT move this remounting to Stage. */}
         <Layer 
           key={`paint:${hidePaintOverlay ? 'hide' : 'show'}:${forceClearToken}:${canvasContextKey || 'none'}`}
           ref={paintLayerRef}
-          listening={!hidePaintOverlay && bgReady}
-          opacity={bgReady ? 1 : 0}
+          listening={!hidePaintOverlay && (bgReady || !!currentShape)}
+          opacity={(bgReady || !!currentShape) ? 1 : 0}
         >
             <Group
               ref={contentGroupRef}
