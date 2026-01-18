@@ -151,12 +151,6 @@ function ShareViewContent() {
   // ★★★ P0-V5: 未選択フラグを正規化（統一ルール適用用）★★★
   const isUnselected = !normalizedActiveCommentId;
   
-  // ★★★ P0-V8: temp 下書き存在判定（共通バッジ・混入条件で使う）★★★
-  const hasTempDraft = React.useMemo(() => {
-    if (!tempCommentId) return false;
-    return draftShapes.some(s => resolveCommentId(s) === tempCommentId);
-  }, [tempCommentId, draftShapes]);
-  
   // ★★★ P0-V5: 未選択時は showAllPaint 強制 false（draft のみ表示）★★★
   const effectiveShowAllPaint = !isUnselected && showAllPaint;
   
@@ -194,6 +188,13 @@ function ShareViewContent() {
   // ★★★ 新規コメント用の仮ID（localStorage下書き用）★★★
   const [tempCommentId, setTempCommentId] = useState(null);
   const saveDraftTimeoutRef = useRef(null);
+  
+  // ★★★ P0-V8: temp 下書き存在判定（共通バッジ・混入条件で使う）★★★
+  // NOTE: draftShapes定義後に移動するとTDZになるため、ここでは関数化しておき、後でuseMemo化
+  const hasTempDraftFn = () => {
+    if (!tempCommentId) return false;
+    return draftShapes.some(s => resolveCommentId(s) === tempCommentId);
+  };
   
   // Composer mode (new or edit or reply)
   const [composerMode, setComposerMode] = useState('new');
