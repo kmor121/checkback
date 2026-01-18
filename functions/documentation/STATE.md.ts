@@ -1,8 +1,8 @@
 # STATE.md - Current System State
 
-**Last Updated:** 2026-01-18
+**Last Updated:** 2026-01-18 (P0 Final)
 
-## P0 Fix: Paint Visibility & Persistence
+## P0 Fix: Paint Visibility & Persistence (Complete)
 **Problem:**
 - ペイントが「ドラッグ中は見えるが、離すと残らない」
 - リロード時に「下書きが一瞬出てすぐ消える」フラッシュ
@@ -19,9 +19,10 @@
 2. paintLayer: `opacity={(contentReady || paintMode || !!currentShape) ? 1 : 0}` で常時表示
 3. 確定shape描画: `contentReady &&` で背景後のみ表示（フラッシュ防止）
 4. currentShape（プレビュー）: contentReady不問で常時描画（ユーザー体験優先）
-5. 未選択時: `effectiveShowAllPaint = showAllPaint || !activeCommentId` で下書き表示維持
-6. BackgroundImage: `onLoadCalledRef` で重複呼び出し防止
-7. window pointerup: `commitInFlightRef` で二重commit防止
+5. ShareView未選択時: `effectiveShowAllPaint = showAllPaint || !activeCommentId` で下書き表示維持
+6. ViewerCanvas未選択時: `renderTargetCommentId=null` → 全表示（フィルタ無効、空配列回避）
+7. BackgroundImage: `onLoadCalledRef` で重複呼び出し防止
+8. window pointerup: `commitInFlightRef` で二重commit防止
 
 **Status:** ✅ Fixed
 **Verify Required:** Z-01〜Z-04 + 回帰テスト
