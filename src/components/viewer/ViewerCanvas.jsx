@@ -401,9 +401,9 @@ const ViewerCanvas = forwardRef(({
       return sourceShapes;
     }
 
-    // デフォルトは空配列
-    console.log('[ViewerCanvas] renderedShapes UMEMO: Default to empty (no targetId, showAllPaint=false)');
-    return [];
+    // ★★★ P0-FIX: targetId空→フィルタ無効（全表示、下書き消失防止）★★★
+    console.log('[ViewerCanvas] renderedShapes UMEMO: No targetId, returning all sourceShapes (prevent draft vanish)', { count: sourceShapes.length });
+    return sourceShapes;
   }, [shapesVersion, showAllPaint, renderTargetCommentId, currentShape]);
 
   // ★★★ Hunk1: hidePaintOverlay時は描画を確実に空にする（表示レイヤー制御）★★★
