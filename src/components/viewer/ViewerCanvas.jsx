@@ -138,6 +138,7 @@ const ViewerCanvas = forwardRef(({
   externalPan = null, // ★★★ FIT: 親からのpan制御 ★★★
   onPanChange = null, // ★★★ FIT: pan変更を親に通知 ★★★
   onScaleInfoChange = null, // ★★★ SCALE: 実表示倍率を親に通知 ★★★
+  showDraftOnly = false, // ★★★ P0-V5: 未選択時 draft のみ表示フラグ ★★★
 }, ref) => {
   const containerRef = useRef(null);
   const stageRef = useRef(null);

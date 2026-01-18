@@ -147,8 +147,11 @@ function ShareViewContent() {
   // ★★★ P0-V2-FIX: normalizedActiveCommentId を先に定義（TDZ回避）★★★
   const normalizedActiveCommentId = normalizeNullableId(activeCommentId);
 
-  // ★★★ P0-V4: effectiveShowAllPaint は showAllPaint のみ（未選択で自動全表示しない）★★★
-  const effectiveShowAllPaint = showAllPaint;
+  // ★★★ P0-V5: 未選択フラグを正規化（統一ルール適用用）★★★
+  const isUnselected = !normalizedActiveCommentId;
+  
+  // ★★★ P0-V5: 未選択時は showAllPaint 強制 false（draft のみ表示）★★★
+  const effectiveShowAllPaint = !isUnselected && showAllPaint;
   
   // Draft paint session state
   const [paintSessionCommentId, setPaintSessionCommentId] = useState(null);
@@ -1988,16 +1991,16 @@ function ShareViewContent() {
       setTool('select');
     }
 
-    // ★★★ FIX: 同じコメント再クリック → 選択解除（トグル）★★★
+    // ★★★ P0-V5: 同じコメント再クリック → 選択解除（draft保持、forceClearは不要）★★★
     if (activeCommentId === comment.id) {
-      addDebugLog(`[C] deselect same (toggle off)`);
+      addDebugLog(`[C] deselect same (toggle off, draft preserved)`);
       setActiveCommentId(null);
       setComposerMode('view');
       setComposerTargetCommentId(null);
       setComposerText('');
       setPendingFiles([]);
       setReplyingThreadId(null);
-      setForceClearToken(prev => prev + 1);
+      // ★★★ P0-V5: forceClearToken削除（未選択で draft のみ表示、Map は保持）★★★
       return;
     }
 
@@ -3216,6 +3219,7 @@ function ShareViewContent() {
                 activeCommentId={activeCommentId}
                 canvasContextKey={canvasInternalResetKey}
                 isCanvasTransitioning={isCanvasTransitioning}
+                showDraftOnly={isUnselected}
                 onCommentClick={(id) => {
                   const comment = comments.find(c => c.id === id);
                   if (!comment) return;
