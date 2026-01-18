@@ -715,10 +715,11 @@ function ShareViewContent() {
   
   // ★★★ CRITICAL: 下書きをcanvasに混ぜるか（storage準備完了 && mode判定）★★★
   const includeDraftInCanvas = React.useMemo(() => {
-    // ★★★ P0-V7: showDraftOnly（未選択）時は必ず draft を混ぜる（composerMode 依存排除）★★★
-    if (isUnselected) return true;
+    // ★★★ P0-V8: showDraftOnly最優先（未選択＋tempプレビュー時は必ず混入）★★★
+    const showDraftOnly = (isUnselected || isTempDraftPreview) && hasTempDraft;
+    if (showDraftOnly) return true;
     return shouldShowDraft && storageDraftReady;
-  }, [shouldShowDraft, storageDraftReady, isUnselected]);
+  }, [shouldShowDraft, storageDraftReady, isUnselected, isTempDraftPreview, hasTempDraft]);
 
   // ★★★ CRITICAL: draftReady フラグ（hydrate完了判定、state化で再レンダー保証）★★★
   const draftReady = storageDraftReady;
@@ -3254,7 +3255,7 @@ function ShareViewContent() {
                 activeCommentId={activeCommentId}
                 canvasContextKey={canvasInternalResetKey}
                 isCanvasTransitioning={isCanvasTransitioning}
-                showDraftOnly={isUnselected}
+                showDraftOnly={(isUnselected || isTempDraftPreview) && hasTempDraft}
                 onCommentClick={(id) => {
                   const comment = comments.find(c => c.id === id);
                   if (!comment) return;
