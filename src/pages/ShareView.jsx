@@ -147,8 +147,8 @@ function ShareViewContent() {
   // ★★★ P0-V2-FIX: normalizedActiveCommentId を先に定義（TDZ回避）★★★
   const normalizedActiveCommentId = normalizeNullableId(activeCommentId);
 
-  // ★★★ P0-V2: 未選択時は showAllPaint を使用（下書きのみ表示は ViewerCanvas で制御）★★★
-  const effectiveShowAllPaint = normalizedActiveCommentId ? showAllPaint : true;
+  // ★★★ P0-V4: effectiveShowAllPaint は showAllPaint のみ（未選択で自動全表示しない）★★★
+  const effectiveShowAllPaint = showAllPaint;
   
   // Draft paint session state
   const [paintSessionCommentId, setPaintSessionCommentId] = useState(null);
@@ -832,7 +832,11 @@ function ShareViewContent() {
     
     // ★★★ CRITICAL: edit時はtempCommentIdを使わず、paintContextIdで正規化 ★★★
     const normalizeCtxId = (draftScope === 'edit') ? paintContextId : tempCommentId;
-    const normalizedShapes = shapes.map(s => normalizeShape(s, normalizeCtxId)).filter(Boolean);
+    // ★★★ P0-V4: draft shapes に isDraft フラグを付与（ViewerCanvas で判定用）★★★
+    const normalizedShapes = shapes.map(s => {
+      const normalized = normalizeShape(s, normalizeCtxId);
+      return normalized ? { ...normalized, isDraft: true } : null;
+    }).filter(Boolean);
     
     // ★★★ CRITICAL: hydrateは置換ではなくマージ（メモリ上の最新を優先）★★★
     const prevShapes = draftShapesRef.current || [];

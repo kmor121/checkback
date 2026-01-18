@@ -398,23 +398,28 @@ const ViewerCanvas = forwardRef(({
       return result;
     }
 
-    // ★★★ P0-V2: targetId なし → showAllPaint 優先、draft判定 ★★★
+    // ★★★ P0-V4: showAllPaint 優先（targetId より先、未選択でも明示ON時は全表示）★★★
     if (showAllPaint) {
-      console.log('[ViewerCanvas] renderedShapes UMEMO: No targetId, showAllPaint=TRUE, returning all', { count: sourceShapes.length });
+      console.log('[ViewerCanvas] renderedShapes UMEMO: showAllPaint=TRUE (priority), returning all', { count: sourceShapes.length });
       return sourceShapes;
     }
 
-    // ★★★ P0-V2: targetId なし + showAllPaint=false → draft のみ表示（未選択UX）★★★
-    // isDraft 判定: temp_ で始まる comment_id を持つ shape、または _dirty=true のもの
+    // ★★★ P0-V4: targetId なし（未選択）→ draft のみ表示（下書き消失防止＋確定shape残留防止）★★★
+    // isDraft 判定: shape.isDraft=true OR temp_ で始まる comment_id
     const draftsOnly = sourceShapes.filter(s => {
+      if (s.isDraft === true) return true;
       const cid = resolveCommentId(s);
-      const isTemp = cid && String(cid).startsWith('temp_');
-      const isDirty = s._dirty === true;
-      return isTemp || isDirty;
+      return cid && String(cid).startsWith('temp_');
     });
     console.log('[ViewerCanvas] renderedShapes UMEMO: No targetId, showAllPaint=false, returning drafts only', {
       sourceCount: sourceShapes.length,
       draftCount: draftsOnly.length,
+      // ★★★ P0-V4-DIAG: draft判定の内訳 ★★★
+      isDraftFlagCount: sourceShapes.filter(s => s.isDraft === true).length,
+      tempCidCount: sourceShapes.filter(s => {
+        const cid = resolveCommentId(s);
+        return cid && String(cid).startsWith('temp_');
+      }).length,
     });
     return draftsOnly;
   }, [shapesVersion, showAllPaint, renderTargetCommentId, currentShape]);
@@ -592,8 +597,7 @@ const ViewerCanvas = forwardRef(({
     }
   }, [canvasContextKey, bump]);
 
-  // CRITICAL: fileIdentity/pageNumber変更時のみリセット（Mapをクリア）
-  // ★★★ P0-FIT: fileIdentity が空の瞬間は無視（初期化中の誤reset防止）★★★
+  // ★★★ P0-V4: reset は fileIdentity/pageNumber 変更時のみ（externalPan除外で誤reset防止）★★★
   const prevFileIdentityRef = useRef(fileIdentity);
   useEffect(() => {
     const prev = prevFileIdentityRef.current;
@@ -613,7 +617,7 @@ const ViewerCanvas = forwardRef(({
     prevFileIdentityRef.current = next;
     prevFileIdentityRef.pageNumber = pageNumber;
     
-    console.log('[P0-FIX] fileIdentity/pageNumber CHANGED, resetting state:', { prev: prev?.substring(0, 30), next: next?.substring(0, 30), pageNumber, mapSizeBefore: shapesMapRef.current.size });
+    console.log('[P0-V4] fileIdentity/pageNumber CHANGED, resetting state:', { prev: prev?.substring(0, 30), next: next?.substring(0, 30), pageNumber, mapSizeBefore: shapesMapRef.current.size });
     shapesMapRef.current = new Map(); // ★ Mapをクリア（ファイル/ページ変更時のみ）
     bump();
     setSelectedId(null);
@@ -625,8 +629,8 @@ const ViewerCanvas = forwardRef(({
       setLocalPan({ x: 0, y: 0 });
     }
     setBgReady(false); // P2 FIX: ファイル変更時に背景ロード状態をリセット
-    console.log('[P0-FIX] bgReady reset to false (file changed)');
-  }, [fileIdentity, pageNumber, externalPan]);
+    console.log('[P0-V4] bgReady reset to false (file changed)');
+  }, [fileIdentity, pageNumber]); // ★★★ P0-V4: externalPan を依存配列から除外（pan変更でresetさせない）★★★
 
   // zoom変更時はpanのクランプのみ（shapesは触らない）
   // ★★★ FIT-FIX: pan/setPanを依存配列から除外（無限ループ防止）★★★

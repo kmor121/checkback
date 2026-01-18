@@ -1,42 +1,29 @@
 # STATE.md - Current System State
 
-**Last Updated:** 2026-01-18 (P0 Hotfix)
+**Last Updated:** 2026-01-18 (P0 Final v4)
 
-## P0 Hotfix: normalizedActiveCommentId TDZ Error
-**Problem:** `normalizedActiveCommentId is not defined` → 参照が定義より前
-
-**Fix:** normalizedActiveCommentId を activeCommentId state 直後に定義（L147→L148）
-
-**Status:** ✅ Fixed
-
----
-
-## P0 Fix v3: Paint Visibility & Persistence (renderTargetCommentId統一版)
+## P0 Fix v4: Paint Visibility & Persistence (完全版)
 **Problem:**
-- リロード時に下書きが「一瞬出て消える」（Map過剰クリア）
-- コメント未選択で下書き/描画が消える（フィルタ誤発火）
-- コメント選択→未選択に戻したとき、そのコメント紐づき描画が"残り続ける"（表示ルール不安定）
+- リロード時に下書きが「一瞬出て消える」（reset useEffect が externalPan 変化で誤発火）
+- 未選択でコメント紐づき描画が残る（effectiveShowAllPaint 自動 true）
+- 未選択で draft 判定できず全表示/空配列の両極端（isDraft フラグ未付与）
 
 **Root Cause:**
-- **renderTargetCommentId = paintContextId (temp_)** → 未選択でも temp_ でフィルタ、全表示されない
-- **案B2/案B ブロック:** temp_ ctx で「Intentional empty」が繰り返し発火 → Map過剰クリア → 描画消失
-- **activeCommentId='null' 文字列化 → truthy 誤判定** → effectiveShowAllPaint=false
+1. **effectiveShowAllPaint 自動 ON**: `normalizedActiveCommentId ? showAllPaint : true` → 未選択で全表示 → コメント紐づき描画残留
+2. **isDraft フラグ未付与**: draft shapes に識別子なし → ViewerCanvas で draft のみ表示不可
+3. **reset 誤発火**: 依存配列に `externalPan` → pan 変更で reset → Map クリア → フラッシュ
 
-**Fix Applied (3 core hunks):**
-1. **Hunk1 (ShareView):** `renderTargetCommentId = normalizedActiveCommentId` に変更（paintContextId から分離）
-   - 表示フィルタは「UIの選択(activeCommentId)」に追従、paintContextId は「保存先ID」として別用途
-2. **Hunk2 (ViewerCanvas):** 案B2/案B ブロック削除（renderTargetCommentId が activeCommentId なので temp_ 過剰クリア不要）
-3. **Hunk3 (ViewerCanvas):** 未選択時デフォルトを「draftのみ」に変更（temp_ または _dirty=true）
-   - showAllPaint=true → 全表示
-   - targetId あり → targetId 一致のみ
-   - targetId なし + showAllPaint=false → draft のみ（temp_ または _dirty）
+**Fix Applied (4 hunks):**
+1. **Hunk1 (ShareView L151):** `effectiveShowAllPaint = showAllPaint` のみ（自動全表示を削除）
+2. **Hunk2 (ShareView L835-838):** draft shapes に `isDraft: true` を付与（hydrate 時）
+3. **Hunk3 (ViewerCanvas L377-409):** 未選択デフォルトを「isDraft=true OR temp_ cid のみ」に変更
+4. **Hunk4 (ViewerCanvas L587-619):** reset useEffect 依存配列から `externalPan` 除外
 
-**Previous fixes (maintained):**
-- ID正規化（'null'/'undefined'/''→null）
-- localStorage 'null' 排除
-- contentReady 判定（bgSize ベース）
-- paintLayer opacity 制御
-- 確定shape は contentReady 後のみ描画
+**Display Contract (固定):**
+- 選択あり + showAllPaint=false → 選択コメント紐づきのみ
+- 選択あり + showAllPaint=true → 全描画
+- 未選択 + showAllPaint=false → draft のみ（isDraft OR temp_）
+- 未選択 + showAllPaint=true → 全描画
 
-**Status:** ✅ Fixed (All 3 core hunks + hotfix applied)
-**Verify Required:** Z-01〜Z-05 + 回帰テスト
+**Status:** ✅ Fixed (All 4 hunks applied)
+**Verify Required:** Z-01〜Z-04 + 回帰テスト

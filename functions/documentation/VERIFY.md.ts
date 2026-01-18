@@ -1,62 +1,58 @@
 # VERIFY.md - Verification Checklist
 
-**Last Updated:** 2026-01-18 (P0 Final v3)
+**Last Updated:** 2026-01-18 (P0 Final v4)
 
-## P0 Fix v3: Paint Visibility & Persistence (renderTargetCommentId統一版)
+## P0 Fix v4: Paint Visibility & Persistence (完全版)
 
 ### Primary Tests
-- [ ] **Z-01**: ペイントON→ドラッグ中に線が見える
-  - Expected: paintMode=true で opacity=1、ドラッグ中に currentShape が描画される
-  - Check: コンソールで `[🎨 DRAW_DIAG] currentShape created` 確認
+- [ ] **Z-01**: 下書きがある状態でリロード → 「一瞬出て消える」が起きない
+  - Expected: reset useEffect が externalPan 除外でファイル/ページ変更時のみ発火
+  - Check: コンソールで `[P0-V4] fileIdentity/pageNumber CHANGED` が **リロード直後に1回のみ** 出る
   - Status: PENDING
 
-- [ ] **Z-02**: pointerUp後も線が残る
-  - Expected: Map に追加され、contentReady で描画される
-  - Check: コンソールで `[🎨 DRAW_DIAG] Map updated after commit` 確認
+- [ ] **Z-02**: リロード直後、右コメント未選択 → 下書きが見える
+  - Expected: activeCommentId=null → effectiveShowAllPaint=false → renderedShapes で isDraft=true フィルタ
+  - Check: コンソールで `[ViewerCanvas] renderedShapes UMEMO: No targetId, showAllPaint=false, returning drafts only` + `draftCount > 0`
   - Status: PENDING
 
-- [ ] **Z-03**: リロードしても「一瞬出て消える」が起きない
-  - Expected: 案B2/案B 削除で Map 過剰クリアなし、contentReady で安定表示
-  - Check: コンソールで「Intentional empty」ログが **出ない** 確認
+- [ ] **Z-03**: コメントを選択 → そのコメント紐づき描画が見える
+  - Expected: activeCommentId 設定 → renderTargetCommentId=activeCommentId → targetId フィルタで表示
+  - Check: コンソールで `[ViewerCanvas] renderedShapes UMEMO: Filtered by targetId` + `filteredCount > 0`
   - Status: PENDING
 
-- [ ] **Z-04**: リロード直後、右コメント未選択 → 下書きが見える
-  - Expected: activeCommentId=null → renderTargetCommentId=null → draft のみ表示（temp_ または _dirty）
-  - Check: コンソールで `[ViewerCanvas] renderedShapes UMEMO: No targetId, showAllPaint=false, returning drafts only` 確認
-  - Status: PENDING
-
-- [ ] **Z-05**: 描画が紐づくコメントを選択→未選択に戻す → そのコメント紐づき描画が"残り続けない"
-  - Expected: 未選択時は draft のみ表示（DB確定shape は非表示）
-  - Check: コンソールで `returning drafts only` 確認、DB shape が消える
+- [ ] **Z-04**: 未選択に戻す → コメント紐づき描画は消える／下書きだけ見える
+  - Expected: activeCommentId=null → effectiveShowAllPaint=false → drafts only
+  - Check: コンソールで `returning drafts only` + DB確定shape が消える（temp_/isDraft のみ残る）
   - Status: PENDING
 
 ### Regression Tests
+- [ ] ペイントで描く→離した後も残る
+  - Expected: Map 追加 → contentReady で描画
+  - Status: PENDING
+
 - [ ] ペイントON/OFF×5 → ズーム/位置が勝手に戻らない
-  - Expected: zoom/pan state が保持される（Stage remount禁止）
+  - Expected: reset が発火しない（externalPan 除外済み）
   - Status: PENDING
 
-- [ ] 入力中に右コメント触っても暴れない（Selection suppressed維持）
-  - Expected: enterNewTextOnlyComposer で即null化
-  - Status: PENDING
-
-- [ ] 送信前後でちらつき無し
-  - Expected: freeze/handoff で temp→real 遷移時のちらつき防止
+- [ ] 入力中に右コメント触っても暴れない
+  - Expected: enterNewTextOnlyComposer で即 null化
   - Status: PENDING
 
 ---
 
-## Key Logs to Check
+## Key Logs (Success Pattern)
 ```
-# ✅ 成功パターン（これが出ればOK）
-[ShareView] context resolved ... activeCommentId: null (NOT 'null' string)
+[ShareView] No comment specified, keeping unselected
 [ViewerCanvas] renderedShapes UMEMO: No targetId, showAllPaint=false, returning drafts only
-[P0-VISIBILITY] contentReady=true, willBeVisible=true
-[🎨 DRAW_DIAG] Map updated after commit
+isDraftFlagCount: X, tempCidCount: Y, draftCount: X+Y > 0
+[P0-V4] fileIdentity/pageNumber CHANGED (リロード直後1回のみ)
+```
 
-# ❌ 失敗パターン（これが出たらNG）
-[案B2] Intentional empty BEFORE SYNC_GUARD: clearing Map
-activeCommentId: 'null' (string, not null)
-renderTargetCommentId: 'temp_...' (when unselected)
+## Key Logs (Failure Pattern - これが出たらNG)
+```
+effectiveShowAllPaint: true (when normalizedActiveCommentId is null)
+returning all sourceShapes (unselected UX) # 未選択で全表示はNG
+[P0-V4] fileIdentity/pageNumber CHANGED (リロード後2回以上) # 誤reset
 ```
 
 ---
