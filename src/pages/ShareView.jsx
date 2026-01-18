@@ -530,23 +530,66 @@ function ShareViewContent() {
   const isEditMode = composerMode === 'edit' && !!composerTargetCommentId;
   const isNewMode = composerMode === 'new' && !!tempCommentId;
   
-  // ★★★ P0-V9: getTempDraftCount（localStorage直接参照、draftShapes依存排除）★★★
-  const getTempDraftCount = React.useCallback(() => {
-    if (!tempCommentId || !shareLink?.file_id) return 0;
-    const tempDraftKey = getDraftKey(shareLink.file_id, null, tempCommentId, 'new');
-    const draft = loadDraft(tempDraftKey);
-    return draft?.shapes?.length || 0;
+  // ★★★ P0-V9: tempDraftプレビュー用キャッシュ（fileId/tempId変化時のみ再計算）★★★
+  const tempDraftKeyForPreviewRef = useRef(null);
+  const prevFileIdForTempRef = useRef(null);
+  const prevTempIdForTempRef = useRef(null);
+  
+  const getTempDraftKeyForPreview = React.useCallback(() => {
+    const fileId = shareLink?.file_id;
+    if (!fileId) return null;
+    
+    // キャッシュ有効判定（fileId/tempId不変なら再計算不要）
+    if (prevFileIdForTempRef.current === fileId && 
+        prevTempIdForTempRef.current === tempCommentId &&
+        tempDraftKeyForPreviewRef.current) {
+      return tempDraftKeyForPreviewRef.current;
+    }
+    
+    // 優先順位1: tempCommentId がある場合
+    if (tempCommentId) {
+      const key = getDraftKey(fileId, null, tempCommentId, 'new');
+      const draft = loadDraft(key);
+      if (draft?.shapes?.length > 0) {
+        tempDraftKeyForPreviewRef.current = key;
+        prevFileIdForTempRef.current = fileId;
+        prevTempIdForTempRef.current = tempCommentId;
+        return key;
+      }
+    }
+    
+    // 優先順位2: localStorage走査（temp_ prefix一致の最初の有効キー）
+    const prefix = `draftPaint:${fileId}:new:`;
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(prefix)) {
+        const draft = loadDraft(key);
+        if (draft?.shapes?.length > 0) {
+          tempDraftKeyForPreviewRef.current = key;
+          prevFileIdForTempRef.current = fileId;
+          prevTempIdForTempRef.current = tempCommentId;
+          return key;
+        }
+      }
+    }
+    
+    // 見つからなければnull（キャッシュクリア）
+    tempDraftKeyForPreviewRef.current = null;
+    prevFileIdForTempRef.current = fileId;
+    prevTempIdForTempRef.current = tempCommentId;
+    return null;
   }, [tempCommentId, shareLink?.file_id]);
   
-  // ★★★ P0-V9: hasTempDraft（localStorage直接参照、draftShapes依存排除）★★★
-  const hasTempDraft = React.useMemo(() => {
-    if (!tempCommentId) return false;
-    // localStorage から直接読み取り（draftShapes が空でも判定成立）
-    const count = getTempDraftCount();
-    if (count > 0) return true;
-    // フォールバック: メモリにあれば true
-    return draftShapes.some(s => resolveCommentId(s) === tempCommentId);
-  }, [tempCommentId, getTempDraftCount, draftShapes]);
+  const getTempDraftCountForPreview = React.useCallback(() => {
+    const previewKey = getTempDraftKeyForPreview();
+    if (!previewKey) return 0;
+    const draft = loadDraft(previewKey);
+    return draft?.shapes?.length || 0;
+  }, [getTempDraftKeyForPreview]);
+  
+  // ★★★ P0-V9: hasTempDraft（localStorage直接判定、draftShapes依存排除）★★★
+  const tempDraftCount = getTempDraftCountForPreview();
+  const hasTempDraft = tempDraftCount > 0;
 
   // ★★★ CRITICAL: Draft state logic moved here to resolve TDZ
   const hydratedKeyRef = useRef(null);
@@ -2038,7 +2081,7 @@ function ShareViewContent() {
       setTool('select');
     }
 
-    // ★★★ P0-V8: 同じコメント再クリック → 未選択＋temp下書きプレビューON ★★★
+    // ★★★ P0-V9: 同じコメント再クリック → 未選択＋temp下書きプレビューON（localStorage直接判定）★★★
     if (activeCommentId === comment.id) {
       addDebugLog(`[C] deselect same (toggle off, draft preview ON)`);
       setActiveCommentId(null);
@@ -2047,8 +2090,9 @@ function ShareViewContent() {
       setComposerText('');
       setPendingFiles([]);
       setReplyingThreadId(null);
-      // ★★★ P0-V8: temp下書きプレビューON（未選択で下書き確実表示）★★★
-      if (hasTempDraft) {
+      // ★★★ P0-V9: localStorage直接判定（hasTempDraft揺れ対策）★★★
+      const currentTempDraftCount = getTempDraftCountForPreview();
+      if (currentTempDraftCount > 0) {
         setIsTempDraftPreview(true);
       }
       return;
@@ -3612,30 +3656,27 @@ function ShareViewContent() {
                           ) : null;
                         })()}
                       </div>
-                    ) : (() => {
-                      const tempDraftCount = getTempDraftCount();
-                      return tempDraftCount > 0 ? (
-                        <div className="text-xs text-gray-500 flex items-center gap-2">
-                          <Badge 
-                            className="bg-blue-600 text-white cursor-pointer hover:bg-blue-700"
-                            onClick={() => {
-                              setActiveCommentId(null);
-                              setIsTempDraftPreview(true);
-                              setComposerMode('view');
-                              setComposerTargetCommentId(null);
-                              setShowAllPaint(false);
-                              setPaintMode(false);
-                              setIsDockOpen(false);
-                              addDebugLog(`[P0-V9] bottom temp draft badge clicked: preview ON`);
-                            }}
-                            title="クリックして新規下書きをプレビュー"
-                          >
-                            📝 新規下書き {tempDraftCount}個
-                          </Badge>
-                          <span>クリックしてプレビュー</span>
-                        </div>
-                      ) : null;
-                    })() || (
+                    ) : tempDraftCount > 0 ? (
+                      <div className="text-xs text-gray-500 flex items-center gap-2">
+                        <Badge 
+                          className="bg-blue-600 text-white cursor-pointer hover:bg-blue-700"
+                          onClick={() => {
+                            setActiveCommentId(null);
+                            setIsTempDraftPreview(true);
+                            setComposerMode('view');
+                            setComposerTargetCommentId(null);
+                            setShowAllPaint(false);
+                            setPaintMode(false);
+                            setIsDockOpen(false);
+                            addDebugLog(`[P0-V9] bottom temp draft badge clicked: preview ON`);
+                          }}
+                          title="クリックして新規下書きをプレビュー"
+                        >
+                          📝 新規下書き {tempDraftCount}個
+                        </Badge>
+                        <span>クリックしてプレビュー</span>
+                      </div>
+                    ) : (
                       <div className="opacity-0 pointer-events-none">placeholder</div>
                     )}
                   </div>
@@ -3683,25 +3724,24 @@ function ShareViewContent() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {/* ★★★ P0-V9: temp下書き共通バッジ（localStorage直接判定、draftShapes依存排除）★★★ */}
-              {(() => {
-                const tempDraftCount = getTempDraftCount();
-                return tempDraftCount > 0 && (
-                  <div 
-                    className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 cursor-pointer hover:bg-blue-100 transition-colors"
-                    onClick={() => {
-                      setActiveCommentId(null);
-                      setIsTempDraftPreview(true);
-                      setComposerMode('view');
-                      setComposerTargetCommentId(null);
-                      setShowAllPaint(false);
-                      setPaintMode(false);
-                      setIsDockOpen(false);
-                      addDebugLog(`[P0-V9] top temp draft badge clicked: preview ON`);
-                    }}
-                    title="クリックして新規下書きをプレビュー"
-                  >
-                    <div className="flex items-center gap-2 text-sm">
+              {/* ★★★ P0-V9: temp下書き共通バッジ（localStorage直接判定＋削除UI）★★★ */}
+              {tempDraftCount > 0 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                  <div className="flex items-center gap-2 justify-between">
+                    <div 
+                      className="flex items-center gap-2 text-sm flex-1 cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => {
+                        setActiveCommentId(null);
+                        setIsTempDraftPreview(true);
+                        setComposerMode('view');
+                        setComposerTargetCommentId(null);
+                        setShowAllPaint(false);
+                        setPaintMode(false);
+                        setIsDockOpen(false);
+                        addDebugLog(`[P0-V9] top temp draft badge clicked: preview ON`);
+                      }}
+                      title="クリックして新規下書きをプレビュー"
+                    >
                       <Badge className="bg-blue-600 text-white">
                         📝 新規下書き
                       </Badge>
@@ -3709,9 +3749,45 @@ function ShareViewContent() {
                         {tempDraftCount}個の描画
                       </span>
                     </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto p-1 text-red-600 hover:text-red-700"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!window.confirm('新規下書きを削除しますか？この操作は元に戻せません。')) {
+                          return;
+                        }
+                        const previewKey = getTempDraftKeyForPreview();
+                        if (previewKey) {
+                          deleteDraft(previewKey);
+                          draftCacheRef.current.delete(previewKey);
+                          // メモリから temp_ shapes のみ削除（edit下書き巻き込み防止）
+                          setDraftShapes(prev => prev.filter(s => {
+                            const cid = resolveCommentId(s);
+                            return !(cid && (cid.startsWith('temp_') || cid === tempCommentId));
+                          }));
+                          draftShapesRef.current = draftShapesRef.current.filter(s => {
+                            const cid = resolveCommentId(s);
+                            return !(cid && (cid.startsWith('temp_') || cid === tempCommentId));
+                          });
+                          // tempCommentId クリア
+                          setTempCommentId(null);
+                          if (shareLink?.file_id) {
+                            localStorage.removeItem(`tempCommentId:${shareLink.file_id}`);
+                          }
+                          // プレビューOFF
+                          setIsTempDraftPreview(false);
+                          showToast('新規下書きを削除しました', 'success');
+                        }
+                      }}
+                      title="新規下書きを削除"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
                   </div>
-                );
-              })()}
+                </div>
+              )}
               
               {/* P0-FINAL: comments は freeze しない（即時反映優先） */}
               {sortedComments.length === 0 ? (
