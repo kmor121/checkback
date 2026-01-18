@@ -141,8 +141,9 @@ function ShareViewContent() {
   const [isNewCommentInputActive, setIsNewCommentInputActive] = useState(false); // 新規コメント入力中フラグ
   const [isDockOpen, setIsDockOpen] = useState(false);
 
-  // ★★★ P1 FIX: activeCommentId がある場合は showAllPaint を強制的に false にする不変条件 ★★★
-  const effectiveShowAllPaint = showAllPaint && !activeCommentId;
+  // ★★★ P0-FIX: コメント未選択時は showAllPaint を強制 true（下書き表示を維持）★★★
+  // 未選択で消えるのは最悪UX（消えた誤認）。コメントがある時だけ選択的表示。
+  const effectiveShowAllPaint = showAllPaint || !activeCommentId;
   
   // Draft paint session state
   const [paintSessionCommentId, setPaintSessionCommentId] = useState(null);

@@ -148,6 +148,9 @@ const ViewerCanvas = forwardRef(({
   const [bgSize, setBgSize] = useState({ width: 800, height: 600 });
   const [error, setError] = useState(null);
   const [bgReady, setBgReady] = useState(false); // P2 FIX: 背景ロード完了フラグ
+  
+  // ★★★ P0-FIX: contentReady判定（bgSize確定ベース、bgReadyフラグ揺れに依存しない）★★★
+  const contentReady = bgSize.width > 0 && bgSize.height > 0;
 
   
   // 描画状態（CRITICAL: Map方式で置換禁止）
@@ -1539,16 +1542,36 @@ const ViewerCanvas = forwardRef(({
       setIsPanning(false);
       return;
     }
+    // ★★★ P0-FIT: 二重commit防止（window pointerup と競合回避）★★★
+    if (commitInFlightRef.current) {
+      console.log('[P0-FIT] Stage pointerUp skipped (commit in flight)');
+      return;
+    }
+    commitInFlightRef.current = true;
     handlePointerUp(e);
+    requestAnimationFrame(() => {
+      commitInFlightRef.current = false;
+    });
   };
   
   // ★★★ P0-FIT: window pointerup で描画取りこぼし防止（Stage外で離した場合）★★★
+  const commitInFlightRef = useRef(false); // 二重commit防止
   useEffect(() => {
     const handleWindowPointerUp = (e) => {
       // 描画中のみ監視（無関係イベント除外）
       if (!isDrawingRef2.current) return;
+      // 二重commit防止
+      if (commitInFlightRef.current) {
+        console.log('[P0-FIT] window pointerUp skipped (commit in flight)');
+        return;
+      }
       console.log('[P0-FIT] window pointerUp detected during drawing, committing shape');
+      commitInFlightRef.current = true;
       handlePointerUp(e);
+      // commit完了後にフラグ解除（次フレームで）
+      requestAnimationFrame(() => {
+        commitInFlightRef.current = false;
+      });
     };
     
     window.addEventListener('pointerup', handleWindowPointerUp);
@@ -3259,11 +3282,13 @@ const ViewerCanvas = forwardRef(({
   // ★★★ P0-FIX: 描画可視性の重要ログ（常時出力）★★★
   console.log('[P0-VISIBILITY] paintLayer state:', {
     bgReady,
+    contentReady,
+    bgSize,
     paintMode,
     currentShapeExists: !!currentShape,
     hidePaintOverlay,
-    willBeVisible: bgReady || paintMode || !!currentShape,
-    willBeInteractive: !hidePaintOverlay && (bgReady || paintMode || !!currentShape),
+    willBeVisible: contentReady || paintMode || !!currentShape,
+    willBeInteractive: !hidePaintOverlay && (contentReady || paintMode || !!currentShape),
   });
 
   if (DEBUG_MODE) {
@@ -3582,14 +3607,14 @@ const ViewerCanvas = forwardRef(({
         </Layer>
 
         {/* 注釈Layer（contentGroup内に配置） */}
-        {/* P0-FIX: paintMode ON または currentShape 存在時は常に表示（bgReady不問） */}
+        {/* P0-FIX: contentReady（bgSize確定）ベースで表示、paintMode/currentShape時は例外表示 */}
         {/* CONTRACT (P0): Paint layer may remount ONLY as a controlled mechanism to remove ghosting
 // when hidePaintOverlay/canvasContextKey changes. Do NOT move this remounting to Stage. */}
         <Layer 
           key={`paint:${hidePaintOverlay ? 'hide' : 'show'}:${forceClearToken}:${canvasContextKey || 'none'}`}
           ref={paintLayerRef}
-          listening={!hidePaintOverlay && (bgReady || paintMode || !!currentShape)}
-          opacity={(bgReady || paintMode || !!currentShape) ? 1 : 0}
+          listening={!hidePaintOverlay && (contentReady || paintMode || !!currentShape)}
+          opacity={(contentReady || paintMode || !!currentShape) ? 1 : 0}
         >
             <Group
               ref={contentGroupRef}
@@ -3647,10 +3672,10 @@ const ViewerCanvas = forwardRef(({
                       contentScale,
                     }) || null}
 
-                    {/* ★★★ CRITICAL: 確定済みshapeのみ描画（currentShapeとの重複は既に除外済み）★★★ */}
-                    {renderedShapesFinal.map(s => renderShape(s, true))}
+                    {/* ★★★ P0-FIX: 確定shape は contentReady 時のみ描画（リロード時フラッシュ防止）★★★ */}
+                    {contentReady && renderedShapesFinal.map(s => renderShape(s, true))}
 
-                    {/* ★★★ CRITICAL: 描画中のcurrentShapeは常に描画（フィルタ無関係、即時フィードバック必須）★★★ */}
+                    {/* ★★★ CRITICAL: 描画中のcurrentShapeは常に描画（contentReady不問、プレビュー必須）★★★ */}
                     {currentShape && renderShape(currentShape, false)}
 
                     <Transformer ref={transformerRef} name="paintOverlay" />
