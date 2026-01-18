@@ -143,12 +143,19 @@ function ShareViewContent() {
   const [showAllPaint, setShowAllPaint] = useState(false);
   const [isNewCommentInputActive, setIsNewCommentInputActive] = useState(false); // 新規コメント入力中フラグ
   const [isDockOpen, setIsDockOpen] = useState(false);
+  const [isTempDraftPreview, setIsTempDraftPreview] = useState(false); // ★★★ P0-V8: 新規下書きプレビューフラグ ★★★
 
   // ★★★ P0-V2-FIX: normalizedActiveCommentId を先に定義（TDZ回避）★★★
   const normalizedActiveCommentId = normalizeNullableId(activeCommentId);
 
   // ★★★ P0-V5: 未選択フラグを正規化（統一ルール適用用）★★★
   const isUnselected = !normalizedActiveCommentId;
+  
+  // ★★★ P0-V8: temp 下書き存在判定（共通バッジ・混入条件で使う）★★★
+  const hasTempDraft = React.useMemo(() => {
+    if (!tempCommentId) return false;
+    return draftShapes.some(s => resolveCommentId(s) === tempCommentId);
+  }, [tempCommentId, draftShapes]);
   
   // ★★★ P0-V5: 未選択時は showAllPaint 強制 false（draft のみ表示）★★★
   const effectiveShowAllPaint = !isUnselected && showAllPaint;
@@ -219,6 +226,8 @@ function ShareViewContent() {
     if (composerTargetCommentId) setComposerTargetCommentId(null);
 
     setIsNewCommentInputActive(true);
+    // ★★★ P0-V8: tempプレビューOFF（新規入力モードへ移行）★★★
+    setIsTempDraftPreview(false);
     setForceClearToken(prev => prev + 1);
   };
   
@@ -1126,6 +1135,9 @@ function ShareViewContent() {
     if (mode) {
       setIsNewCommentInputActive(false);
     }
+    
+    // ★★★ P0-V8: ペイントON時はtempプレビューOFF（編集モードへ移行）★★★
+    setIsTempDraftPreview(false);
 
     if (authStatus === 'guest' && !guestName.trim()) {
       setShowNameDialog(true);
@@ -2008,16 +2020,19 @@ function ShareViewContent() {
       setTool('select');
     }
 
-    // ★★★ P0-V5: 同じコメント再クリック → 選択解除（draft保持、forceClearは不要）★★★
+    // ★★★ P0-V8: 同じコメント再クリック → 未選択＋temp下書きプレビューON ★★★
     if (activeCommentId === comment.id) {
-      addDebugLog(`[C] deselect same (toggle off, draft preserved)`);
+      addDebugLog(`[C] deselect same (toggle off, draft preview ON)`);
       setActiveCommentId(null);
       setComposerMode('view');
       setComposerTargetCommentId(null);
       setComposerText('');
       setPendingFiles([]);
       setReplyingThreadId(null);
-      // ★★★ P0-V5: forceClearToken削除（未選択で draft のみ表示、Map は保持）★★★
+      // ★★★ P0-V8: temp下書きプレビューON（未選択で下書き確実表示）★★★
+      if (hasTempDraft) {
+        setIsTempDraftPreview(true);
+      }
       return;
     }
 
@@ -2027,6 +2042,9 @@ function ShareViewContent() {
     setPaintSessionCommentId(null);
     setIsDockOpen(true);
     setShowAllPaint(false);
+
+    // ★★★ P0-V8: temp下書きプレビューOFF（コメント選択でプレビュー解除）★★★
+    setIsTempDraftPreview(false);
 
     // ★★★ P0-FINAL: 必ず view に遷移（new状態から復帰できるように）★★★
     setComposerMode('view');
@@ -3344,9 +3362,9 @@ function ShareViewContent() {
                 showAllPaint={effectiveShowAllPaint}
                 forceClearToken={forceClearToken}
                 draftCommentId={paintContextId}
-                renderTargetCommentId={isUnselected ? null : normalizedActiveCommentId}
+                renderTargetCommentId={(isUnselected || isTempDraftPreview) ? null : normalizedActiveCommentId}
                 activeCommentId={normalizedActiveCommentId}
-                showDraftOnly={isUnselected}
+                showDraftOnly={(isUnselected || isTempDraftPreview) && hasTempDraft}
                 hidePaintOverlay={(() => {
                   // ★★★ P0: 新規テキスト入力中かつ描画なしの時のみhide（描画ある時は表示維持）★★★
                   const hasAnyShapes = (shapesForCanvasSafe?.length || 0) > 0;
@@ -3576,6 +3594,26 @@ function ShareViewContent() {
                           ) : null;
                         })()}
                       </div>
+                    ) : hasTempDraft ? (
+                      <div className="text-xs text-gray-500 flex items-center gap-2">
+                        <Badge 
+                          className="bg-blue-600 text-white cursor-pointer hover:bg-blue-700"
+                          onClick={() => {
+                            setActiveCommentId(null);
+                            setIsTempDraftPreview(true);
+                            setComposerMode('view');
+                            setComposerTargetCommentId(null);
+                            setShowAllPaint(false);
+                            setPaintMode(false);
+                            setIsDockOpen(false);
+                            addDebugLog(`[P0-V8] bottom temp draft badge clicked: preview ON`);
+                          }}
+                          title="クリックして新規下書きをプレビュー"
+                        >
+                          📝 新規下書き {draftShapes.filter(s => resolveCommentId(s) === tempCommentId).length}個
+                        </Badge>
+                        <span>クリックしてプレビュー</span>
+                      </div>
                     ) : (
                       <div className="opacity-0 pointer-events-none">placeholder</div>
                     )}
@@ -3624,9 +3662,22 @@ function ShareViewContent() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {/* ★★★ P0-V7: 未選択時の新規下書き共通バッジ（全コメントに混ぜない）★★★ */}
-              {isUnselected && tempCommentId && draftShapes.filter(s => resolveCommentId(s) === tempCommentId).length > 0 && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+              {/* ★★★ P0-V8: temp下書き共通バッジ（常時表示、クリックで未選択＋プレビュー）★★★ */}
+              {hasTempDraft && (
+                <div 
+                  className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 cursor-pointer hover:bg-blue-100 transition-colors"
+                  onClick={() => {
+                    setActiveCommentId(null);
+                    setIsTempDraftPreview(true);
+                    setComposerMode('view');
+                    setComposerTargetCommentId(null);
+                    setShowAllPaint(false);
+                    setPaintMode(false);
+                    setIsDockOpen(false);
+                    addDebugLog(`[P0-V8] temp draft badge clicked: preview ON`);
+                  }}
+                  title="クリックして新規下書きをプレビュー"
+                >
                   <div className="flex items-center gap-2 text-sm">
                     <Badge className="bg-blue-600 text-white">
                       📝 新規下書き
