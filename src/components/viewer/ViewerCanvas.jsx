@@ -353,13 +353,16 @@ const ViewerCanvas = forwardRef(({
       sourceShapes = sourceShapes.filter(s => s.id !== currentShape.id);
     }
 
-    const targetId = renderTargetCommentId ? String(renderTargetCommentId) : '';
+    // ★★★ P0-FIX: ID正規化（'null'/'undefined'/''を真のnullへ戻す）★★★
+    const normalizeNullableId = (v) => (v == null || v === 'null' || v === 'undefined' || v === '' ? null : v);
+    const targetId = normalizeNullableId(renderTargetCommentId);
 
     console.log('[ViewerCanvas] renderedShapes UMEMO:', {
       shapesVersion,
       showAllPaint,
       renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
-      targetId: targetId?.substring(0, 12) || 'null',
+      targetIdRaw: String(renderTargetCommentId ?? 'null'),
+      targetIdNormalized: targetId?.substring(0, 12) || 'null',
       mapShapesCount: mapShapes.length,
       sourceShapesCount: sourceShapes.length,
       currentShapeId: currentShape?.id?.substring(0, 12) || 'null',
@@ -370,7 +373,13 @@ const ViewerCanvas = forwardRef(({
       })),
     });
 
-    // P1.2 FIX: targetIdが指定されている場合は、showAllPaintに関わらず常にフィルタリングを優先する
+    // ★★★ P0-FIX: showAllPaint を最優先（targetId より先にチェック、未選択時全表示UX）★★★
+    if (showAllPaint) {
+      console.log('[ViewerCanvas] renderedShapes UMEMO: showAllPaint=TRUE, returning all sourceShapes (priority)', { count: sourceShapes.length });
+      return sourceShapes;
+    }
+
+    // ★★★ P0-FIX: showAllPaint=false かつ targetId有効 → フィルタリング ★★★
     if (targetId) {
       const filtered = sourceShapes.filter(s => resolveCommentId(s) === targetId);
 
@@ -382,7 +391,7 @@ const ViewerCanvas = forwardRef(({
         }
       });
       const result = Array.from(dedupedMap.values());
-      console.log('[ViewerCanvas] renderedShapes UMEMO: Filtered by targetId', { 
+      console.log('[ViewerCanvas] renderedShapes UMEMO: Filtered by targetId (showAllPaint=false)', { 
         targetId: targetId?.substring(0, 12), 
         filteredCount: result.length,
         sourceCount: sourceShapes.length,
@@ -395,14 +404,8 @@ const ViewerCanvas = forwardRef(({
       return result;
     }
 
-    // P1.2 FIX: targetIdがない場合にのみ、showAllPaintを考慮する
-    if (showAllPaint) {
-      console.log('[ViewerCanvas] renderedShapes UMEMO: showAllPaint=TRUE, returning all sourceShapes', { count: sourceShapes.length });
-      return sourceShapes;
-    }
-
-    // ★★★ P0-FIX: targetId空→フィルタ無効（全表示、下書き消失防止）★★★
-    console.log('[ViewerCanvas] renderedShapes UMEMO: No targetId, returning all sourceShapes (prevent draft vanish)', { count: sourceShapes.length });
+    // ★★★ P0-FIX: targetId空 かつ showAllPaint=false → 全表示（未選択時UX）★★★
+    console.log('[ViewerCanvas] renderedShapes UMEMO: No targetId + no showAllPaint, returning all sourceShapes (unselected UX)', { count: sourceShapes.length });
     return sourceShapes;
   }, [shapesVersion, showAllPaint, renderTargetCommentId, currentShape]);
 

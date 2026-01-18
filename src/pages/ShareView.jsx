@@ -73,6 +73,9 @@ const resolveCommentId = (s) => {
   return v == null ? null : String(v);
 };
 
+// ★★★ P0-FIX: ID正規化（'null'/'undefined'/''を真のnullへ戻す、truthy誤判定防止）★★★
+const normalizeNullableId = (v) => (v == null || v === 'null' || v === 'undefined' || v === '' ? null : v);
+
 // ★★★ CRITICAL: shape正規化（入れ子を平坦化、comment_id を canonical 化）★★★
 // defaultCommentId: shapeにcomment_idが無い場合のみ使用（既存値は上書きしない）
 const normalizeShape = (s, defaultCommentId = null) => {
@@ -474,9 +477,11 @@ function ShareViewContent() {
       return;
     }
     
-    // ★★★ 既存のtempCommentIdがあれば復元 ★★★
-    const savedTempId = localStorage.getItem(`tempCommentId:${shareLink.file_id}`);
-    if (savedTempId && savedTempId !== 'null' && savedTempId !== 'undefined' && savedTempId.trim() !== '') {
+    // ★★★ P0-FIX: 既存のtempCommentIdがあれば復元（正規化版）★★★
+    const savedTempIdRaw = localStorage.getItem(`tempCommentId:${shareLink.file_id}`);
+    const savedTempId = normalizeNullableId(savedTempIdRaw);
+    
+    if (savedTempId) {
       if (tempCommentId !== savedTempId) {
         setTempCommentId(savedTempId);
         console.log('[ShareView] ✓ Restored tempCommentId:', {
@@ -486,7 +491,8 @@ function ShareViewContent() {
       }
     } else {
       // ★★★ 無ければ生成（composerMode='new'の時のみ到達）★★★
-      if (savedTempId && (savedTempId === 'null' || savedTempId === 'undefined' || savedTempId.trim() === '')) {
+      if (savedTempIdRaw) {
+        // 'null' 文字列が残っていたら削除
         localStorage.removeItem(`tempCommentId:${shareLink.file_id}`);
       }
       const newTempId = generateTempCommentId();
@@ -499,15 +505,17 @@ function ShareViewContent() {
     }
   }, [shareLink?.file_id, composerMode]);
 
-  // ★★★ tempCommentIdの永続化 ★★★
+  // ★★★ P0-FIX: tempCommentIdの永続化（'null'/'undefined'/''のときは削除）★★★
   useEffect(() => {
     if (!shareLink?.file_id) return;
-    if (!tempCommentId || tempCommentId === 'null' || tempCommentId === 'undefined') {
+    const normalized = normalizeNullableId(tempCommentId);
+    if (!normalized) {
       localStorage.removeItem(`tempCommentId:${shareLink.file_id}`);
+      console.log('[ShareView] Removed tempCommentId from localStorage (was null/invalid)');
       return;
     }
-    localStorage.setItem(`tempCommentId:${shareLink.file_id}`, tempCommentId);
-    console.log('[ShareView] Saved tempCommentId to localStorage:', tempCommentId);
+    localStorage.setItem(`tempCommentId:${shareLink.file_id}`, normalized);
+    console.log('[ShareView] Saved tempCommentId to localStorage:', normalized);
   }, [shareLink?.file_id, tempCommentId]);
 
   // ★★★ CRITICAL: mode判定（TDZ回避のため、computedPaintContextIdより先に定義）★★★
@@ -1215,33 +1223,21 @@ function ShareViewContent() {
     }
   };
 
-  // 初回ロード時のみ activeCommentId を初期化（URLにcomment指定がある場合のみ選択）
+  // ★★★ P0-FIX: 初回ロード時の activeCommentId 初期化（正規化版）★★★
   useEffect(() => {
     if (!token || !shareLink?.file_id) return;
     if (didInitActiveRef.current) return;
 
     const params = new URLSearchParams(window.location.search);
-    const commentIdFromUrl = params.get('comment');
+    const commentIdFromUrlRaw = params.get('comment');
+    const commentIdFromUrl = normalizeNullableId(commentIdFromUrlRaw);
 
-    // comment指定がない共有リンクは「先頭コメントを自動選択」で初期表示を安定させる
+    // comment指定がない共有リンクは未選択のまま（下書き全表示UX優先）
     if (!commentIdFromUrl) {
-      // comments が揃うのを待つ
-      if (!comments || comments.length === 0) {
-        setActiveCommentId(null);
-        didInitActiveRef.current = true;
-        return;
-      }
-      
-      // ★★★ FIX-INIT: 先頭コメントを自動選択（初回のみ）★★★
-      const firstComment = comments[0];
-      if (firstComment) {
-        setCurrentPage(firstComment.page_no);
-        setActiveCommentId(firstComment.id);
-        console.log('[ShareView] Auto-selected first comment:', firstComment.id.substring(0, 12));
-      } else {
-        setActiveCommentId(null);
-      }
+      // ★★★ P0-FIX: 未選択維持（先頭自動選択を削除、下書き表示優先UX）★★★
+      setActiveCommentId(null);
       didInitActiveRef.current = true;
+      console.log('[ShareView] No comment specified, keeping unselected (showAllPaint will activate)');
       return;
     }
 
@@ -1260,9 +1256,14 @@ function ShareViewContent() {
   }, [token, shareLink?.file_id, comments]);
 
   useEffect(() => {
-    if (!token || !shareLink?.file_id || !activeCommentId) return;
+    if (!token || !shareLink?.file_id) return;
     const key = `lastActiveCommentId:${token}:${shareLink.file_id}:${currentPage}`;
-    localStorage.setItem(key, activeCommentId);
+    // ★★★ P0-FIX: activeCommentId=null のときは removeItem（'null' を書かない）★★★
+    if (!activeCommentId) {
+      localStorage.removeItem(key);
+    } else {
+      localStorage.setItem(key, activeCommentId);
+    }
   }, [activeCommentId, token, shareLink?.file_id, currentPage]);
 
   // ★★★ SCALE: ViewerCanvasから実表示倍率を受け取る ★★★
