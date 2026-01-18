@@ -158,6 +158,12 @@ function ShareViewContent() {
   const [paintSessionCommentId, setPaintSessionCommentId] = useState(null);
   const [draftShapes, setDraftShapes] = useState([]);
   const draftShapesRef = useRef([]);
+  
+  // ★★★ P0-V8: temp 下書き存在判定（TDZ回避: draftShapes定義後に配置）★★★
+  const hasTempDraft = React.useMemo(() => {
+    if (!tempCommentId) return false;
+    return draftShapes.some(s => resolveCommentId(s) === tempCommentId);
+  }, [tempCommentId, draftShapes]);
   const draftCacheRef = useRef(new Map()); // ★★★ P1: targetKey -> shapes[] のキャッシュ ★★★
   const seededFromDBRef = useRef(false); // ★★★ Hunk1: DB seed直後の autosave スキップ用フラグ ★★★
   const justEnteredEditRef = useRef({ key: null, active: false }); // ★★★ P0: 編集突入直後のdirty化防止 ★★★
