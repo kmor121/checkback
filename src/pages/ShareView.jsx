@@ -195,12 +195,7 @@ function ShareViewContent() {
   const [tempCommentId, setTempCommentId] = useState(null);
   const saveDraftTimeoutRef = useRef(null);
   
-  // ★★★ P0-V8: temp 下書き存在判定（共通バッジ・混入条件で使う）★★★
-  // NOTE: draftShapes定義後に移動するとTDZになるため、ここでは関数化しておき、後でuseMemo化
-  const hasTempDraftFn = () => {
-    if (!tempCommentId) return false;
-    return draftShapes.some(s => resolveCommentId(s) === tempCommentId);
-  };
+
   
   // Composer mode (new or edit or reply)
   const [composerMode, setComposerMode] = useState('new');
