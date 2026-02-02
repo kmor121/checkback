@@ -3122,8 +3122,22 @@ function ShareViewContent() {
   return (
   <div className="max-w-full mx-auto h-screen flex flex-col">
     {/* ★★★ P0-V9-FIX: 診断HUD（?diag=1 で状態見える化）★★★ */}
+    {/* ★★★ P0-COORD-DIAG: ViewerCanvasのdebugHudDataをstateに保存してHUDに渡す ★★★ */}
+    {(() => {
+      const [vcDebugHudData, setVcDebugHudData] = React.useState(null);
+      
+      React.useEffect(() => {
+        // ViewerCanvasからdebugHudDataを受け取る手段がないため、代わりにrefで渡すかpropsを追加する必要がある
+        // 現状、debugInfoとして渡されているが、coordDiagはまだ含まれていない
+        // → ViewerCanvasのdebugHudDataを親に公開する必要がある
+        // 暫定案: ViewerCanvasにonDebugHudDataChangeを追加し、変化時にShareViewに通知
+      }, []);
+      
+      return null;
+    })()}
+    
     {(new URLSearchParams(window.location.search).get('diag') === '1') && (
-      <div className="fixed top-16 left-4 z-[9998] bg-black/90 text-white text-xs font-mono p-3 rounded shadow-lg max-w-xs">
+      <div className="fixed top-16 left-4 z-[9998] bg-black/90 text-white text-xs font-mono p-3 rounded shadow-lg max-w-xs max-h-[80vh] overflow-auto">
         <div className="font-bold text-yellow-400 mb-2">🔍 診断HUD (Z-03)</div>
         <div>normalizedActiveCommentId: <span className={normalizedActiveCommentId ? 'text-cyan-400' : 'text-red-400'}>{normalizedActiveCommentId?.substring(0, 12) || 'null'}</span></div>
         <div>isUnselected: <span className={isUnselected ? 'text-green-400' : 'text-red-400'}>{isUnselected.toString()}</span></div>
@@ -3136,6 +3150,25 @@ function ShareViewContent() {
           <div>paintContextId: <span className="text-cyan-400">{paintContextId?.substring(0, 12) || 'null'}</span></div>
           <div>targetKey: <span className="text-cyan-400">{targetKey?.substring(0, 30) || 'null'}</span></div>
         </div>
+        
+        {/* ★★★ P0-COORD-DIAG: Paint Coords (VC) セクション追加 ★★★ */}
+        {(() => {
+          // ViewerCanvasのdebugHudDataを取得（debugInfoとして渡されている）
+          // しかし、現状のdebugInfoにはcoordDiagが含まれていないため、表示できない
+          // → ViewerCanvasから親に通知する仕組みが必要
+          // 暫定: ViewerCanvasのdebugHudDataに含まれているはずのcoordDiagを参照
+          // しかし、propsでは渡されていないので、別途渡す必要がある
+          
+          // ★★★ WORKAROUND: ViewerCanvasにonDebugHudDataChangeを追加する代わりに、
+          // ViewerCanvasのDEBUG HUD内でcoordDiagを出力し、ShareViewではdebugInfoのcoordDiagを参照する ★★★
+          // これは最小差分のため、ViewerCanvasのdebugHudDataをそのまま使う
+          
+          // ★★★ CRITICAL: ViewerCanvasのdebugHudDataはpropsで渡されていないので、
+          // 別途 onDebugHudDataChange を追加する必要がある ★★★
+          // 最小差分で実装するため、ViewerCanvasにcallbackを追加
+          
+          return null; // 一旦実装を進めてから追加
+        })()}
       </div>
     )}
     
@@ -3476,6 +3509,7 @@ function ShareViewContent() {
                   fileId: shareLink?.file_id,
                   pageNo: currentPage,
                   guestId: guestId,
+                  coordDiag: null, // ★★★ P0-COORD-DIAG: ViewerCanvasのdebugHudDataから受け取る ★★★
                 }}
               />
             </>

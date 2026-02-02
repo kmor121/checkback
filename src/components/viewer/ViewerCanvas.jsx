@@ -197,6 +197,19 @@ const ViewerCanvas = forwardRef(({
   // デバッグHUD用ログ履歴
   const [debugHudLogs, setDebugHudLogs] = useState([]);
   
+  // ★★★ P0-COORD-DIAG: ペイント座標診断用ref（?diag=1で観測、ロジック変更なし）★★★
+  const coordDiagRef = useRef({
+    paintEnterSeq: 0,        // paintMode ON回数
+    strokeSeqInSession: 0,   // 同一paintEnterSeq内のストローク回数
+    firstStroke: false,      // 最初のストロークか
+    lastPointerEvent: null,  // 'down'|'move'|'up'
+    lastPointerRaw: null,    // {clientX, clientY}
+    lastPointerStage: null,  // {x, y}
+    lastPointerImage: null,  // {x, y, stageX, stageY}
+    viewAtEvent: null,       // {viewX, viewY, contentScale, baseFitScale, userScale, stageW, stageH, drawViewRefExists, drawViewRefSnapshot}
+  });
+  const [diagTick, setDiagTick] = useState(0); // HUD更新用tick
+  
   // ★ Map方式では shapes state は不要（getAllShapes()を使う）
   // 後方互換のためのダミー（実際はMapを参照）
   const shapes = useMemo(() => getAllShapes(), [shapesVersion]);
@@ -1688,6 +1701,26 @@ const ViewerCanvas = forwardRef(({
       if (DEBUG_MODE) {
         console.log('[ViewerCanvas] drawViewRef saved:', drawViewRef.current);
       }
+      
+      // ★★★ P0-COORD-DIAG: down時の座標情報を記録 ★★★
+      const rawPointer = { clientX: e.evt?.clientX ?? 0, clientY: e.evt?.clientY ?? 0 };
+      const stagePointer = stageRef.current?.getPointerPosition() ?? null;
+      coordDiagRef.current.strokeSeqInSession += 1;
+      coordDiagRef.current.firstStroke = (coordDiagRef.current.strokeSeqInSession === 1);
+      coordDiagRef.current.lastPointerEvent = 'down';
+      coordDiagRef.current.lastPointerRaw = rawPointer;
+      coordDiagRef.current.lastPointerStage = stagePointer;
+      coordDiagRef.current.lastPointerImage = { x: imgCoords.x, y: imgCoords.y, stageX: imgCoords.stageX, stageY: imgCoords.stageY };
+      coordDiagRef.current.viewAtEvent = {
+        viewX, viewY, contentScale, offsetX, offsetY,
+        baseFitScale,
+        userScale: zoom / 100,
+        stageW: containerSize.width,
+        stageH: containerSize.height,
+        drawViewRefExists: !!drawViewRef.current,
+        drawViewRefSnapshot: drawViewRef.current ? { ...drawViewRef.current } : null,
+      };
+      setDiagTick(t => t + 1);
 
       // ★★★ CRITICAL: comment_idを取得（draftCommentId優先、fallback禁止）★★★
       const commentId = getCommentIdForDrawing();
@@ -1772,6 +1805,30 @@ const ViewerCanvas = forwardRef(({
       if (DEBUG_MODE && !isDraggingRef.current && !isDrawingRef2.current) {
         setPointerPos({ x: imgCoords.stageX, y: imgCoords.stageY });
         setImgPos({ x: imgCoords.x, y: imgCoords.y });
+      }
+      
+      // ★★★ P0-COORD-DIAG: move時の座標情報を記録（描画中のみ、最初の3点まで）★★★
+      if (isDrawingRef2.current) {
+        const pointsLen = currentShapeRef2.current?.points?.length ?? 0;
+        const pointIdx = Math.floor(pointsLen / 2);
+        if (pointIdx <= 3) {
+          const rawPointer = { clientX: e.evt?.clientX ?? 0, clientY: e.evt?.clientY ?? 0 };
+          const stagePointer = stageRef.current?.getPointerPosition() ?? null;
+          coordDiagRef.current.lastPointerEvent = 'move';
+          coordDiagRef.current.lastPointerRaw = rawPointer;
+          coordDiagRef.current.lastPointerStage = stagePointer;
+          coordDiagRef.current.lastPointerImage = { x: imgCoords.x, y: imgCoords.y, stageX: imgCoords.stageX, stageY: imgCoords.stageY };
+          coordDiagRef.current.viewAtEvent = {
+            viewX, viewY, contentScale, offsetX, offsetY,
+            baseFitScale,
+            userScale: zoom / 100,
+            stageW: containerSize.width,
+            stageH: containerSize.height,
+            drawViewRefExists: !!drawViewRef.current,
+            drawViewRefSnapshot: drawViewRef.current ? { ...drawViewRef.current } : null,
+          };
+          setDiagTick(t => t + 1);
+        }
       }
       
       // CRITICAL: refベースで判定（親stateが揺れても描画継続）
@@ -2687,6 +2744,18 @@ const ViewerCanvas = forwardRef(({
       }
     });
     
+    // ★★★ P0-COORD-DIAG: 座標診断データをスナップショット化（?diag=1時のみ）★★★
+    const coordDiag = DEBUG_MODE ? {
+      paintEnterSeq: coordDiagRef.current.paintEnterSeq,
+      strokeSeqInSession: coordDiagRef.current.strokeSeqInSession,
+      firstStroke: coordDiagRef.current.firstStroke,
+      lastPointerEvent: coordDiagRef.current.lastPointerEvent,
+      lastPointerRaw: coordDiagRef.current.lastPointerRaw ? { ...coordDiagRef.current.lastPointerRaw } : null,
+      lastPointerStage: coordDiagRef.current.lastPointerStage ? { ...coordDiagRef.current.lastPointerStage } : null,
+      lastPointerImage: coordDiagRef.current.lastPointerImage ? { ...coordDiagRef.current.lastPointerImage } : null,
+      viewAtEvent: coordDiagRef.current.viewAtEvent ? { ...coordDiagRef.current.viewAtEvent } : null,
+    } : null;
+    
     return {
       activeCommentId: String(activeCommentId ?? 'null'),
       effectiveActiveId: String(effectiveActiveId ?? 'null'),
@@ -2694,8 +2763,9 @@ const ViewerCanvas = forwardRef(({
       renderedShapesLength: renderedShapes.length,
       uniqueCommentIds: uniqueCids.map(id => String(id).substring(0, 12)),
       countsByCommentId,
+      coordDiag, // ★★★ P0-COORD-DIAG: 座標診断データ追加 ★★★
     };
-  }, [activeCommentId, effectiveActiveId, renderedShapes]);
+  }, [activeCommentId, effectiveActiveId, renderedShapes, diagTick]);
 
   // Undo/Redo
   useImperativeHandle(ref, () => ({
