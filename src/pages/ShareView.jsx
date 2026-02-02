@@ -3137,24 +3137,12 @@ function ShareViewContent() {
           <div>targetKey: <span className="text-cyan-400">{targetKey?.substring(0, 30) || 'null'}</span></div>
         </div>
         
-        {/* ★★★ P0-COORD-DIAG: Paint Coords (VC) セクション追加 ★★★ */}
-        {(() => {
-          // ViewerCanvasのdebugHudDataを取得（debugInfoとして渡されている）
-          // しかし、現状のdebugInfoにはcoordDiagが含まれていないため、表示できない
-          // → ViewerCanvasから親に通知する仕組みが必要
-          // 暫定: ViewerCanvasのdebugHudDataに含まれているはずのcoordDiagを参照
-          // しかし、propsでは渡されていないので、別途渡す必要がある
-          
-          // ★★★ WORKAROUND: ViewerCanvasにonDebugHudDataChangeを追加する代わりに、
-          // ViewerCanvasのDEBUG HUD内でcoordDiagを出力し、ShareViewではdebugInfoのcoordDiagを参照する ★★★
-          // これは最小差分のため、ViewerCanvasのdebugHudDataをそのまま使う
-          
-          // ★★★ CRITICAL: ViewerCanvasのdebugHudDataはpropsで渡されていないので、
-          // 別途 onDebugHudDataChange を追加する必要がある ★★★
-          // 最小差分で実装するため、ViewerCanvasにcallbackを追加
-          
-          return null; // 一旦実装を進めてから追加
-        })()}
+        {/* ★★★ P0-COORD-DIAG: Paint Coords (VC) セクション（ViewerCanvas右上HUD参照案内）★★★ */}
+        <div className="border-t border-gray-600 mt-2 pt-2">
+          <div className="font-bold text-yellow-400 mb-1">🎯 Paint Coords (VC)</div>
+          <div className="text-xs opacity-80">→ ViewerCanvas右上のDebug HUD</div>
+          <div className="text-xs opacity-80">（Paint Coordsセクションを確認）</div>
+        </div>
       </div>
     )}
     

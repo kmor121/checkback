@@ -3812,7 +3812,7 @@ const ViewerCanvas = forwardRef(({
           </div>
 
           {/* Save Status */}
-          <div>
+          <div style={{ marginBottom: '8px', borderBottom: '1px solid #333', paddingBottom: '6px' }}>
             <div style={{ color: lastSaveStatus === 'success' ? '#0f0' : lastSaveStatus === 'error' ? '#f00' : '#ff0' }}>
               saveStatus: {lastSaveStatus}
             </div>
@@ -3821,7 +3821,34 @@ const ViewerCanvas = forwardRef(({
             <div style={{ fontSize: '9px' }}>activeCommentId: {debugInfo?.activeCommentId || 'null'}</div>
             <div style={{ fontSize: '9px' }}>filteredCount: {debugInfo?.filteredCount || 0}</div>
             <div style={{ fontSize: '9px' }}>showAllPaint: {showAllPaint ? 'ON' : 'OFF'}</div>
+          </div>
+          
+          {/* ★★★ P0-COORD-DIAG: Paint Coords セクション追加 ★★★ */}
+          {debugHudData.coordDiag && (
+            <div>
+              <div style={{ color: '#ff0', fontWeight: 'bold', marginBottom: '4px' }}>🎯 Paint Coords</div>
+              <div style={{ fontSize: '9px' }}>enterSeq: <span style={{ color: '#ff0' }}>{debugHudData.coordDiag.paintEnterSeq}</span></div>
+              <div style={{ fontSize: '9px' }}>strokeSeq: <span style={{ color: '#ff0' }}>{debugHudData.coordDiag.strokeSeqInSession}</span></div>
+              <div style={{ fontSize: '9px' }}>firstStroke: <span style={{ color: debugHudData.coordDiag.firstStroke ? '#0f0' : '#f00' }}>{debugHudData.coordDiag.firstStroke ? 'YES' : 'NO'}</span></div>
+              <div style={{ fontSize: '9px' }}>lastEvent: <span style={{ color: '#0ff' }}>{debugHudData.coordDiag.lastPointerEvent || 'none'}</span></div>
+              {debugHudData.coordDiag.lastPointerRaw && (
+                <div style={{ fontSize: '9px' }}>raw: <span style={{ color: '#0ff' }}>({debugHudData.coordDiag.lastPointerRaw.clientX}, {debugHudData.coordDiag.lastPointerRaw.clientY})</span></div>
+              )}
+              {debugHudData.coordDiag.lastPointerStage && (
+                <div style={{ fontSize: '9px' }}>stage: <span style={{ color: '#0ff' }}>({debugHudData.coordDiag.lastPointerStage.x.toFixed(1)}, {debugHudData.coordDiag.lastPointerStage.y.toFixed(1)})</span></div>
+              )}
+              {debugHudData.coordDiag.lastPointerImage && (
+                <div style={{ fontSize: '9px' }}>image: <span style={{ color: '#0ff' }}>({debugHudData.coordDiag.lastPointerImage.x.toFixed(1)}, {debugHudData.coordDiag.lastPointerImage.y.toFixed(1)})</span></div>
+              )}
+              {debugHudData.coordDiag.viewAtEvent && (
+                <>
+                  <div style={{ fontSize: '9px' }}>scale: <span style={{ color: '#ff0' }}>{debugHudData.coordDiag.viewAtEvent.contentScale.toFixed(3)}</span></div>
+                  <div style={{ fontSize: '9px' }}>viewXY: <span style={{ color: '#ff0' }}>({Math.round(debugHudData.coordDiag.viewAtEvent.viewX)}, {Math.round(debugHudData.coordDiag.viewAtEvent.viewY)})</span></div>
+                  <div style={{ fontSize: '9px' }}>drawViewRef: <span style={{ color: debugHudData.coordDiag.viewAtEvent.drawViewRefExists ? '#0f0' : '#f00' }}>{debugHudData.coordDiag.viewAtEvent.drawViewRefExists ? 'SET' : 'NULL'}</span></div>
+                </>
+              )}
             </div>
+          )}
         </div>
       )}
     </div>
