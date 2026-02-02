@@ -1041,6 +1041,17 @@ const ViewerCanvas = forwardRef(({
     };
   }, []);
 
+  // ★★★ P0-COORD-DIAG: paintMode ON時に enterSeq++ / strokeSeqInSession=0 ★★★
+  useEffect(() => {
+    if (paintMode) {
+      coordDiagRef.current.paintEnterSeq += 1;
+      coordDiagRef.current.strokeSeqInSession = 0;
+      coordDiagRef.current.firstStroke = false;
+      coordDiagRef.current.lastPointerEvent = null;
+      console.log('[COORD-DIAG] paintMode ON, enterSeq=', coordDiagRef.current.paintEnterSeq);
+    }
+  }, [paintMode]);
+  
   // ★★★ CRITICAL: 描画ツール切替時のみ選択解除（select→pen等の時のみ）★★★
   const prevToolRef = useRef(tool);
   useEffect(() => {

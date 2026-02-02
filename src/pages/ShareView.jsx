@@ -3122,20 +3122,6 @@ function ShareViewContent() {
   return (
   <div className="max-w-full mx-auto h-screen flex flex-col">
     {/* ★★★ P0-V9-FIX: 診断HUD（?diag=1 で状態見える化）★★★ */}
-    {/* ★★★ P0-COORD-DIAG: ViewerCanvasのdebugHudDataをstateに保存してHUDに渡す ★★★ */}
-    {(() => {
-      const [vcDebugHudData, setVcDebugHudData] = React.useState(null);
-      
-      React.useEffect(() => {
-        // ViewerCanvasからdebugHudDataを受け取る手段がないため、代わりにrefで渡すかpropsを追加する必要がある
-        // 現状、debugInfoとして渡されているが、coordDiagはまだ含まれていない
-        // → ViewerCanvasのdebugHudDataを親に公開する必要がある
-        // 暫定案: ViewerCanvasにonDebugHudDataChangeを追加し、変化時にShareViewに通知
-      }, []);
-      
-      return null;
-    })()}
-    
     {(new URLSearchParams(window.location.search).get('diag') === '1') && (
       <div className="fixed top-16 left-4 z-[9998] bg-black/90 text-white text-xs font-mono p-3 rounded shadow-lg max-w-xs max-h-[80vh] overflow-auto">
         <div className="font-bold text-yellow-400 mb-2">🔍 診断HUD (Z-03)</div>
