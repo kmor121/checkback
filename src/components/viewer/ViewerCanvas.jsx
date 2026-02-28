@@ -156,10 +156,8 @@ const ViewerCanvas = forwardRef(({
   
   const isDrawingRef2 = useRef(false);
   const currentShapeRef2 = useRef(null);
-  
-  // CRITICAL: activeCommentId変化検知用
   const prevActiveCommentIdRef = useRef(activeCommentId);
-  const draftCommentIdRef = useRef(null); // 仮コメントID（描画開始時にactiveCommentIdが無い場合）
+  const draftCommentIdRef = useRef(null);
   // CRITICAL: 描画コンテキスト変化検知用（Map残留根絶）
   const prevCanvasContextKeyRef = useRef(null);
   const pendingCtxRef = useRef(null); // ★ FIX-PENDING: 新ctx待機用（Map即クリア禁止）
