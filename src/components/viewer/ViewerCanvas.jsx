@@ -409,18 +409,11 @@ const ViewerCanvas = forwardRef(({
   // P0-DIAG: 最終表示配列
   if (DEBUG_MODE) console.log('[VC] final:', { hide: hidePaintOverlay, cnt: renderedShapesFinal.length, cur: !!currentShape });
   
-  // ★ CRITICAL: activeShapes を existingShapes から抽出（comment_id統一判定）
-  const activeShapes = useMemo(() => {
-    if (!existingShapes?.length) return [];
-    if (activeCommentId == null) return [];
-    return existingShapes.filter((s) => sameId(shapeCommentId(s), activeCommentId));
+  // ★ CRITICAL: editableIds は existingShapes + activeCommentId から作る
+  const editableIds = useMemo(() => {
+    if (!existingShapes?.length || activeCommentId == null) return new Set();
+    return new Set(existingShapes.filter(s => sameId(shapeCommentId(s), activeCommentId)).map(s => s.id));
   }, [existingShapes, activeCommentId]);
-  
-  // ★ CRITICAL: editableIds は activeShapes を元に作る
-  const editableIds = useMemo(
-    () => new Set(activeShapes.map((s) => s.id)),
-    [activeShapes]
-  );
 
   // CRITICAL: 編集可能かをcomment_id一致で判定（sameId使用）
   const isEditableShape = (shape) => {
