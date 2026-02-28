@@ -158,12 +158,10 @@ const ViewerCanvas = forwardRef(({
   const currentShapeRef2 = useRef(null);
   const prevActiveCommentIdRef = useRef(activeCommentId);
   const draftCommentIdRef = useRef(null);
-  // CRITICAL: 描画コンテキスト変化検知用（Map残留根絶）
   const prevCanvasContextKeyRef = useRef(null);
-  const pendingCtxRef = useRef(null); // ★ FIX-PENDING: 新ctx待機用（Map即クリア禁止）
-  const prevEmptyCountRef = useRef(0); // Hunk E: empty連続カウント（2回連続でクリア）
-  const lastEmptyAppliedCtxRef = useRef(null); // ★★★ P0-FIX: 意図的空表示の重複防止 ★★★
-  
+  const pendingCtxRef = useRef(null);
+  const prevEmptyCountRef = useRef(0);
+  const lastEmptyAppliedCtxRef = useRef(null);
   const debugHudLogsRef = useRef([]);
   
   const coordDiagRef = useRef({ paintEnterSeq: 0, strokeSeqInSession: 0, firstStroke: false, lastPointerEvent: null, lastPointerRaw: null, lastPointerStage: null, lastPointerImage: null, viewAtEvent: null, ptrDiagStr: null, commitDiagStr: null, downK: null, firstPtr: null, firstCmt: null, lastPtr: null, lastCmt: null });
