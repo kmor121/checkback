@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useImperativeHandle, forwardRef, useMemo, useCallback } from 'react';
-import { Stage, Layer, Image as KonvaImage, Group, Transformer } from 'react-konva';
+import { Stage, Layer, Line, Rect, Circle, Arrow, Image as KonvaImage, Group, Transformer, Text } from 'react-konva';
 import useImage from 'use-image';
 import TextEditorOverlay from './TextEditorOverlay';
 import CanvasDebugHud from './CanvasDebugHud';
@@ -134,48 +134,89 @@ const ViewerCanvas = forwardRef(({
   const [error, setError] = useState(null);
   const [bgReady, setBgReady] = useState(false); // P2 FIX: 背景ロード完了フラグ
   
+  // ★★★ P0-V5: contentReady判定（bgReady フラグベース、リロード時フラッシュ防止）★★★
   const contentReady = bgReady && bgSize.width > 0 && bgSize.height > 0;
-  // 描画状態
+
+  
+  // 描画状態（CRITICAL: Map方式で置換禁止）
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentShape, setCurrentShape] = useState(null);
-  const shapesMapRef = useRef(new Map());
-  const [shapesVersion, setShapesVersion] = useState(0);
+  const shapesMapRef = useRef(new Map()); // ★ CRITICAL: Mapが唯一の真実
+  const [shapesVersion, setShapesVersion] = useState(0); // 再描画トリガー
   const [selectedId, setSelectedId] = useState(null);
   const transformerRef = useRef(null);
   const shapeRefs = useRef({});
   
+  // Map操作ヘルパー
+  // A) 無限ループ対策: bumpの参照を安定化
   const bump = useCallback(() => setShapesVersion(v => v + 1), []);
   const getAllShapes = () => Array.from(shapesMapRef.current.values());
+  
+  // 後方互換用（shapesRef.currentを参照している箇所向け）
   const shapesRef = { get current() { return getAllShapes(); } };
-  const drawViewRef = useRef(null);
-  const isInteractingRef = useRef(false);
-  const pendingIncomingShapesRef = useRef(null);
-  const isDraggingRef = useRef(false);
-  const dragRafRef = useRef(null);
-  const pendingDragRef = useRef(null);
+  // ★★★ CRITICAL: 描画開始時のview/scale情報を固定（ジャンプ防止の核心）★★★
+  const drawViewRef = useRef(null); // { viewX, viewY, contentScale } を描画開始時に保存
+  const isInteractingRef = useRef(false); // ★ B) 操作中はtrue（drag/transform）
+  const pendingIncomingShapesRef = useRef(null); // ★ B) 操作中に保留された外部Shapes
+  const isDraggingRef = useRef(false); // CRITICAL: ドラッグ中フラグ（残像防止）
+  const dragRafRef = useRef(null); // RAF間引き用
+  const pendingDragRef = useRef(null); // ドラッグ座標バッファ
   
   const isDrawingRef2 = useRef(false);
   const currentShapeRef2 = useRef(null);
+  
+  // CRITICAL: activeCommentId変化検知用
   const prevActiveCommentIdRef = useRef(activeCommentId);
-  const draftCommentIdRef = useRef(null);
+  const draftCommentIdRef = useRef(null); // 仮コメントID（描画開始時にactiveCommentIdが無い場合）
+  // ★★★ REMOVED: lastStableCommentIdRef - fallback禁止のため完全削除 ★★★
+  
+  // ★★★ CRITICAL: 描画コンテキスト変化検知用（Map残留根絶）★★★
   const prevCanvasContextKeyRef = useRef(null);
-  const pendingCtxRef = useRef(null);
-  const prevEmptyCountRef = useRef(0);
-  const lastEmptyAppliedCtxRef = useRef(null);
+  const pendingCtxRef = useRef(null); // ★ FIX-PENDING: 新ctx待機用（Map即クリア禁止）
+  const prevEmptyCountRef = useRef(0); // Hunk E: empty連続カウント（2回連続でクリア）
+  const lastEmptyAppliedCtxRef = useRef(null); // ★★★ P0-FIX: 意図的空表示の重複防止 ★★★
+  
   const debugHudLogsRef = useRef([]);
   
-  const coordDiagRef = useRef({ paintEnterSeq: 0, strokeSeqInSession: 0, firstStroke: false, lastPointerEvent: null, lastPointerRaw: null, lastPointerStage: null, lastPointerImage: null, viewAtEvent: null, ptrDiagStr: null, commitDiagStr: null, downK: null, firstPtr: null, firstCmt: null, lastPtr: null, lastCmt: null });
-  const [diagTick, setDiagTick] = useState(0);
+  // ★★★ P0-COORD-DIAG: ペイント座標診断用ref（?diag=1で観測、ロジック変更なし）★★★
+  const coordDiagRef = useRef({
+    paintEnterSeq: 0,        // paintMode ON回数
+    strokeSeqInSession: 0,   // 同一paintEnterSeq内のストローク回数
+    firstStroke: false,      // 最初のストロークか
+    lastPointerEvent: null,  // 'down'|'move'|'up'
+    lastPointerRaw: null,    // {clientX, clientY}
+    lastPointerStage: null,  // {x, y}
+    lastPointerImage: null,  // {x, y, stageX, stageY}
+    viewAtEvent: null, ptrDiagStr: null, commitDiagStr: null, downK: null, firstPtr: null, firstCmt: null, lastPtr: null, lastCmt: null,
+  });
+  const [diagTick, setDiagTick] = useState(0); // HUD更新用tick
   
+  // ★ Map方式では shapes state は不要（getAllShapes()を使う）
+  // 後方互換のためのダミー（実際はMapを参照）
   const shapes = useMemo(() => getAllShapes(), [shapesVersion]);
+  
+  // setShapes互換関数（★★★ CRITICAL: 必ず新しいMapを作成して不変更新 ★★★）
   const setShapes = (updater) => {
-    const next = typeof updater === 'function' ? updater(getAllShapes()) : (updater ?? []);
+    let next;
+    if (typeof updater === 'function') {
+      const current = getAllShapes();
+      next = updater(current);
+    } else {
+      next = updater ?? [];
+    }
+    // ★★★ CRITICAL: 新しいMap参照を作成（不変更新）★★★
     shapesMapRef.current = new Map(next.map(s => [s.id, s]));
     bump();
   };
   
-  useEffect(() => { isDrawingRef2.current = isDrawing; }, [isDrawing]);
-  useEffect(() => { currentShapeRef2.current = currentShape; }, [currentShape]);
+  // CRITICAL: 描画状態をrefに同期（activeCommentIdリセットガード用）
+  useEffect(() => {
+    isDrawingRef2.current = isDrawing;
+  }, [isDrawing]);
+  
+  useEffect(() => {
+    currentShapeRef2.current = currentShape;
+  }, [currentShape]);
   
   // パン状態（★★★ FIT: 親制御とローカル制御の統合 ★★★）
   const [localPan, setLocalPan] = useState({ x: 0, y: 0 });
@@ -417,6 +458,8 @@ const ViewerCanvas = forwardRef(({
     });
   }, [activeCommentId]);
   
+  // ★★★ REMOVED: lastStableCommentIdRef更新処理 - fallback禁止のため削除 ★★★
+
   // CRITICAL: 送信完了後のキャンバスクリア（nonce変化で発火）
   const prevNonceRef = useRef(clearAfterSubmitNonce);
   useEffect(() => {
@@ -449,6 +492,8 @@ const ViewerCanvas = forwardRef(({
       }
     }
   }, [clearAfterSubmitNonce]);
+
+  // ★★★ REMOVED: hidePaintUntilSelect解除処理 - 不要なフラグ操作を削除 ★★★
 
   // CRITICAL: 仮commentIdで描いたshapeを、activeCommentId確定後に付け替える
   useEffect(() => {
@@ -628,7 +673,10 @@ const ViewerCanvas = forwardRef(({
     // ★★★ Hunk2: 空判定は filtered (incoming) 基準 ★★★
     const incomingEmpty = incoming.length === 0;
 
-      // ★★★ P0-FLICKER: 非空shapesを記録（コンテキストキー付き）★★★
+    // ★★★ P0-V2: 案B2ガード削除（renderTargetCommentId が activeCommentId なので temp_ で過剰クリア不要）★★★
+    // REMOVED: 案B2 Intentional empty block (過剰Map clear の元凶)
+
+    // ★★★ P0-FLICKER: 非空shapesを記録（コンテキストキー付き）★★★
     if (!incomingEmpty) {
       lastNonEmptyShapesRef.current = { key: ctx, shapes: shapesToSync };
       emptyStreakCountRef.current = 0;
@@ -665,6 +713,9 @@ const ViewerCanvas = forwardRef(({
       }
     }
     
+    // ★★★ P0-V2: 案B allowIntentionalEmpty 削除（renderTargetCommentId=activeCommentId なので不要）★★★
+    // REMOVED: allowIntentionalEmpty block (過剰Map clear の元凶)
+
     // ★★★ FIX-PENDING: pending中のincomingEmpty は何もしない（旧Map保持）★★★
     if (isPending && incomingEmpty) {
       // ★★★ FIX-INIT: prevMapSize=0 の場合は pending解除（空×空で固着防止）★★★
@@ -774,6 +825,12 @@ const ViewerCanvas = forwardRef(({
         });
       }
 
+      // ★★★ P0-FINAL: P1 FIX を削除（誤発火でdb>0でもMapクリア→描画消失の原因）★★★
+      // renderTargetCommentId だけでは「真に描画がないコメント」か判定できない
+      // → ctx変更（canvasContextKey変化）で既にMapクリア済み（L442-459）
+      // → 追加の empty判定は不要（二重クリアで誤発火の温床）
+
+      // 既存のロジック：描画がないコメント選択以外のケース（例：初回ロードなど）
       // ★★★ Hunk2: 遷移中でも「空にしたい意図」があれば空にする ★★★
       if (isCanvasTransitioning) {
           // hidePaintOverlay または allowIntentionalEmpty 時は空表示を優先
@@ -951,16 +1008,43 @@ const ViewerCanvas = forwardRef(({
     }
   }, [tool]);
 
-  // Transformer selection
+  // Transformer selection（編集モード時のみ、Rect/Circle/Textに対応）
   useEffect(() => {
     if (!transformerRef.current) return;
-    const node = (isEditMode && selectedId && shapeRefs.current[selectedId]) ? shapeRefs.current[selectedId] : null;
-    const selectedShape = node ? shapes.find(s => s.id === selectedId) : null;
-    const canTransform = selectedShape && ['rect', 'circle', 'text', 'arrow'].includes(selectedShape.tool);
-    transformerRef.current.nodes(canTransform ? [node] : []);
-    if (canTransform) { transformerRef.current.padding(0); transformerRef.current.boundBoxFunc(null); }
-    transformerRef.current.getLayer()?.batchDraw();
-  }, [selectedId, isEditMode, shapes]);
+    
+    if (isEditMode && selectedId && shapeRefs.current[selectedId]) {
+      const selectedShape = shapes.find(s => s.id === selectedId);
+      const canTransform = selectedShape && (selectedShape.tool === 'rect' || selectedShape.tool === 'circle' || selectedShape.tool === 'text' || selectedShape.tool === 'arrow');
+
+      if (canTransform) {
+        transformerRef.current.nodes([shapeRefs.current[selectedId]]);
+        // テキストの場合：Group内のRectを対象にする
+        if (selectedShape.tool === 'text') {
+          transformerRef.current.padding(0);
+          transformerRef.current.boundBoxFunc(null);
+        } else {
+          transformerRef.current.padding(0);
+          transformerRef.current.boundBoxFunc(null);
+        }
+        const layer = transformerRef.current.getLayer();
+        if (layer?.batchDraw) {
+          layer.batchDraw();
+        }
+      } else {
+        transformerRef.current.nodes([]);
+        const layer = transformerRef.current.getLayer();
+        if (layer?.batchDraw) {
+          layer.batchDraw();
+        }
+      }
+    } else {
+      transformerRef.current.nodes([]);
+      const layer = transformerRef.current.getLayer();
+      if (layer?.batchDraw) {
+        layer.batchDraw();
+      }
+    }
+    }, [selectedId, isEditMode, shapes]);
 
   // テキストエディタフォーカス
   useEffect(() => {
@@ -1345,7 +1429,12 @@ const ViewerCanvas = forwardRef(({
       return;
     }
 
-    // CRITICAL: 描画開始時に古いcurrentShapeを強制クリア（前コメントのdraft残り防止）
+    // ★★★ P0-FIX: draftReadyチェックを削除（paintMode ON なら描画開始を許可）★★★
+    // draftReady は「既存shape編集」の権限であり、新規描画には不要
+    // 描画開始後の commit 時に draftReady をチェックする（L2148）
+
+    // ★★★ CRITICAL: 描画開始時に古いcurrentShapeを強制クリア（前コメントのdraft残り防止）★★★
+    // currentShapeのcomment_idがactiveCommentIdと異なる場合は古いdraftなので破棄
     if (currentShape && activeCommentId != null) {
       const currentCid = currentShape.comment_id;
       if (currentCid != null && String(currentCid) !== String(activeCommentId)) {
@@ -1354,6 +1443,14 @@ const ViewerCanvas = forwardRef(({
         setIsDrawing(false);
       }
     }
+
+    // ★★★ CRITICAL FIX: 描画開始時にhidePaintUntilSelectを解除しない ★★★
+    // この解除が過去shapeを表示させる原因になっている可能性が高い
+    // 代わりに、新規描画中はeffectiveActiveId(draftCommentId)のshapeのみ表示される
+    // if (hidePaintUntilSelect && paintMode && tool !== 'select') {
+    //   if (DEBUG_MODE) console.log('[ViewerCanvas] Clearing hidePaintUntilSelect on draw start');
+    //   setHidePaintUntilSelect(false);
+    // }
 
     // ★ CRITICAL: activeCommentIdがnullでもonBeginPaintがあれば描画を許可
     if (activeCommentId == null && tool !== 'select' && !onBeginPaint) {
@@ -1550,15 +1647,174 @@ const ViewerCanvas = forwardRef(({
     } catch (err) { console.error('PointerMove Error:', err); }
   };
   
-  // Text handlers (extracted to TextHandlers.js)
-  const { handleTextConfirm, handleTextCancel, handleTextBlur, handleTextDblClick } = createTextHandlers({
-    textInputRef, textEditor, setTextEditor, setIsComposing,
-    shapes, shapesMapRef, bump, getAllShapes, onShapesChange,
-    addToUndoStack, onSaveShape, onToolChange,
-    activeCommentId, getCommentIdForDrawing, onBeginPaint,
-    strokeColor, strokeWidth, bgSize, normalizeCoords, denormalizeCoords,
-    isEditMode, contentGroupRef, setSelectedId, DEBUG_MODE,
-  });
+  // テキスト確定（DOMから直接読む）
+  const handleTextConfirm = async () => {
+    const raw = textInputRef.current?.value ?? textEditor.value;
+    const text = raw.trim();
+    if (!text) {
+      setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
+      if (onToolChange) onToolChange('select');
+      return;
+    }
+
+    const { imgX, imgY, shapeId } = textEditor;
+    const { nx, ny } = normalizeCoords(imgX, imgY);
+
+    // フォントサイズをstrokeWidthベースで計算
+    const fontSize = Math.max(12, strokeWidth * 6);
+
+    if (shapeId) {
+      // 既存テキストの編集（現在のツールバー設定を適用）
+      const existingShape = shapes.find(s => s.id === shapeId);
+      if (existingShape) {
+        const updatedShape = {
+          ...existingShape,
+          text,
+          nx,
+          ny,
+          stroke: strokeColor,
+          strokeWidth: strokeWidth,
+          fontSize,
+        };
+
+        // CRITICAL: Map方式でupsert + dirty/localTs付与（★★★ 不変更新 ★★★）
+        const updatedWithDirty = { ...updatedShape, _dirty: true, _localTs: Date.now() };
+        addToUndoStack({ type: 'update', shapeId, before: existingShape, after: updatedWithDirty });
+        const newMap = new Map(shapesMapRef.current);
+        newMap.set(shapeId, updatedWithDirty);
+        shapesMapRef.current = newMap;
+        bump();
+        onShapesChange?.(getAllShapes());
+
+        if (onSaveShape) {
+          try {
+            await onSaveShape(updatedShape, 'upsert');
+            // CRITICAL: dirty解除（★★★ 不変更新 ★★★）
+            const cur = shapesMapRef.current.get(shapeId);
+            if (cur) {
+              const dirtyMap = new Map(shapesMapRef.current);
+              dirtyMap.set(shapeId, { ...cur, _dirty: false });
+              shapesMapRef.current = dirtyMap;
+              bump();
+              onShapesChange?.(getAllShapes());
+            }
+          } catch (err) {
+            console.error('Save text error:', err);
+          }
+        }
+      }
+    } else {
+      // 新規テキスト作成（activeCommentIdがなければ仮IDを使用）
+      const commentIdForText = activeCommentId || getCommentIdForDrawing();
+      if (!commentIdForText) {
+        console.error('[ViewerCanvas] Cannot create text: no commentId available');
+        setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
+        return;
+      }
+      
+      const normalizedShape = {
+        id: generateUUID(),
+        comment_id: commentIdForText,
+        commentId: commentIdForText,  // ★両方のキーで入れる
+        tool: 'text',
+        stroke: strokeColor,
+        strokeWidth: strokeWidth,
+        bgWidth: bgSize.width,
+        bgHeight: bgSize.height,
+        nx,
+        ny,
+        text,
+        fontSize,
+        boxResized: false,  // 初期状態はautoサイズ
+        // boxW, boxH は作成時には入れない（undefinedのまま）
+      };
+      
+      // 仮IDでコメント作成をトリガー
+      if (!activeCommentId && onBeginPaint) {
+        queueMicrotask(() => {
+          onBeginPaint(imgX, imgY, bgSize.width, bgSize.height);
+        });
+      }
+
+      // CRITICAL: Map方式でupsert + dirty/localTs付与（★★★ 不変更新 ★★★）
+      const shapeWithDirty = { ...normalizedShape, _dirty: true, _localTs: Date.now() };
+      addToUndoStack({ type: 'add', shapeId: normalizedShape.id });
+      const newMap = new Map(shapesMapRef.current);
+      newMap.set(shapeWithDirty.id, shapeWithDirty);
+      shapesMapRef.current = newMap;
+      bump();
+      onShapesChange?.(getAllShapes());
+      setSelectedId(normalizedShape.id);
+
+      if (onSaveShape) {
+        try {
+          const result = await onSaveShape(normalizedShape, 'create');
+          // CRITICAL: dirty解除（★★★ 不変更新 ★★★）
+          const cur = shapesMapRef.current.get(normalizedShape.id);
+          if (cur) {
+            const dirtyMap = new Map(shapesMapRef.current);
+            dirtyMap.set(normalizedShape.id, { ...cur, dbId: result?.dbId, _dirty: false });
+            shapesMapRef.current = dirtyMap;
+            bump();
+            onShapesChange?.(getAllShapes());
+          }
+        } catch (err) {
+          console.error('Save text error:', err);
+        }
+      }
+    }
+
+    setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
+    setIsComposing(false);
+    if (onToolChange) onToolChange('select');
+  };
+
+  // テキストキャンセル
+  const handleTextCancel = () => {
+    setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
+    setIsComposing(false);
+    if (onToolChange) onToolChange('select');
+  };
+
+  // テキストBlur確定（開いた直後の誤作動を防ぐ）
+  const handleTextBlur = () => {
+    // 開いて250ms以内のblurは無視（誤作動防止）
+    if (textEditor.openedAt && Date.now() - textEditor.openedAt < 250) return;
+    
+    const raw = textInputRef.current?.value ?? textEditor.value;
+    if (raw.trim()) {
+      handleTextConfirm();
+    } else {
+      handleTextCancel();
+    }
+  };
+
+  // テキストダブルクリックで再編集
+  const handleTextDblClick = (shape) => {
+    if (!isEditMode) return;
+
+    const { x: imgX, y: imgY } = denormalizeCoords(shape.nx, shape.ny);
+    
+    // CRITICAL: transform API で画像座標→ステージ座標に変換
+    const group = contentGroupRef.current;
+    if (!group) return;
+    
+    const tr = group.getAbsoluteTransform().copy();
+    const stagePoint = tr.point({ x: imgX, y: imgY });
+
+    console.log('[ViewerCanvas] Text double-click edit:', { shapeId: shape.id, text: shape.text });
+
+    setTextEditor({
+      visible: true,
+      x: stagePoint.x,
+      y: stagePoint.y,
+      value: shape.text || '',
+      shapeId: shape.id,
+      imgX,
+      imgY,
+      openedAt: Date.now(),
+    });
+  };
 
   // PointerUp: 描画終了（CRITICAL: refベースで判定、propsに依存しない）
   const handlePointerUp = async () => {
@@ -1807,15 +2063,357 @@ const ViewerCanvas = forwardRef(({
         };
   handlePointerUpRef.current = handlePointerUp;
   useEffect(() => { const h=(e)=>{if(!isDrawingRef2.current||commitInFlightRef.current)return;commitInFlightRef.current=true;handlePointerUpRef.current?.(e);requestAnimationFrame(()=>{commitInFlightRef.current=false;});}; window.addEventListener('pointerup',h); return()=>window.removeEventListener('pointerup',h); }, []);
+  const handleDragStart = (shape, e) => {
+    isInteractingRef.current = true;
+    isDraggingRef.current = true;
+    e.cancelBubble = true;
+  };
 
-  // Drag/Transform handlers (extracted to DragTransformHandlers.js)
-  const { handleDragStart, handleDragMove, handleDragEnd, handleTransformStart, handleTransformEnd } = createDragTransformHandlers({
-    shapesMapRef, bump, getAllShapes, onShapesChange,
-    addToUndoStack, onSaveShape, normalizeCoords, denormalizeCoords,
-    bgSize, isEditableShape, canMutateExisting, isSaving, setIsSaving,
-    isInteractingRef, isDraggingRef, pendingIncomingShapesRef,
-    dragRafRef, pendingDragRef, debugRef, setSelectedId,
-  });
+  const handleTransformStart = (shape, e) => {
+    isInteractingRef.current = true;
+  };
+
+  // CRITICAL: ドラッグ中の追従更新（Map方式）
+  const handleDragMove = (shape, e) => {
+    // ★★★ CRITICAL: 既存shape編集は canMutateExisting 必須 ★★★
+    if (!canMutateExisting) return;
+    const node = e.target;
+
+    // RAF間引き
+    pendingDragRef.current = { shape, x: node.x(), y: node.y() };
+    if (dragRafRef.current) return;
+
+    dragRafRef.current = requestAnimationFrame(() => {
+      const p = pendingDragRef.current;
+      dragRafRef.current = null;
+      if (!p) return;
+
+      const { shape, x, y } = p;
+
+      // tool別にMapを追従させる（保存はしない）（★★★ 不変更新 ★★★）
+      const cur = shapesMapRef.current.get(shape.id);
+      if (!cur) return;
+      
+      const newMap = new Map(shapesMapRef.current);
+      if (shape.tool === 'rect' || shape.tool === 'circle' || shape.tool === 'text') {
+        const { nx, ny } = normalizeCoords(x, y);
+        newMap.set(shape.id, { ...cur, nx, ny });
+      } else if (shape.tool === 'pen' || shape.tool === 'arrow') {
+        newMap.set(shape.id, { ...cur, dragX: x, dragY: y });
+      }
+      shapesMapRef.current = newMap;
+      bump();
+    });
+  };
+
+  // ドラッグ終了時の更新（CRITICAL: 増殖防止のため置換処理）
+  const handleDragEnd = async (shape, e) => {
+    // ★★★ CRITICAL: 既存shape編集は canMutateExisting 必須 ★★★
+    if (!canMutateExisting) {
+      console.log('[ViewerCanvas] DragEnd blocked: canMutateExisting=false');
+      isDraggingRef.current = false;
+      return;
+    }
+
+    // CRITICAL: 編集不可なら即return（isEditableShape関数で判定）
+    if (!isEditableShape(shape)) {
+      console.log('[ViewerCanvas] DragEnd blocked: not editable');
+      isDraggingRef.current = false;
+      return;
+    }
+
+    // 多重保存防止
+    if (isSaving[shape.id]) {
+      console.log('[ViewerCanvas] Already saving:', shape.id);
+      isDraggingRef.current = false;
+      return;
+    }
+    
+    const node = e.target;
+    // CRITICAL: dragX/dragY を優先（??で0を潰さない）
+    const dx = shape.dragX ?? node.x();
+    const dy = shape.dragY ?? node.y();
+    
+    const updatedShape = { ...shape };
+    
+    if (shape.tool === 'pen' && shape.normalizedPoints) {
+      // Pen: deltaとしてpointsに焼き込み
+      const newPoints = [];
+      for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
+        const { x: px, y: py } = denormalizeCoords(shape.normalizedPoints[i], shape.normalizedPoints[i + 1]);
+        const { nx, ny } = normalizeCoords(px + dx, py + dy);
+        newPoints.push(nx, ny);
+      }
+      updatedShape.normalizedPoints = newPoints;
+      updatedShape.dragX = 0;
+      updatedShape.dragY = 0;
+      node.position({ x: 0, y: 0 }); // dragEndでのみリセット
+      } else if (shape.tool === 'rect') {
+      // Rect: 絶対座標として直接保存
+      const { nx, ny } = normalizeCoords(dx, dy);
+      updatedShape.nx = nx;
+      updatedShape.ny = ny;
+      } else if (shape.tool === 'circle') {
+      // Circle: 絶対座標として直接保存
+      const { nx, ny } = normalizeCoords(dx, dy);
+      updatedShape.nx = nx;
+      updatedShape.ny = ny;
+      } else if (shape.tool === 'arrow' && shape.normalizedPoints) {
+      // Arrow: deltaとしてpointsに焼き込み
+      const newPoints = [];
+      for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
+        const { x: px, y: py } = denormalizeCoords(shape.normalizedPoints[i], shape.normalizedPoints[i + 1]);
+        const { nx, ny } = normalizeCoords(px + dx, py + dy);
+        newPoints.push(nx, ny);
+      }
+      updatedShape.normalizedPoints = newPoints;
+      updatedShape.dragX = 0;
+      updatedShape.dragY = 0;
+      node.position({ x: 0, y: 0 }); // dragEndでのみリセット
+      } else if (shape.tool === 'text') {
+      // Text: 絶対座標として直接保存
+      const { nx, ny } = normalizeCoords(dx, dy);
+      updatedShape.nx = nx;
+      updatedShape.ny = ny;
+    }
+    
+    // CRITICAL: Map方式でupsert + dirty/localTs付与（★★★ 不変更新 ★★★）
+    const updatedWithDirty = { ...updatedShape, _dirty: true, _localTs: Date.now() };
+    addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: updatedWithDirty });
+
+    // CRITICAL: Map更新 + 親に全量同期（★★★ 不変更新 ★★★）
+    const newMap = new Map(shapesMapRef.current);
+    newMap.set(updatedWithDirty.id, updatedWithDirty);
+    shapesMapRef.current = newMap;
+    bump();
+    onShapesChange?.(getAllShapes());
+
+    // ドラッグ終了
+    isDraggingRef.current = false;
+    isInteractingRef.current = false;
+    if (pendingIncomingShapesRef.current) {
+      console.log('[SYNC] handleDragEnd: applying pending shapes');
+      bump();
+    }
+    
+    // DB更新（upsertモード）
+    if (onSaveShape) {
+      setIsSaving(prev => ({ ...prev, [shape.id]: true }));
+      debugRef.current.mutation = 'update-drag';
+      debugRef.current.saveStatus = 'saving';
+      
+      try {
+        const result = await onSaveShape(updatedShape, 'upsert');
+        debugRef.current.saveStatus = 'success';
+        debugRef.current.error = null;
+        
+        const cur = shapesMapRef.current.get(updatedShape.id);
+        if (cur) {
+          const newMap = new Map(shapesMapRef.current);
+          newMap.set(updatedShape.id, { ...cur, dbId: result?.dbId, _dirty: false });
+          shapesMapRef.current = newMap;
+          bump();
+          onShapesChange?.(getAllShapes());
+        }
+      } catch (err) {
+        console.error('Update shape error:', err);
+        debugRef.current.saveStatus = 'error';
+        debugRef.current.error = err.message;
+        // 失敗時はrevert（★★★ 不変更新 ★★★）
+        const revertMap = new Map(shapesMapRef.current);
+        revertMap.set(shape.id, shape);
+        shapesMapRef.current = revertMap;
+        bump();
+        onShapesChange?.(getAllShapes());
+      } finally {
+        setIsSaving(prev => ({ ...prev, [shape.id]: false }));
+      }
+    }
+  };
+
+  // Transform終了時の更新（CRITICAL: 増殖防止のため置換処理、Rect/Circle/Arrowに対応）
+  const handleTransformEnd = async (shape, e) => {
+    // ★★★ CRITICAL: 既存shape編集は canMutateExisting 必須 ★★★
+    if (!canMutateExisting) {
+      console.log('[ViewerCanvas] TransformEnd blocked: canMutateExisting=false');
+      return;
+    }
+
+    // CRITICAL: 編集不可なら即return（isEditableShape関数で判定）
+    if (!isEditableShape(shape)) {
+      console.log('[ViewerCanvas] TransformEnd blocked: not editable');
+      return;
+    }
+
+    // 多重保存防止
+    if (isSaving[shape.id]) {
+      console.log('[ViewerCanvas] Already saving:', shape.id);
+      return;
+    }
+
+    const node = e.target;
+    const scaleX = node.scaleX();
+    const scaleY = node.scaleY();
+
+    const updatedShape = { ...shape };
+
+    if (shape.tool === 'rect') {
+      const finalX = node.x();
+      const finalY = node.y();
+      const finalW = Math.max(5, node.width() * scaleX);
+      const finalH = Math.max(5, node.height() * scaleY);
+
+      // ノードを更新（リセットではなく確定）
+      node.scaleX(1);
+      node.scaleY(1);
+      node.width(finalW);
+      node.height(finalH);
+      node.x(finalX);
+      node.y(finalY);
+
+      // 正規化座標に変換
+      const { nx, ny } = normalizeCoords(finalX, finalY);
+      const { nx: nx2, ny: ny2 } = normalizeCoords(finalX + finalW, finalY + finalH);
+
+      updatedShape.nx = nx;
+      updatedShape.ny = ny;
+      updatedShape.nw = nx2 - nx;
+      updatedShape.nh = ny2 - ny;
+    } else if (shape.tool === 'circle') {
+      const finalX = node.x();
+      const finalY = node.y();
+      const finalR = Math.max(3, node.radius() * Math.max(scaleX, scaleY));
+
+      // ノードを更新（リセットではなく確定）
+      node.scaleX(1);
+      node.scaleY(1);
+      node.radius(finalR);
+      node.x(finalX);
+      node.y(finalY);
+
+      // 正規化座標に変換
+      const { nx, ny } = normalizeCoords(finalX, finalY);
+      updatedShape.nx = nx;
+      updatedShape.ny = ny;
+      updatedShape.nr = finalR / bgSize.width;
+    } else if (shape.tool === 'arrow' && shape.normalizedPoints) {
+      // Arrowの変形：2点のtransformを適用して新しいnormalizedPointsを作成
+      const transform = node.getAbsoluteTransform();
+
+      // 元の2点を復元（normalizedPoints → ステージ座標）
+      const p1 = denormalizeCoords(shape.normalizedPoints[0], shape.normalizedPoints[1]);
+      const p2 = denormalizeCoords(shape.normalizedPoints[2], shape.normalizedPoints[3]);
+
+      // Transformを適用（回転・スケール・移動を反映）
+      const newP1 = transform.point({ x: p1.x, y: p1.y });
+      const newP2 = transform.point({ x: p2.x, y: p2.y });
+
+      // 正規化座標に変換
+      const { nx: nx1, ny: ny1 } = normalizeCoords(newP1.x, newP1.y);
+      const { nx: nx2, ny: ny2 } = normalizeCoords(newP2.x, newP2.y);
+
+      updatedShape.normalizedPoints = [nx1, ny1, nx2, ny2];
+
+      // Transformをリセット
+      node.scaleX(1);
+      node.scaleY(1);
+      node.rotation(0);
+      node.x(0);
+      node.y(0);
+    } else if (shape.tool === 'text') {
+      // Text: リサイズ時にboxResized=trueとboxW/boxHを保存
+      const finalX = node.x();
+      const finalY = node.y();
+      
+      // Group内のRectを取得してサイズを計算
+      const rectChild = node.findOne('Rect');
+      const finalW = rectChild ? Math.max(20, rectChild.width() * scaleX) : 100;
+      const finalH = rectChild ? Math.max(16, rectChild.height() * scaleY) : 24;
+
+      // ノードを更新
+      node.scaleX(1);
+      node.scaleY(1);
+      node.x(finalX);
+      node.y(finalY);
+
+      // 正規化座標に変換
+      const { nx, ny } = normalizeCoords(finalX, finalY);
+      updatedShape.nx = nx;
+      updatedShape.ny = ny;
+      updatedShape.boxResized = true;
+      updatedShape.boxW = finalW / bgSize.width;
+      updatedShape.boxH = finalH / bgSize.height;
+      }
+
+      // CRITICAL: 一時フィールドを完全削除（更新前に）
+      delete updatedShape.points;
+      delete updatedShape.startX;
+      delete updatedShape.startY;
+      delete updatedShape.x;
+      delete updatedShape.y;
+      delete updatedShape.width;
+      delete updatedShape.height;
+      delete updatedShape.radius;
+
+      // CRITICAL: Map方式でupsert + dirty/localTs付与（★★★ 不変更新 ★★★）
+      const updatedWithDirty = { ...updatedShape, _dirty: true, _localTs: Date.now() };
+      addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: updatedWithDirty });
+
+      // CRITICAL: Map更新 + 親に全量同期（★★★ 不変更新 ★★★）
+      const newMap = new Map(shapesMapRef.current);
+      newMap.set(updatedWithDirty.id, updatedWithDirty);
+      shapesMapRef.current = newMap;
+      bump();
+      onShapesChange?.(getAllShapes());
+
+      // DB更新（upsertモード）
+      isInteractingRef.current = false; // ★ B) 操作終了
+      if (onSaveShape) {
+        // ★ B) 保留されていたshapesがあれば同期をトリガー
+        if (pendingIncomingShapesRef.current) {
+            console.log('[SYNC] handleTransformEnd: applying pending shapes');
+            bump();
+        }
+
+        setIsSaving(prev => ({ ...prev, [shape.id]: true }));
+        debugRef.current.mutation = 'update-transform';
+        debugRef.current.saveStatus = 'saving';
+        console.log('[ViewerCanvas] COMMIT existing shape -> onSaveShape:', { 
+          shapeId: shape.id?.substring(0, 8), 
+          canMutateExisting, 
+          draftReady 
+        });
+
+        try {
+          const result = await onSaveShape(updatedShape, 'upsert');
+          debugRef.current.saveStatus = 'success';
+          debugRef.current.error = null;
+
+          // CRITICAL: dirty解除（★★★ 不変更新 ★★★）
+          const cur = shapesMapRef.current.get(updatedShape.id);
+          if (cur) {
+            const dirtyMap = new Map(shapesMapRef.current);
+            dirtyMap.set(updatedShape.id, { ...cur, dbId: result?.dbId, _dirty: false });
+            shapesMapRef.current = dirtyMap;
+            bump();
+            onShapesChange?.(getAllShapes());
+          }
+        } catch (err) {
+          console.error('[ViewerCanvas] onSaveShape error:', err);
+          debugRef.current.saveStatus = 'error';
+          debugRef.current.error = err.message;
+          // 失敗時はrevert（★★★ 不変更新 ★★★）
+          const revertMap = new Map(shapesMapRef.current);
+          revertMap.set(shape.id, shape);
+          shapesMapRef.current = revertMap;
+          bump();
+          onShapesChange?.(getAllShapes());
+          console.log('[ViewerCanvas] onSaveShape failed, reverted to original size:', { shapeId: shape.id?.substring(0, 8) });
+        } finally {
+          setIsSaving(prev => ({ ...prev, [shape.id]: false }));
+        }
+      }
+  };
 
   // 選択図形にスタイルを適用（CRITICAL: ref基準＆number正規化）
   const applyStyleToSelected = async (patch) => {
@@ -1885,15 +2483,37 @@ const ViewerCanvas = forwardRef(({
     applyStyleToSelected({ strokeWidth });
   }, [strokeWidth, canEdit, selectedId]);
 
+  // ★★★ CRITICAL: debugHudData の useMemo は全ての hooks の後、早期return の前に配置 ★★★
   const debugHudData = useMemo(() => {
+    const uniqueCids = [...new Set(renderedShapes.map(s => shapeCommentId(s)).filter(Boolean))].slice(0, 10);
+    
+    // comment_idごとの件数を集計
     const countsByCommentId = {};
-    renderedShapes.forEach(s => { const cid = shapeCommentId(s); if (cid) { const k = String(cid).substring(0, 12); countsByCommentId[k] = (countsByCommentId[k] || 0) + 1; } });
+    renderedShapes.forEach(s => {
+      const cid = shapeCommentId(s);
+      if (cid != null && cid !== '') {
+        const cidStr = String(cid).substring(0, 12);
+        countsByCommentId[cidStr] = (countsByCommentId[cidStr] || 0) + 1;
+      }
+    });
+    
+    const coordDiag = DEBUG_MODE ? {
+      paintEnterSeq: coordDiagRef.current.paintEnterSeq,
+      strokeSeqInSession: coordDiagRef.current.strokeSeqInSession,
+      firstStroke: coordDiagRef.current.firstStroke,
+      lastPointerEvent: coordDiagRef.current.lastPointerEvent,
+      ptrDiagStr: coordDiagRef.current.ptrDiagStr, commitDiagStr: coordDiagRef.current.commitDiagStr,
+      firstPtr: coordDiagRef.current.firstPtr, firstCmt: coordDiagRef.current.firstCmt, lastPtr: coordDiagRef.current.lastPtr, lastCmt: coordDiagRef.current.lastCmt,
+    } : null;
+    
     return {
-      activeCommentId: String(activeCommentId ?? 'null'), effectiveActiveId: String(effectiveActiveId ?? 'null'),
-      draftCommentId: String(draftCommentIdRef.current ?? 'null'), renderedShapesLength: renderedShapes.length,
-      uniqueCommentIds: [...new Set(renderedShapes.map(s => shapeCommentId(s)).filter(Boolean))].slice(0, 10).map(id => String(id).substring(0, 12)),
+      activeCommentId: String(activeCommentId ?? 'null'),
+      effectiveActiveId: String(effectiveActiveId ?? 'null'),
+      draftCommentId: String(draftCommentIdRef.current ?? 'null'),
+      renderedShapesLength: renderedShapes.length,
+      uniqueCommentIds: uniqueCids.map(id => String(id).substring(0, 12)),
       countsByCommentId,
-      coordDiag: DEBUG_MODE ? { ...coordDiagRef.current } : null,
+      coordDiag, // ★★★ P0-COORD-DIAG: 座標診断データ追加 ★★★
     };
   }, [activeCommentId, effectiveActiveId, renderedShapes, diagTick]);
 
