@@ -144,20 +144,15 @@ const ViewerCanvas = forwardRef(({
   const transformerRef = useRef(null);
   const shapeRefs = useRef({});
   
-  // Map操作ヘルパー
-  // A) 無限ループ対策: bumpの参照を安定化
   const bump = useCallback(() => setShapesVersion(v => v + 1), []);
   const getAllShapes = () => Array.from(shapesMapRef.current.values());
-  
-  // 後方互換用（shapesRef.currentを参照している箇所向け）
   const shapesRef = { get current() { return getAllShapes(); } };
-  // ★★★ CRITICAL: 描画開始時のview/scale情報を固定（ジャンプ防止の核心）★★★
-  const drawViewRef = useRef(null); // { viewX, viewY, contentScale } を描画開始時に保存
-  const isInteractingRef = useRef(false); // ★ B) 操作中はtrue（drag/transform）
-  const pendingIncomingShapesRef = useRef(null); // ★ B) 操作中に保留された外部Shapes
-  const isDraggingRef = useRef(false); // CRITICAL: ドラッグ中フラグ（残像防止）
-  const dragRafRef = useRef(null); // RAF間引き用
-  const pendingDragRef = useRef(null); // ドラッグ座標バッファ
+  const drawViewRef = useRef(null);
+  const isInteractingRef = useRef(false);
+  const pendingIncomingShapesRef = useRef(null);
+  const isDraggingRef = useRef(false);
+  const dragRafRef = useRef(null);
+  const pendingDragRef = useRef(null);
   
   const isDrawingRef2 = useRef(false);
   const currentShapeRef2 = useRef(null);
