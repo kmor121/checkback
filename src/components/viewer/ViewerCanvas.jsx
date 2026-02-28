@@ -1,20 +1,11 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useImperativeHandle, forwardRef, useMemo, useCallback } from 'react';
 import { Stage, Layer, Line, Rect, Circle, Arrow, Image as KonvaImage, Group, Transformer, Text } from 'react-konva';
 import useImage from 'use-image';
-import TextShapeRenderer from './TextShapeRenderer';
 import TextEditorOverlay from './TextEditorOverlay';
+import CanvasDebugHud from './CanvasDebugHud';
+import { renderShapeFactory } from './ShapeRenderer';
 function generateUUID() { return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16); }); }
-
-// ★★★ DEBUG: 通常時はOFF、URLパラメータ ?diag=1 または localStorage.debugPaintLayer=1 で有効化 ★★★
-const getDebugEnabled = () => {
-  if (typeof window === 'undefined') return false;
-  const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.get('diag') === '1') return true;
-  if (localStorage.getItem('debugPaintLayer') === '1') return true;
-  if (import.meta.env.VITE_DEBUG === 'true') return true;
-  return false;
-};
-const DEBUG_MODE = getDebugEnabled();
+const DEBUG_MODE = (typeof window !== 'undefined') && (new URLSearchParams(window.location.search).get('diag') === '1' || localStorage.getItem('debugPaintLayer') === '1' || import.meta.env.VITE_DEBUG === 'true');
 
 // ★ CRITICAL: fileUrlを正規化（クエリ違いを同一ファイルとして扱う）
 function normalizeFileUrl(url) {
