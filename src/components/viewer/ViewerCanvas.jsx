@@ -186,14 +186,8 @@ const ViewerCanvas = forwardRef(({
     bump();
   };
   
-  // CRITICAL: 描画状態をrefに同期（activeCommentIdリセットガード用）
-  useEffect(() => {
-    isDrawingRef2.current = isDrawing;
-  }, [isDrawing]);
-  
-  useEffect(() => {
-    currentShapeRef2.current = currentShape;
-  }, [currentShape]);
+  useEffect(() => { isDrawingRef2.current = isDrawing; }, [isDrawing]);
+  useEffect(() => { currentShapeRef2.current = currentShape; }, [currentShape]);
   
   // パン状態（★★★ FIT: 親制御とローカル制御の統合 ★★★）
   const [localPan, setLocalPan] = useState({ x: 0, y: 0 });
