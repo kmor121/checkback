@@ -152,7 +152,8 @@ export default function FloatingToolbar({
   return (
     <div 
       ref={toolbarRef}
-      className="fixed z-50"
+      className="fixed z-[9999]"
+      data-ft="toolbar"
       style={{
         left: `${pos.x}px`,
         top: `${pos.y}px`,
