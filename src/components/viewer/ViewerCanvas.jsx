@@ -1577,15 +1577,9 @@ const ViewerCanvas = forwardRef(({
         if (onSaveShape) {
           try {
             await onSaveShape(updatedShape, 'upsert');
-            // CRITICAL: dirty解除（★★★ 不変更新 ★★★）
-            const cur = shapesMapRef.current.get(shapeId);
-            if (cur) {
-              const dirtyMap = new Map(shapesMapRef.current);
-              dirtyMap.set(shapeId, { ...cur, _dirty: false });
-              shapesMapRef.current = dirtyMap;
-              bump();
-              onShapesChange?.(getAllShapes());
-            }
+            shapesMapRef.current = mapClearDirty(shapesMapRef.current, shapeId);
+            bump();
+            onShapesChange?.(getAllShapes());
           } catch (err) {
             console.error('Save text error:', err);
           }
