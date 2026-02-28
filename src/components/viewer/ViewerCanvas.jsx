@@ -458,8 +458,6 @@ const ViewerCanvas = forwardRef(({
     });
   }, [activeCommentId]);
   
-  // ★★★ REMOVED: lastStableCommentIdRef更新処理 - fallback禁止のため削除 ★★★
-
   // CRITICAL: 送信完了後のキャンバスクリア（nonce変化で発火）
   const prevNonceRef = useRef(clearAfterSubmitNonce);
   useEffect(() => {
