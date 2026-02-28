@@ -1249,10 +1249,9 @@ const ViewerCanvas = forwardRef(({
     if (!stage) return null;
     const p = stage.getPointerPosition();
     if (!p) return null;
+    const _branch = viewOverride ? 'override' : (isDrawingRef2.current && drawViewRef.current) ? 'frozen' : 'current';
     const v = viewOverride || (isDrawingRef2.current && drawViewRef.current) || { viewX, viewY, contentScale };
-    const imgX = (p.x - v.viewX) / v.contentScale;
-    const imgY = (p.y - v.viewY) / v.contentScale;
-    return { x: imgX, y: imgY, stageX: p.x, stageY: p.y };
+    return { x: (p.x - v.viewX) / v.contentScale, y: (p.y - v.viewY) / v.contentScale, stageX: p.x, stageY: p.y, _branch, _view: v };
   };
   
   // 正規化座標（0-1の範囲）
