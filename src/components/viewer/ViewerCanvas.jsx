@@ -3463,12 +3463,7 @@ const ViewerCanvas = forwardRef(({
             </Group>
         </Layer>
         
-        {DEBUG_MODE && (
-          <Layer listening={false}>
-            <Rect x={40} y={40} width={180} height={80} stroke="magenta" strokeWidth={4} fill="rgba(255,0,255,0.2)" />
-            <Text x={50} y={50} text={`stg:${containerSize.width}x${containerSize.height} bg:${bgSize.width}x${bgSize.height} sc:${contentScale.toFixed(2)} rdy:${bgReady}`} fontSize={10} fill="magenta" />
-          </Layer>
-        )}
+        
         </Stage>
       
       {/* デバッグオーバーレイ（拡張版） */}
