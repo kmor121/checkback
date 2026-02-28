@@ -1848,11 +1848,7 @@ const ViewerCanvas = forwardRef(({
       // Undo履歴に追加
       addToUndoStack({ type: 'add', shapeId: normalizedShape.id });
 
-      // CRITICAL: Map方式でupsert（追加）+ dirty/localTs付与（★★★ 不変更新 ★★★）
-      const shapeWithDirty = { ...normalizedShape, _dirty: true, _localTs: Date.now() };
-      const newMap = new Map(shapesMapRef.current);
-      newMap.set(shapeWithDirty.id, shapeWithDirty);
-      shapesMapRef.current = newMap;
+      shapesMapRef.current = mapUpsertDirty(shapesMapRef.current, normalizedShape);
       bump();
       console.log('[🎨 DRAW_DIAG] Map updated after commit:', {
         shapeId: shapeWithDirty.id.substring(0, 8),
