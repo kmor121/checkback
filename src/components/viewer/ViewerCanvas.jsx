@@ -2697,57 +2697,7 @@ const ViewerCanvas = forwardRef(({
     onTransformEnd: (isEditable && canTransform && !isDrawingThisShape) ? (e) => handleTransformEnd(shape, e) : undefined,
     };
 
-    // バウンディングボックス用の計算
-    let boundingBox = null;
-    if (showBoundingBoxes && DEBUG_MODE) {
-      if (shape.tool === 'pen' && shape.normalizedPoints) {
-        const points = [];
-        for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
-          const { x, y } = denormalizeCoords(shape.normalizedPoints[i], shape.normalizedPoints[i + 1]);
-          points.push({ x, y });
-        }
-        const xs = points.map(p => p.x);
-        const ys = points.map(p => p.y);
-        boundingBox = {
-          x: Math.min(...xs),
-          y: Math.min(...ys),
-          width: Math.max(...xs) - Math.min(...xs),
-          height: Math.max(...ys) - Math.min(...ys),
-        };
-      } else if (shape.tool === 'rect' && shape.nx !== undefined) {
-        const p1 = denormalizeCoords(shape.nx, shape.ny);
-        const p2 = denormalizeCoords(shape.nx + shape.nw, shape.ny + shape.nh);
-        boundingBox = {
-          x: p1.x,
-          y: p1.y,
-          width: p2.x - p1.x,
-          height: p2.y - p1.y,
-        };
-      } else if (shape.tool === 'circle' && shape.nx !== undefined) {
-        const center = denormalizeCoords(shape.nx, shape.ny);
-        const radius = shape.nr * bgSize.width;
-        boundingBox = {
-          x: center.x - radius,
-          y: center.y - radius,
-          width: radius * 2,
-          height: radius * 2,
-        };
-      } else if (shape.tool === 'arrow' && shape.normalizedPoints) {
-        const points = [];
-        for (let i = 0; i < shape.normalizedPoints.length; i += 2) {
-          const { x, y } = denormalizeCoords(shape.normalizedPoints[i], shape.normalizedPoints[i + 1]);
-          points.push({ x, y });
-        }
-        const xs = points.map(p => p.x);
-        const ys = points.map(p => p.y);
-        boundingBox = {
-          x: Math.min(...xs),
-          y: Math.min(...ys),
-          width: Math.max(...xs) - Math.min(...xs),
-          height: Math.max(...ys) - Math.min(...ys),
-        };
-      }
-    }
+    const boundingBox = null; // debug bbox removed for perf
     
     if (shape.tool === 'pen') {
       // ★★★ CRITICAL FIX: 描画中と確定済みで座標系を完全に分離 ★★★
