@@ -1429,12 +1429,7 @@ const ViewerCanvas = forwardRef(({
       return;
     }
 
-    // ★★★ P0-FIX: draftReadyチェックを削除（paintMode ON なら描画開始を許可）★★★
-    // draftReady は「既存shape編集」の権限であり、新規描画には不要
-    // 描画開始後の commit 時に draftReady をチェックする（L2148）
-
-    // ★★★ CRITICAL: 描画開始時に古いcurrentShapeを強制クリア（前コメントのdraft残り防止）★★★
-    // currentShapeのcomment_idがactiveCommentIdと異なる場合は古いdraftなので破棄
+    // CRITICAL: 描画開始時に古いcurrentShapeを強制クリア（前コメントのdraft残り防止）
     if (currentShape && activeCommentId != null) {
       const currentCid = currentShape.comment_id;
       if (currentCid != null && String(currentCid) !== String(activeCommentId)) {
