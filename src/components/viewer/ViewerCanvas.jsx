@@ -1788,10 +1788,9 @@ const ViewerCanvas = forwardRef(({
         newShape.points = [shape.startX, shape.startY, imgCoords.x, imgCoords.y];
       }
 
+      currentShapeRef2.current = newShape; // P0-FIX: ref同期
       setCurrentShape(newShape);
-    } catch (err) {
-      console.error('PointerMove Error:', err);
-    }
+    } catch (err) { console.error('PointerMove Error:', err); }
   };
   
   // テキスト確定（DOMから直接読む）
