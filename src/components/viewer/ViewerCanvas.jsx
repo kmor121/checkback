@@ -3033,121 +3033,14 @@ const ViewerCanvas = forwardRef(({
           </Group>
         );
       } else if (shape.tool === 'text') {
-        // Text描画
-        let x = 0, y = 0;
-
-        // 正規化座標を優先
-        if (shape.nx !== undefined) {
-          const pos = denormalizeCoords(shape.nx, shape.ny);
-          x = pos.x;
-          y = pos.y;
-        } else if (shape.x !== undefined) {
-          x = shape.x;
-          y = shape.y;
-        }
-
-        const fontSize = shape.fontSize || Math.max(12, (shape.strokeWidth || 2) * 6);
-        const textContent = shape.text || '';
-
-        // ★ フォント設定を完全統一（測定と描画で同一）
-        const fontProps = {
-          fontFamily: 'Arial, sans-serif',
-          fontStyle: 'normal',
-          fontSize: fontSize,
-          lineHeight: 1,
-          letterSpacing: 0,
-          padding: 0,
-          wrap: 'none',  // ★ 折り返し禁止（bboxが太らないように）
-        };
-
-        // パディング設定
-        const padL = 4;
-        const padR = 4;
-        const padY = 3;
-
-        // ★ Canvas measureTextでグリフのAscent/Descentを実測
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        ctx.font = `${fontProps.fontStyle} ${fontSize}px ${fontProps.fontFamily}`;
-        const metrics = ctx.measureText(textContent || 'M');
-        
-        // actualBoundingBox系でグリフの実際の高さを取得
-        const ascent = metrics.actualBoundingBoxAscent || fontSize * 0.8;
-        const descent = metrics.actualBoundingBoxDescent || fontSize * 0.2;
-        const glyphH = ascent + descent;
-        const tw = metrics.width;
-
-        // ★ 判定を厳密に（boxResized === true かつ boxH != null）
-        const hasManualBoxW = shape.boxResized === true && shape.boxW != null;
-        const hasManualBoxH = shape.boxResized === true && shape.boxH != null;
-
-        // ★ auto時：グリフ実測ベースで計算
-        const autoBoxW = tw + padL + padR;
-        const autoBoxH = glyphH + padY * 2;
-        
-        const boxW = hasManualBoxW ? shape.boxW * bgSize.width : autoBoxW;
-        const boxH = hasManualBoxH ? shape.boxH * bgSize.height : autoBoxH;
-
-        // ★ textY計算：グリフ上端がpadYに来るように配置
-        const textX = padL;
-        // Konva Textはbaselineがtopなので、ascent分だけ下にずらす必要はない
-        // ただしKonvaはデフォルトでtop配置なので、padYをそのまま使う
-        const textY = hasManualBoxH
-          ? padY + (boxH - padY * 2 - glyphH) / 2  // リサイズ済み：中央配置
-          : padY;  // auto：上端固定
-
-        // デバッグログ
-        if (DEBUG_MODE && !hasManualBoxH) {
-          console.log('[Text auto canvas]', {
-            id: shape.id?.substring(0, 8),
-            ascent: ascent.toFixed(2),
-            descent: descent.toFixed(2),
-            glyphH: glyphH.toFixed(2),
-            autoBoxH: autoBoxH.toFixed(2),
-            boxH: boxH.toFixed(2),
-            textY: textY.toFixed(2),
-          });
-        }
-
-        return (
-          <Group
-            key={shape.id}
-            name="paintOverlay"
-            x={x}
-            y={y}
-            ref={(node) => { if (node) shapeRefs.current[shape.id] = node; }}
-            draggable={isEditable}
-            onPointerDown={canEdit ? (e) => {
-              if (!isEditable) return;
-              e.cancelBubble = true;
-              setSelectedId(shape.id);
-              if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke);
-              if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth);
-            } : undefined}
-            onDragStart={isEditable ? (e) => handleDragStart(shape, e) : undefined}
-            onDragMove={isEditable ? (e) => handleDragMove(shape, e) : undefined}
-            onDragEnd={isEditable ? (e) => handleDragEnd(shape, e) : undefined}
-            onTransformEnd={isEditable ? (e) => handleTransformEnd(shape, e) : undefined}
-            onDblClick={canEdit ? () => handleTextDblClick(shape) : undefined}
-          >
-            {/* 透明Rect：Transformerの対象・当たり判定 */}
-            <Rect
-              width={boxW}
-              height={boxH}
-              fill="transparent"
-              listening={true}
-            />
-            {/* テキスト：Canvas実測ベースで配置 */}
-            <Text
-              x={textX}
-              y={textY}
-              text={textContent}
-              {...fontProps}
-              fill={shape.stroke}
-              listening={false}
-            />
-          </Group>
-        );
+        let tx = 0, ty = 0;
+        if (shape.nx !== undefined) { const pos = denormalizeCoords(shape.nx, shape.ny); tx = pos.x; ty = pos.y; } else if (shape.x !== undefined) { tx = shape.x; ty = shape.y; }
+        return <TextShapeRenderer key={shape.id} shape={shape} x={tx} y={ty} isEditable={isEditable} canEdit={canEdit} isEditMode={isEditMode} bgSize={bgSize} DEBUG_MODE={DEBUG_MODE}
+          shapeRefCb={(node) => { if (node) shapeRefs.current[shape.id] = node; }}
+          onPointerDown={canEdit ? (e) => { if (!isEditable) return; e.cancelBubble = true; setSelectedId(shape.id); if (onStrokeColorChange && shape.stroke) onStrokeColorChange(shape.stroke); if (onStrokeWidthChange && typeof shape.strokeWidth === 'number') onStrokeWidthChange(shape.strokeWidth); } : undefined}
+          onDragStart={isEditable ? (e) => handleDragStart(shape, e) : undefined} onDragMove={isEditable ? (e) => handleDragMove(shape, e) : undefined}
+          onDragEnd={isEditable ? (e) => handleDragEnd(shape, e) : undefined} onTransformEnd={isEditable ? (e) => handleTransformEnd(shape, e) : undefined}
+          onDblClick={canEdit ? () => handleTextDblClick(shape) : undefined} />;
       }
       return null;
       };
