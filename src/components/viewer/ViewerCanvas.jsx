@@ -669,10 +669,7 @@ const ViewerCanvas = forwardRef(({
     // ★★★ Hunk2: 空判定は filtered (incoming) 基準 ★★★
     const incomingEmpty = incoming.length === 0;
 
-    // ★★★ P0-V2: 案B2ガード削除（renderTargetCommentId が activeCommentId なので temp_ で過剰クリア不要）★★★
-    // REMOVED: 案B2 Intentional empty block (過剰Map clear の元凶)
-
-    // ★★★ P0-FLICKER: 非空shapesを記録（コンテキストキー付き）★★★
+      // ★★★ P0-FLICKER: 非空shapesを記録（コンテキストキー付き）★★★
     if (!incomingEmpty) {
       lastNonEmptyShapesRef.current = { key: ctx, shapes: shapesToSync };
       emptyStreakCountRef.current = 0;
