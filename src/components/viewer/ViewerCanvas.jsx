@@ -963,43 +963,16 @@ const ViewerCanvas = forwardRef(({
     }
   }, [tool]);
 
-  // Transformer selection（編集モード時のみ、Rect/Circle/Textに対応）
+  // Transformer selection
   useEffect(() => {
     if (!transformerRef.current) return;
-    
-    if (isEditMode && selectedId && shapeRefs.current[selectedId]) {
-      const selectedShape = shapes.find(s => s.id === selectedId);
-      const canTransform = selectedShape && (selectedShape.tool === 'rect' || selectedShape.tool === 'circle' || selectedShape.tool === 'text' || selectedShape.tool === 'arrow');
-
-      if (canTransform) {
-        transformerRef.current.nodes([shapeRefs.current[selectedId]]);
-        // テキストの場合：Group内のRectを対象にする
-        if (selectedShape.tool === 'text') {
-          transformerRef.current.padding(0);
-          transformerRef.current.boundBoxFunc(null);
-        } else {
-          transformerRef.current.padding(0);
-          transformerRef.current.boundBoxFunc(null);
-        }
-        const layer = transformerRef.current.getLayer();
-        if (layer?.batchDraw) {
-          layer.batchDraw();
-        }
-      } else {
-        transformerRef.current.nodes([]);
-        const layer = transformerRef.current.getLayer();
-        if (layer?.batchDraw) {
-          layer.batchDraw();
-        }
-      }
-    } else {
-      transformerRef.current.nodes([]);
-      const layer = transformerRef.current.getLayer();
-      if (layer?.batchDraw) {
-        layer.batchDraw();
-      }
-    }
-    }, [selectedId, isEditMode, shapes]);
+    const node = (isEditMode && selectedId && shapeRefs.current[selectedId]) ? shapeRefs.current[selectedId] : null;
+    const selectedShape = node ? shapes.find(s => s.id === selectedId) : null;
+    const canTransform = selectedShape && ['rect', 'circle', 'text', 'arrow'].includes(selectedShape.tool);
+    transformerRef.current.nodes(canTransform ? [node] : []);
+    if (canTransform) { transformerRef.current.padding(0); transformerRef.current.boundBoxFunc(null); }
+    transformerRef.current.getLayer()?.batchDraw();
+  }, [selectedId, isEditMode, shapes]);
 
   // テキストエディタフォーカス
   useEffect(() => {
