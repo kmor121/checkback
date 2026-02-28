@@ -138,8 +138,8 @@ const ViewerCanvas = forwardRef(({
   // 描画状態
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentShape, setCurrentShape] = useState(null);
-  const shapesMapRef = useRef(new Map()); // ★ CRITICAL: Mapが唯一の真実
-  const [shapesVersion, setShapesVersion] = useState(0); // 再描画トリガー
+  const shapesMapRef = useRef(new Map());
+  const [shapesVersion, setShapesVersion] = useState(0);
   const [selectedId, setSelectedId] = useState(null);
   const transformerRef = useRef(null);
   const shapeRefs = useRef({});
