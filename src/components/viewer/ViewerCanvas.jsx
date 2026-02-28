@@ -1250,31 +1250,15 @@ const ViewerCanvas = forwardRef(({
 
 
   // ★★★ CRITICAL: 座標変換（描画中は開始時のview/scaleを使用してジャンプ防止）★★★
-  const stagePointToImagePoint = () => {
+  // P0-FIX: viewOverride引数で1点目のズレ防止（frozenViewを渡す）
+  const stagePointToImagePoint = (viewOverride) => {
     const stage = stageRef.current;
     if (!stage) return null;
-
     const p = stage.getPointerPosition();
     if (!p) return null;
-
-    // ★★★ CRITICAL: 描画中は開始時に保存したview/scaleを使う（ジャンプ防止の核心）★★★
-    let useViewX, useViewY, useScale;
-    if (isDrawingRef2.current && drawViewRef.current) {
-      // 描画中は固定値を使用
-      useViewX = drawViewRef.current.viewX;
-      useViewY = drawViewRef.current.viewY;
-      useScale = drawViewRef.current.contentScale;
-    } else {
-      // 非描画中は現在値を使用
-      useViewX = viewX;
-      useViewY = viewY;
-      useScale = contentScale;
-    }
-
-    // 手計算で座標変換（Konva transform APIはGroup位置変更でジャンプの原因になる）
-    const imgX = (p.x - useViewX) / useScale;
-    const imgY = (p.y - useViewY) / useScale;
-
+    const v = viewOverride || (isDrawingRef2.current && drawViewRef.current) || { viewX, viewY, contentScale };
+    const imgX = (p.x - v.viewX) / v.contentScale;
+    const imgY = (p.y - v.viewY) / v.contentScale;
     return { x: imgX, y: imgY, stageX: p.x, stageY: p.y };
   };
   
@@ -1653,8 +1637,14 @@ const ViewerCanvas = forwardRef(({
     if (textEditor.visible) return;
     
     try {
-      const imgCoords = stagePointToImagePoint();
-      if (!imgCoords) return;
+      // ★★★ P0-FIX: 1点目ズレ対策 — (A) pointer座標更新 (B) frozenView先行確保 (C) isDrawingRef先行true ★★★
+      if (stageRef.current && e.evt) stageRef.current.setPointersPositions(e.evt);
+      const frozenView = { viewX, viewY, contentScale };
+      drawViewRef.current = frozenView;
+      isDrawingRef2.current = true;
+      
+      const imgCoords = stagePointToImagePoint(frozenView);
+      if (!imgCoords) { drawViewRef.current = null; isDrawingRef2.current = false; return; }
       
       setLastEvent('down');
       if (DEBUG_MODE) {
@@ -1663,12 +1653,6 @@ const ViewerCanvas = forwardRef(({
       }
       
       setIsDrawing(true);
-      
-      // ★★★ CRITICAL: 描画開始時のview/scaleを保存（ジャンプ防止の核心）★★★
-      drawViewRef.current = { viewX, viewY, contentScale };
-      if (DEBUG_MODE) {
-        console.log('[ViewerCanvas] drawViewRef saved:', drawViewRef.current);
-      }
       
       // ★★★ P0-COORD-DIAG: down時の座標情報を記録 ★★★
       const rawPointer = { clientX: e.evt?.clientX ?? 0, clientY: e.evt?.clientY ?? 0 };
