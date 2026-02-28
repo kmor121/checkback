@@ -4,47 +4,8 @@ import useImage from 'use-image';
 import TextEditorOverlay from './TextEditorOverlay';
 import CanvasDebugHud from './CanvasDebugHud';
 import { renderShapeFactory } from './ShapeRenderer';
-function generateUUID() { return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16); }); }
-const DEBUG_MODE = (typeof window !== 'undefined') && (new URLSearchParams(window.location.search).get('diag') === '1' || localStorage.getItem('debugPaintLayer') === '1' || import.meta.env.VITE_DEBUG === 'true');
-
-// ★ CRITICAL: fileUrlを正規化（クエリ違いを同一ファイルとして扱う）
-function normalizeFileUrl(url) {
-  if (!url) return "";
-  try {
-    const u = new URL(url);
-    return `${u.origin}${u.pathname}`; // queryを無視
-  } catch {
-    return String(url).split("?")[0]; // フォールバック
-  }
-}
-
-// ★★★ CRITICAL: commentId解決ユーティリティ（キー揺れ完全吸収、入れ子対応）★★★
-const resolveCommentId = (s) => {
-  const v = s?.comment_id ?? s?.commentId ?? s?.commentID ?? 
-            s?.comment?.id ?? 
-            s?.data?.comment_id ?? s?.data?.commentId ?? s?.data?.commentID ??
-            s?.shape?.comment_id ?? s?.shape?.commentId ?? s?.shape?.commentID;
-  return v == null ? null : String(v);
-};
-
-// ★★★ CRITICAL: shape正規化（入れ子を平坦化、comment_id を canonical 化）★★★
-// defaultCommentId: shapeにcomment_idが無い場合のみ使用（既存値は上書きしない）
-const normalizeShape = (s, defaultCommentId = null) => {
-  if (!s) return null;
-  const base = s.data ? { ...s, ...s.data } : (s.shape ? { ...s, ...s.shape } : s);
-  let commentId = resolveCommentId(base);
-  if (commentId == null || commentId === '') {
-    commentId = defaultCommentId != null ? String(defaultCommentId) : null;
-  }
-  return {
-    ...base,
-    comment_id: commentId,
-    id: base.id ?? base.client_shape_id ?? base._local_id ?? (base._local_id = generateUUID()),
-  };
-};
-
-const shapeCommentId = resolveCommentId;  // 後方互換エイリアス
-const sameId = (a, b) => String(a ?? '') === String(b ?? '');
+import { generateUUID, DEBUG_MODE, normalizeFileUrl, resolveCommentId, normalizeShape, shapeCommentId, sameId, TEXT_EDITOR_INITIAL } from './canvasUtils';
+import { mapUpsertDirty, mapDelete, mapClearDirty, mapPatchShape, mapFromArray, extractDirtyShapes } from './canvasMapHelpers';
 
 // 背景画像コンポーネント（チラつき防止：前の画像を保持）
 function BackgroundImage({ src, onLoad }) {
