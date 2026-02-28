@@ -397,7 +397,7 @@ const ViewerCanvas = forwardRef(({
     setSelectedId(null);
     
     // テキストエディタ
-    setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
+    setTextEditor(TEXT_EDITOR_INITIAL);
 
     // ★★★ CRITICAL: draftCommentIdRefをクリア（前コメントのドラフト参照をリセット）★★★
     draftCommentIdRef.current = null;
