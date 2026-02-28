@@ -4152,7 +4152,7 @@ function ShareViewContent() {
       </div>
 
       {/* ツールバー（ペイントモード時のみ） */}
-      {paintMode && shareLink.can_post_comments && isReady && (
+      {paintMode && canPost && isReady && (
         <FloatingToolbar
             paintMode={paintMode}
             onPaintModeChange={handlePaintModeChange}
