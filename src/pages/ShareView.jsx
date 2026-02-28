@@ -38,7 +38,7 @@ import {
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import ViewerCanvas from '../components/viewer/ViewerCanvas';
-import FloatingToolbar from '../components/viewer/FloatingToolbar';
+import FloatingToolbarPortal from '../components/viewer/FloatingToolbarPortal';
 import ErrorBoundary from '../components/ErrorBoundary';
 import DebugOverlay from '../components/DebugOverlay';
 import {
