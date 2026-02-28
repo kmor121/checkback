@@ -1294,25 +1294,16 @@ function ShareViewContent() {
             setIsDockOpen(true);
   };
   
-  // ★★★ FIX-2: 描画ツール記録 + paintMode変化時のtool制御（1箇所集約）★★★
+  // FIX-2: 描画ツール記録 + paintMode変化時のtool制御 + P0-TOOLBAR不整合防止
   const prevPaintModeRef = useRef(paintMode);
   useEffect(() => {
-    // 描画ツール記録
-    if (['pen', 'rect', 'circle', 'arrow', 'text'].includes(tool)) {
-      lastDrawToolRef.current = tool;
-      addDebugLog(`[tool] recorded: ${tool}`);
-    }
-    
-    // paintMode false→true の瞬間だけ tool制御
+    if (['pen', 'rect', 'circle', 'arrow', 'text'].includes(tool)) lastDrawToolRef.current = tool;
     const prev = prevPaintModeRef.current;
     prevPaintModeRef.current = paintMode;
-    
-    if (!prev && paintMode && tool === 'select') {
-      const drawTool = lastDrawToolRef.current || 'pen';
-      setTool(drawTool);
-      addDebugLog(`[FIX-2] paint ON: select → ${drawTool}`);
-    }
-  }, [tool, paintMode]);
+    if (!prev && paintMode && tool === 'select') { const d = lastDrawToolRef.current || 'pen'; setTool(d); }
+    // P0-TOOLBAR: paintMode=ON なのにツールを出せない → 強制OFF
+    if (paintMode && (!canPost || !isReady)) { setPaintMode(false); setTool('select'); }
+  }, [tool, paintMode, canPost, isReady]);
 
   const handleBeginPaint = () => {
     // ペイント開始時はコメントを作らず、セッション開始のみ
