@@ -2132,14 +2132,8 @@ const ViewerCanvas = forwardRef(({
         onToolChange('select');
       }
 
-      // DB保存前の検証（一時フィールドが残っていないことを確認）
-      if (DEBUG_MODE) {
-        const hasTemp = ['points', 'startX', 'startY', 'x', 'y', 'width', 'height', 'radius']
-          .some(key => normalizedShape[key] !== undefined);
-        if (hasTemp) {
-          console.warn('[ViewerCanvas] WARNING: Temp fields detected in normalizedShape:', normalizedShape);
-        }
-      }
+      // commitDiag: shape確定座標 vs down時k座標（A/B切り分け）
+      if (DEBUG_MODE && coordDiagRef.current.downK) { const dK=coordDiagRef.current.downK; let ix=0,iy=0; if(normalizedShape.nx!==undefined){const p=denormalizeCoords(normalizedShape.nx,normalizedShape.ny);ix=p.x;iy=p.y;}else if(normalizedShape.normalizedPoints?.length>=2){const p=denormalizeCoords(normalizedShape.normalizedPoints[0],normalizedShape.normalizedPoints[1]);ix=p.x;iy=p.y;} const sx=ix*contentScale+viewX,sy=iy*contentScale+viewY; coordDiagRef.current.commitDiagStr=`img=(${Math.round(ix)},${Math.round(iy)}) stg=(${Math.round(sx)},${Math.round(sy)}) k0=(${Math.round(dK.x)},${Math.round(dK.y)}) Δ=(${Math.round(sx-dK.x)},${Math.round(sy-dK.y)})`; setDiagTick(t=>t+1); }
 
       // 親コンポーネントに保存を依頼（createモード）
       if (onSaveShape) {
