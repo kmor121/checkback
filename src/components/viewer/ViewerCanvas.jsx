@@ -440,17 +440,8 @@ const ViewerCanvas = forwardRef(({
       // isDrawing
       setIsDrawing(false);
       
-      // テキストエディタ
-      setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
-
-      // Transformer解除
-      if (transformerRef.current) {
-        transformerRef.current.nodes([]);
-        const layer = transformerRef.current.getLayer();
-        if (layer?.batchDraw) {
-          layer.batchDraw();
-        }
-      }
+      setTextEditor(TEXT_EDITOR_INITIAL);
+      if (transformerRef.current) { transformerRef.current.nodes([]); transformerRef.current.getLayer()?.batchDraw(); }
     }
   }, [clearAfterSubmitNonce]);
 
