@@ -2197,19 +2197,12 @@ const ViewerCanvas = forwardRef(({
       delete updatedShape.height;
       delete updatedShape.radius;
 
-      // CRITICAL: Map方式でupsert + dirty/localTs付与（★★★ 不変更新 ★★★）
-      const updatedWithDirty = { ...updatedShape, _dirty: true, _localTs: Date.now() };
-      addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: updatedWithDirty });
-
-      // CRITICAL: Map更新 + 親に全量同期（★★★ 不変更新 ★★★）
-      const newMap = new Map(shapesMapRef.current);
-      newMap.set(updatedWithDirty.id, updatedWithDirty);
-      shapesMapRef.current = newMap;
+      addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: { ...updatedShape, _dirty: true, _localTs: Date.now() } });
+      shapesMapRef.current = mapUpsertDirty(shapesMapRef.current, updatedShape);
       bump();
       onShapesChange?.(getAllShapes());
 
-      // DB更新（upsertモード）
-      isInteractingRef.current = false; // ★ B) 操作終了
+      isInteractingRef.current = false;
       if (onSaveShape) {
         // ★ B) 保留されていたshapesがあれば同期をトリガー
         if (pendingIncomingShapesRef.current) {
