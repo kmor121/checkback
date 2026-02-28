@@ -4128,34 +4128,30 @@ function ShareViewContent() {
         )}
       </div>
 
-      {/* ツールバー（ペイントモード時のみ） */}
-      {paintMode && canPost && isReady && (
-        <FloatingToolbar
-            paintMode={paintMode}
-            onPaintModeChange={handlePaintModeChange}
-            tool={tool}
-            onToolChange={setTool}
-            strokeColor={strokeColor}
-            onStrokeColorChange={setStrokeColor}
-            strokeWidth={strokeWidth}
-            onStrokeWidthChange={setStrokeWidth}
-            canUndo={viewerCanvasRef.current?.canUndo || false}
-            canRedo={viewerCanvasRef.current?.canRedo || false}
-            onUndo={() => viewerCanvasRef.current?.undo()}
-            onRedo={() => viewerCanvasRef.current?.redo()}
-            onClear={() => viewerCanvasRef.current?.clear()}
-            onClearAll={handleClearAll}
-            onDelete={() => viewerCanvasRef.current?.delete()}
-            onComplete={() => {
-              setPaintMode(false);
-              setTool('select');
-            }}
-            onResetView={() => setZoom(100)}
-            showBoundingBoxes={showBoundingBoxes}
-            onToggleBoundingBoxes={DEBUG_MODE ? () => setShowBoundingBoxes(!showBoundingBoxes) : undefined}
-            hasActiveComment={!!(paintSessionCommentId || activeCommentId || draftShapes.length > 0)}
-          />
-      )}
+      {/* ツールバー（ペイントモード時のみ、Portal でbody直下へ描画） */}
+      <FloatingToolbarPortal
+        show={paintMode && canPost && isReady}
+        paintMode={paintMode}
+        onPaintModeChange={handlePaintModeChange}
+        tool={tool}
+        onToolChange={setTool}
+        strokeColor={strokeColor}
+        onStrokeColorChange={setStrokeColor}
+        strokeWidth={strokeWidth}
+        onStrokeWidthChange={setStrokeWidth}
+        canUndo={viewerCanvasRef.current?.canUndo || false}
+        canRedo={viewerCanvasRef.current?.canRedo || false}
+        onUndo={() => viewerCanvasRef.current?.undo()}
+        onRedo={() => viewerCanvasRef.current?.redo()}
+        onClear={() => viewerCanvasRef.current?.clear()}
+        onClearAll={handleClearAll}
+        onDelete={() => viewerCanvasRef.current?.delete()}
+        onComplete={() => { setPaintMode(false); setTool('select'); }}
+        onResetView={() => setZoom(100)}
+        showBoundingBoxes={showBoundingBoxes}
+        onToggleBoundingBoxes={DEBUG_MODE ? () => setShowBoundingBoxes(!showBoundingBoxes) : undefined}
+        hasActiveComment={!!(paintSessionCommentId || activeCommentId || draftShapes.length > 0)}
+      />
 
 
 
