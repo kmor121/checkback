@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useImperativeHandle, forwardRef, useMemo, useCallback } from 'react';
-import { Stage, Layer, Line, Rect, Circle, Arrow, Image as KonvaImage, Group, Transformer, Text } from 'react-konva';
+import { Stage, Layer, Image as KonvaImage, Group, Transformer } from 'react-konva';
 import useImage from 'use-image';
 import TextEditorOverlay from './TextEditorOverlay';
 import CanvasDebugHud from './CanvasDebugHud';
