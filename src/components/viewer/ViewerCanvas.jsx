@@ -1192,19 +1192,8 @@ const ViewerCanvas = forwardRef(({
     const shape = selectedShape;
     addToUndoStack({ type: 'delete', shape, index: 0 });
     
-    // Transformer解除（先に）
-    if (transformerRef.current) {
-      transformerRef.current.nodes([]);
-      const layer = transformerRef.current.getLayer();
-      if (layer?.batchDraw) {
-        layer.batchDraw();
-      }
-    }
-    
-    // Optimistic update（★★★ CRITICAL: 新しいMapを作成 ★★★）
-    const newMap = new Map(shapesMapRef.current);
-    newMap.delete(selectedId);
-    shapesMapRef.current = newMap;
+    if (transformerRef.current) { transformerRef.current.nodes([]); transformerRef.current.getLayer()?.batchDraw(); }
+    shapesMapRef.current = mapDelete(shapesMapRef.current, selectedId);
     bump();
     onShapesChange?.(getAllShapes());
     setSelectedId(null);
