@@ -3115,25 +3115,11 @@ function ShareViewContent() {
     {/* ★★★ P0-V9-FIX: 診断HUD（?diag=1 で状態見える化）★★★ */}
     {(new URLSearchParams(window.location.search).get('diag') === '1') && (
       <div className="fixed top-16 left-4 z-[9998] bg-black/90 text-white text-xs font-mono p-3 rounded shadow-lg max-w-xs max-h-[80vh] overflow-auto">
-        <div className="font-bold text-yellow-400 mb-2">🔍 診断HUD (Z-03)</div>
-        <div>normalizedActiveCommentId: <span className={normalizedActiveCommentId ? 'text-cyan-400' : 'text-red-400'}>{normalizedActiveCommentId?.substring(0, 12) || 'null'}</span></div>
-        <div>isUnselected: <span className={isUnselected ? 'text-green-400' : 'text-red-400'}>{isUnselected.toString()}</span></div>
-        <div>isTempDraftPreview: <span className={isTempDraftPreview ? 'text-green-400' : 'text-red-400'}>{isTempDraftPreview.toString()}</span></div>
-        <div>tempDraftCount: <span className="text-yellow-400">{tempDraftCount}</span></div>
-        <div>hasTempDraft: <span className={hasTempDraft ? 'text-green-400' : 'text-red-400'}>{hasTempDraft.toString()}</span></div>
-        <div>showDraftOnly: <span className={((isUnselected || isTempDraftPreview) && hasTempDraft) ? 'text-green-400' : 'text-red-400'}>{((isUnselected || isTempDraftPreview) && hasTempDraft).toString()}</span></div>
-        <div className="border-t border-gray-600 mt-2 pt-2">
-          <div>composerMode: <span className="text-cyan-400">{composerMode}</span></div>
-          <div>paintContextId: <span className="text-cyan-400">{paintContextId?.substring(0, 12) || 'null'}</span></div>
-          <div>targetKey: <span className="text-cyan-400">{targetKey?.substring(0, 30) || 'null'}</span></div>
-        </div>
-        
-        {/* ★★★ P0-COORD-DIAG: Paint Coords (VC) セクション（ViewerCanvas右上HUD参照案内）★★★ */}
-        <div className="border-t border-gray-600 mt-2 pt-2">
-          <div className="font-bold text-yellow-400 mb-1">🎯 Paint Coords (VC)</div>
-          <div className="text-xs opacity-80">→ ViewerCanvas右上のDebug HUD</div>
-          <div className="text-xs opacity-80">（Paint Coordsセクションを確認）</div>
-        </div>
+        <div className="font-bold text-yellow-400 mb-1">🔍 Z-04</div>
+        <div>tbGate: pm=<span className={paintMode?'text-green-400':'text-red-400'}>{paintMode?'T':'F'}</span> cp=<span className={canPost?'text-green-400':'text-red-400'}>{canPost?'T':'F'}</span>(<span className="text-gray-400">{String(shareLink?.can_post_comments)}</span>) rdy=<span className={isReady?'text-green-400':'text-red-400'}>{isReady?'T':'F'}</span> vis=<span className={(paintMode&&canPost&&isReady)?'text-green-400 font-bold':'text-red-400 font-bold'}>{(paintMode&&canPost&&isReady)?'T':'F'}</span></div>
+        <div>active: <span className={normalizedActiveCommentId?'text-cyan-400':'text-red-400'}>{normalizedActiveCommentId?.substring(0,12)||'null'}</span> unsel: <span className={isUnselected?'text-green-400':'text-red-400'}>{isUnselected?'T':'F'}</span></div>
+        <div>tempPreview: {isTempDraftPreview?'T':'F'} tempDraft: {tempDraftCount} mode: <span className="text-cyan-400">{composerMode}</span></div>
+        <div>pCtx: <span className="text-cyan-400">{paintContextId?.substring(0,12)||'null'}</span> tKey: <span className="text-cyan-400">{targetKey?.substring(0,30)||'null'}</span></div>
       </div>
     )}
     
