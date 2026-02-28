@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useImperativeHandle, forwardRef, useMemo, useCallback } from 'react';
-import { createPortal } from 'react-dom';
 import { Stage, Layer, Line, Rect, Circle, Arrow, Image as KonvaImage, Group, Transformer, Text } from 'react-konva';
 import useImage from 'use-image';
 import TextShapeRenderer from './TextShapeRenderer';
@@ -3014,9 +3013,6 @@ const ViewerCanvas = forwardRef(({
   // ★★★ FIX-3: pending中判定（ctx切替でMap空にしない間）★★★
   const isPending = !!pendingCtxRef.current;
   
-  // ★★★ P0-DIAG: Portal HUD用変数（hooksではないので早期returnに影響しない）★★★
-  const debugPaintLayerEnabled = typeof window !== 'undefined' && window.localStorage?.getItem('debugPaintLayer') === '1';
-
   if (DEBUG_MODE) {
     console.log('[ViewerCanvas] Render:', { renderedShapesCount: renderedShapes.length, paintMode, isPending, contentReady, bgReady });
   }
@@ -3052,14 +3048,6 @@ const ViewerCanvas = forwardRef(({
           touchAction: 'none'
         }}
       >
-        {/* ★★★ DEBUG: デバッグRect（diag=1時のみ表示）★★★ */}
-        {DEBUG_MODE && (
-          <Layer listening={false}>
-            <Rect x={10} y={10} width={100} height={50} fill="magenta" opacity={0.8} />
-            <Text x={15} y={20} text={`Stage:${containerSize.width}x${containerSize.height}`} fontSize={10} fill="white" />
-          </Layer>
-        )}
-
         {/* 背景Layer（非インタラクティブ） - 常に表示 */}
         <Layer listening={false}>
           <Group
@@ -3093,12 +3081,7 @@ const ViewerCanvas = forwardRef(({
             >
               {!hidePaintOverlay && (
                   <>
-                    {/* DEBUG markers + render log (compressed) */}
-                    {DEBUG_MODE && <Rect x={20} y={20} width={160} height={100} stroke="cyan" strokeWidth={6} fill="rgba(0,255,255,0.3)" listening={false} />}
-                    {DEBUG_MODE && <Rect x={40} y={40} width={120} height={120} stroke="magenta" strokeWidth={6} fill="rgba(255,0,255,0.2)" listening={false} />}
-                    {DEBUG_MODE && console.log('[VC] RENDER:', { rsFinal: renderedShapesFinal.length, cur: !!currentShape, vX: viewX, vY: viewY, sc: contentScale }) || null}
-
-                    {/* ★★★ P0-V5: 確定shapeも描画中shapeも contentReady 時のみ描画（リロード時フラッシュ完全防止）★★★ */}
+                    {/* P0-V5: contentReady 時のみ描画 */}
                     {contentReady && (
                       <>
                         {renderedShapesFinal.map(s => renderShape(s, true))}
