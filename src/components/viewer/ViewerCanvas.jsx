@@ -3241,27 +3241,8 @@ const ViewerCanvas = forwardRef(({
   // ★★★ P0-DIAG: Portal HUD用変数（hooksではないので早期returnに影響しない）★★★
   const debugPaintLayerEnabled = typeof window !== 'undefined' && window.localStorage?.getItem('debugPaintLayer') === '1';
 
-  // ★★★ P0-FIX: 描画可視性の重要ログ（常時出力）★★★
-  console.log('[P0-VISIBILITY] paintLayer state:', {
-    bgReady,
-    contentReady,
-    bgSize,
-    paintMode,
-    currentShapeExists: !!currentShape,
-    hidePaintOverlay,
-    willBeVisible: contentReady || paintMode || !!currentShape,
-    willBeInteractive: !hidePaintOverlay && (contentReady || paintMode || !!currentShape),
-  });
-
   if (DEBUG_MODE) {
-    console.log('[ViewerCanvas] Render:', {
-      renderedShapesCount: renderedShapes.length,
-      paintMode,
-      showAllPaint,
-      canvasContextKey: canvasContextKey?.substring(0, 20) || 'null',
-      renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
-      isPending,
-    });
+    console.log('[ViewerCanvas] Render:', { renderedShapesCount: renderedShapes.length, paintMode, isPending, contentReady, bgReady });
   }
 
   // ★★★ P0-DIAG: Portal HUD診断情報（純粋な変数、hookなし）★★★
