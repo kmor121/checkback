@@ -1166,16 +1166,9 @@ const ViewerCanvas = forwardRef(({
     return { x: (p.x - v.viewX) / v.contentScale, y: (p.y - v.viewY) / v.contentScale, stageX: p.x, stageY: p.y, _branch, _view: v };
   };
   
-  // 正規化座標（0-1の範囲）
-  const normalizeCoords = (imgX, imgY) => ({
-    nx: imgX / bgSize.width,
-    ny: imgY / bgSize.height,
-  });
-  
-  const denormalizeCoords = (nx, ny) => ({
-    x: nx * bgSize.width,
-    y: ny * bgSize.height,
-  });
+  // 正規化座標（0-1の範囲）— bgSizeをバインドしたローカル版
+  const normalizeCoords = (imgX, imgY) => ({ nx: imgX / bgSize.width, ny: imgY / bgSize.height });
+  const denormalizeCoords = (nx, ny) => ({ x: nx * bgSize.width, y: ny * bgSize.height });
   
   // 操作履歴追加
   const addToUndoStack = (action) => {
