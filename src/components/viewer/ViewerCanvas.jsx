@@ -2,15 +2,9 @@ import React, { useState, useEffect, useLayoutEffect, useRef, useImperativeHandl
 import { createPortal } from 'react-dom';
 import { Stage, Layer, Line, Rect, Circle, Arrow, Image as KonvaImage, Group, Transformer, Text } from 'react-konva';
 import useImage from 'use-image';
-
-// UUID生成（clientShapeId用、再生成されない保証）
-function generateUUID() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
+import TextShapeRenderer from './TextShapeRenderer';
+import TextEditorOverlay from './TextEditorOverlay';
+function generateUUID() { return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16); }); }
 
 // ★★★ DEBUG: 通常時はOFF、URLパラメータ ?diag=1 または localStorage.debugPaintLayer=1 で有効化 ★★★
 const getDebugEnabled = () => {
