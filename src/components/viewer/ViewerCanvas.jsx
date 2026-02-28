@@ -1363,19 +1363,17 @@ const ViewerCanvas = forwardRef(({
     
     // DB削除を実行
     if (onDeleteShape) {
-      setLastMutation('delete');
-      setLastPayload(JSON.stringify({ id: shape.id }));
+      debugRef.current.mutation = 'delete';
       try {
         console.log('[ViewerCanvas] Calling onDeleteShape...');
         await onDeleteShape(shape);
-        setLastSaveStatus('success');
-        setLastError(null);
+        debugRef.current.saveStatus = 'success';
+        debugRef.current.error = null;
         console.log('[ViewerCanvas] ========== HANDLE DELETE END (success) ==========');
-        console.log('[ViewerCanvas] deletedLocalCount: 1, deletedDbCount: 1');
       } catch (err) {
         console.error('[ViewerCanvas] Delete shape error:', err);
-        setLastSaveStatus('error');
-        setLastError(err.message);
+        debugRef.current.saveStatus = 'error';
+        debugRef.current.error = err.message;
         // 失敗時はrevert（★★★ CRITICAL: 新しいMapを作成 ★★★）
         const revertMap = new Map(shapesMapRef.current);
         revertMap.set(shape.id, shape);
@@ -1614,10 +1612,10 @@ const ViewerCanvas = forwardRef(({
       const imgCoords = stagePointToImagePoint(frozenView);
       if (!imgCoords) { drawViewRef.current = null; isDrawingRef2.current = false; return; }
       
-      setLastEvent('down');
+      debugRef.current.lastEvent = 'down';
       if (DEBUG_MODE) {
-        setPointerPos({ x: imgCoords.stageX, y: imgCoords.stageY });
-        setImgPos({ x: imgCoords.x, y: imgCoords.y });
+        debugRef.current.pointerPos = { x: imgCoords.stageX, y: imgCoords.stageY };
+        debugRef.current.imgPos = { x: imgCoords.x, y: imgCoords.y };
       }
       
       setIsDrawing(true);
@@ -1705,10 +1703,9 @@ const ViewerCanvas = forwardRef(({
       const imgCoords = stagePointToImagePoint();
       if (!imgCoords) return;
       
-      // CRITICAL: デバッグ用座標更新はドラッグ中・描画中は止める（残像防止）
       if (DEBUG_MODE && !isDraggingRef.current && !isDrawingRef2.current) {
-        setPointerPos({ x: imgCoords.stageX, y: imgCoords.stageY });
-        setImgPos({ x: imgCoords.x, y: imgCoords.y });
+        debugRef.current.pointerPos = { x: imgCoords.stageX, y: imgCoords.stageY };
+        debugRef.current.imgPos = { x: imgCoords.x, y: imgCoords.y };
       }
       
         // P0-COORD-DIAG: move時（最初3点のみ記録）
@@ -1721,7 +1718,7 @@ const ViewerCanvas = forwardRef(({
       const shape = currentShapeRef2.current;
       if (!isDrawingRef2.current || !shape) return;
       
-      setLastEvent('move');
+      debugRef.current.lastEvent = 'move';
       
       const newShape = { ...shape };
       const shapeTool = shape.tool; // CRITICAL: refから取得したshape.tool
@@ -1948,7 +1945,7 @@ const ViewerCanvas = forwardRef(({
     }
     
     try {
-      setLastEvent('up');
+      debugRef.current.lastEvent = 'up';
       setIsDrawing(false);
       
       // CRITICAL: 描画終了時に抑止解除
@@ -2114,9 +2111,8 @@ const ViewerCanvas = forwardRef(({
       // 親コンポーネントに保存を依頼（createモード）
       if (onSaveShape) {
         setIsSaving(prev => ({ ...prev, [normalizedShape.id]: true }));
-        setLastSaveStatus('saving');
-        setLastMutation('create');
-        setLastPayload(JSON.stringify(normalizedShape));
+        debugRef.current.saveStatus = 'saving';
+        debugRef.current.mutation = 'create';
 
         console.log('[🎨 DRAW_DIAG] calling onSaveShape:', {
           shapeId: normalizedShape.id.substring(0, 8),
@@ -2131,9 +2127,9 @@ const ViewerCanvas = forwardRef(({
             shapeId: normalizedShape.id.substring(0, 8),
             result,
           });
-          setLastSaveStatus('success');
-          setLastSuccessId(result?.dbId || normalizedShape.id);
-          setLastError(null);
+          debugRef.current.saveStatus = 'success';
+          debugRef.current.successId = result?.dbId || normalizedShape.id;
+          debugRef.current.error = null;
 
           // CRITICAL: DBから返ってきた_idを既存shapeに上書き + dirty解除（★★★ 不変更新 ★★★）
           const cur = shapesMapRef.current.get(normalizedShape.id);
@@ -2145,8 +2141,8 @@ const ViewerCanvas = forwardRef(({
             onShapesChange?.(getAllShapes());
           }
         } catch (err) {
-          setLastSaveStatus('error');
-          setLastError(err.message || String(err));
+          debugRef.current.saveStatus = 'error';
+          debugRef.current.error = err.message || String(err);
           console.error('Save Shape Error:', err);
         } finally {
           setIsSaving(prev => ({ ...prev, [normalizedShape.id]: false }));
@@ -2161,8 +2157,8 @@ const ViewerCanvas = forwardRef(({
         } catch (err) {
         console.error('PointerUp Error:', err);
         setError(`PointerUp Error: ${err.message}`);
-        setLastSaveStatus('error');
-        setLastError(err.message);
+        debugRef.current.saveStatus = 'error';
+        debugRef.current.error = err.message;
         drawViewRef.current = null; // エラー時も解除
         }
         };
@@ -2304,17 +2300,14 @@ const ViewerCanvas = forwardRef(({
     // DB更新（upsertモード）
     if (onSaveShape) {
       setIsSaving(prev => ({ ...prev, [shape.id]: true }));
-      setLastMutation('update-drag');
-      setLastPayload(JSON.stringify(updatedShape));
-      setLastSaveStatus('saving');
+      debugRef.current.mutation = 'update-drag';
+      debugRef.current.saveStatus = 'saving';
       
       try {
         const result = await onSaveShape(updatedShape, 'upsert');
-        setLastSaveStatus('success');
-        setLastSuccessId(result?.dbId || updatedShape.id);
-        setLastError(null);
+        debugRef.current.saveStatus = 'success';
+        debugRef.current.error = null;
         
-        // CRITICAL: dirty解除（★★★ 不変更新 ★★★）
         const cur = shapesMapRef.current.get(updatedShape.id);
         if (cur) {
           const newMap = new Map(shapesMapRef.current);
@@ -2325,8 +2318,8 @@ const ViewerCanvas = forwardRef(({
         }
       } catch (err) {
         console.error('Update shape error:', err);
-        setLastSaveStatus('error');
-        setLastError(err.message);
+        debugRef.current.saveStatus = 'error';
+        debugRef.current.error = err.message;
         // 失敗時はrevert（★★★ 不変更新 ★★★）
         const revertMap = new Map(shapesMapRef.current);
         revertMap.set(shape.id, shape);
@@ -2484,9 +2477,8 @@ const ViewerCanvas = forwardRef(({
         }
 
         setIsSaving(prev => ({ ...prev, [shape.id]: true }));
-        setLastMutation('update-transform');
-        setLastPayload(JSON.stringify(updatedShape));
-        setLastSaveStatus('saving');
+        debugRef.current.mutation = 'update-transform';
+        debugRef.current.saveStatus = 'saving';
         console.log('[ViewerCanvas] COMMIT existing shape -> onSaveShape:', { 
           shapeId: shape.id?.substring(0, 8), 
           canMutateExisting, 
@@ -2495,10 +2487,8 @@ const ViewerCanvas = forwardRef(({
 
         try {
           const result = await onSaveShape(updatedShape, 'upsert');
-          setLastSaveStatus('success');
-          setLastSuccessId(result?.dbId || updatedShape.id);
-          setLastError(null);
-          console.log('[ViewerCanvas] onSaveShape success:', { shapeId: shape.id?.substring(0, 8) });
+          debugRef.current.saveStatus = 'success';
+          debugRef.current.error = null;
 
           // CRITICAL: dirty解除（★★★ 不変更新 ★★★）
           const cur = shapesMapRef.current.get(updatedShape.id);
@@ -2511,8 +2501,8 @@ const ViewerCanvas = forwardRef(({
           }
         } catch (err) {
           console.error('[ViewerCanvas] onSaveShape error:', err);
-          setLastSaveStatus('error');
-          setLastError(err.message);
+          debugRef.current.saveStatus = 'error';
+          debugRef.current.error = err.message;
           // 失敗時はrevert（★★★ 不変更新 ★★★）
           const revertMap = new Map(shapesMapRef.current);
           revertMap.set(shape.id, shape);
@@ -3189,13 +3179,13 @@ const ViewerCanvas = forwardRef(({
 
           {/* Drawing State (compressed) */}
           <div style={{ marginBottom: '4px', fontSize: '9px' }}>
-            pm:{paintMode?'Y':'N'} dr:{draftReady?'Y':'N'} tool:{tool} cDN:{canDrawNew?'Y':'N'} cME:{canMutateExisting?'Y':'N'} cE:{canEdit?'Y':'N'} drw:{isDrawing?'Y':'N'} evt:{lastEvent}
+            pm:{paintMode?'Y':'N'} dr:{draftReady?'Y':'N'} tool:{tool} cDN:{canDrawNew?'Y':'N'} cME:{canMutateExisting?'Y':'N'} cE:{canEdit?'Y':'N'} drw:{isDrawing?'Y':'N'} evt:{debugRef.current.lastEvent}
           </div>
 
           {/* Save Status */}
           <div style={{ marginBottom: '4px', fontSize: '9px' }}>
-            <span style={{ color: lastSaveStatus === 'success' ? '#0f0' : lastSaveStatus === 'error' ? '#f00' : '#ff0' }}>save:{lastSaveStatus}</span>
-            {lastError && <span style={{ color: '#f00' }}> err:{lastError.substring(0, 30)}</span>}
+            <span>save:{debugRef.current.saveStatus}</span>
+            {debugRef.current.error && <span style={{ color: '#f00' }}> err:{debugRef.current.error.substring(0, 30)}</span>}
           </div>
         </div>
       )}
