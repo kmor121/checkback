@@ -1277,55 +1277,12 @@ const ViewerCanvas = forwardRef(({
 
   // CRITICAL: 単体削除（★★★ canMutateExisting で判定、paintMode && draftReady 必須 ★★★）
   const handleDelete = async () => {
-    // ★★★ DEBUG: 単体削除の詳細ログ ★★★
-    console.log('[ViewerCanvas] ========== HANDLE DELETE START ==========');
-    console.log('[ViewerCanvas] handleDelete state:', { 
-      selectedId, 
-      canMutateExisting, 
-      paintMode, 
-      draftReady,
-      tool,
-      shapesMapSize: shapesMapRef.current.size,
-    });
-
-    // ★★★ FIX-DELETE: canDeleteExisting で判定（draftReady不要、isEditMode && paintMode で許可）★★★
-    if (!canDeleteExisting) {
-      console.log('[ViewerCanvas] Delete blocked: canDeleteExisting=false');
-      console.log('[ViewerCanvas] ========== HANDLE DELETE END (canDeleteExisting=false) ==========');
-      return;
-    }
-
-    // ★★★ CRITICAL: selectedIdが必須 ★★★
-    if (!selectedId) {
-      console.log('[ViewerCanvas] Delete blocked: no selectedId');
-      console.log('[ViewerCanvas] ========== HANDLE DELETE END (no selectedId) ==========');
-      return;
-    }
-    
+    if (!canDeleteExisting || !selectedId) return;
     const selectedShape = shapesMapRef.current.get(selectedId);
-    if (!selectedShape) {
-      console.log('[ViewerCanvas] Delete blocked: shape not found in Map');
-      console.log('[ViewerCanvas] Available shape ids:', [...shapesMapRef.current.keys()].slice(0, 5));
-      console.log('[ViewerCanvas] ========== HANDLE DELETE END (shape not found) ==========');
-      return;
-    }
-
-    // ★★★ CRITICAL: comment_id一致チェック（effectiveActiveIdと比較）★★★
+    if (!selectedShape) return;
     const shapeCommentIdValue = shapeCommentId(selectedShape);
-    console.log('[ViewerCanvas] comment_id check:', { 
-      shapeCommentIdValue, 
-      effectiveActiveId,
-      match: sameId(shapeCommentIdValue, effectiveActiveId),
-    });
-
-    if (!sameId(shapeCommentIdValue, effectiveActiveId)) {
-      console.log('[ViewerCanvas] Delete blocked: comment_id mismatch');
-      console.log('[ViewerCanvas] ========== HANDLE DELETE END (comment_id mismatch) ==========');
-      return;
-    }
-    
+    if (!sameId(shapeCommentIdValue, effectiveActiveId)) return;
     const shape = selectedShape;
-    console.log('[ViewerCanvas] Proceeding with delete for shape:', shape.id);
     addToUndoStack({ type: 'delete', shape, index: 0 });
     
     // Transformer解除（先に）
@@ -1353,23 +1310,16 @@ const ViewerCanvas = forwardRef(({
         await onDeleteShape(shape);
         debugRef.current.saveStatus = 'success';
         debugRef.current.error = null;
-        console.log('[ViewerCanvas] ========== HANDLE DELETE END (success) ==========');
       } catch (err) {
         console.error('[ViewerCanvas] Delete shape error:', err);
         debugRef.current.saveStatus = 'error';
         debugRef.current.error = err.message;
-        // 失敗時はrevert（★★★ CRITICAL: 新しいMapを作成 ★★★）
         const revertMap = new Map(shapesMapRef.current);
         revertMap.set(shape.id, shape);
         shapesMapRef.current = revertMap;
         bump();
         onShapesChange?.(getAllShapes());
-        console.log('[ViewerCanvas] ========== HANDLE DELETE END (error, reverted) ==========');
-        console.log('[ViewerCanvas] deletedLocalCount: 0, deletedDbCount: 0');
       }
-    } else {
-      console.log('[ViewerCanvas] ========== HANDLE DELETE END (local only, no onDeleteShape) ==========');
-      console.log('[ViewerCanvas] deletedLocalCount: 1, deletedDbCount: 0');
     }
   };
 
