@@ -1735,28 +1735,10 @@ const ViewerCanvas = forwardRef(({
         setImgPos({ x: imgCoords.x, y: imgCoords.y });
       }
       
-      // ★★★ P0-COORD-DIAG: move時の座標情報を記録（描画中のみ、最初の3点まで）★★★
-      if (isDrawingRef2.current) {
-        const pointsLen = currentShapeRef2.current?.points?.length ?? 0;
-        const pointIdx = Math.floor(pointsLen / 2);
-        if (pointIdx <= 3) {
-          const rawPointer = { clientX: e.evt?.clientX ?? 0, clientY: e.evt?.clientY ?? 0 };
-          const stagePointer = stageRef.current?.getPointerPosition() ?? null;
-          coordDiagRef.current.lastPointerEvent = 'move';
-          coordDiagRef.current.lastPointerRaw = rawPointer;
-          coordDiagRef.current.lastPointerStage = stagePointer;
-          coordDiagRef.current.lastPointerImage = { x: imgCoords.x, y: imgCoords.y, stageX: imgCoords.stageX, stageY: imgCoords.stageY };
-          coordDiagRef.current.viewAtEvent = {
-            viewX, viewY, contentScale, offsetX, offsetY,
-            baseFitScale,
-            userScale: zoom / 100,
-            stageW: containerSize.width,
-            stageH: containerSize.height,
-            drawViewRefExists: !!drawViewRef.current,
-            drawViewRefSnapshot: drawViewRef.current ? { ...drawViewRef.current } : null,
-          };
-          setDiagTick(t => t + 1);
-        }
+        // P0-COORD-DIAG: move時（最初3点のみ記録）
+      if (isDrawingRef2.current && (Math.floor((currentShapeRef2.current?.points?.length ?? 0) / 2)) <= 3) {
+        coordDiagRef.current.lastPointerEvent = 'move';
+        coordDiagRef.current.lastPointerImage = { x: imgCoords.x, y: imgCoords.y, stageX: imgCoords.stageX, stageY: imgCoords.stageY };
       }
       
       // CRITICAL: refベースで判定（親stateが揺れても描画継続）
