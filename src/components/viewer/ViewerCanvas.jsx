@@ -3021,35 +3021,11 @@ const ViewerCanvas = forwardRef(({
     console.log('[ViewerCanvas] Render:', { renderedShapesCount: renderedShapes.length, paintMode, isPending, contentReady, bgReady });
   }
 
-  // Portal HUD (compressed)
-  let portalHud = null;
-  if (debugPaintLayerEnabled && containerRef.current && typeof document !== 'undefined') {
-    const sc = stageRef.current?.container?.(), pr = containerRef.current?.getBoundingClientRect(), sr = sc?.getBoundingClientRect();
-    const cx = (sr?.left||0)+(sr?.width||0)/2, cy = (sr?.top||0)+(sr?.height||0)/2, topEl = (cx>0&&cy>0)?document.elementFromPoint(cx,cy):null;
-    const onTop = topEl && sc && (topEl===sc||sc.contains(topEl));
-    portalHud = createPortal(<div style={{position:'fixed',top:8,left:8,zIndex:2147483647,background:'magenta',color:'white',padding:'6px 10px',fontSize:'10px',fontFamily:'monospace',borderRadius:'4px',maxWidth:'400px',whiteSpace:'pre-wrap',lineHeight:'1.4',pointerEvents:'none'}}>
-      VC HUD | cnt:{containerSize.width}x{containerSize.height} stg:{Math.round(sr?.width||0)}x{Math.round(sr?.height||0)} bg:{bgSize.width}x{bgSize.height} rdy:{String(bgReady)}{'\n'}onTop:<span style={{color:onTop?'#0f0':'#f00'}}>{String(!!onTop)}</span> topEl:{topEl?topEl.tagName:'?'}
-    </div>, document.body);
-  }
-
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative', overflow: 'auto', background: '#e0e0e0' }}>
-      {/* ★★★ P0-DIAG: Portal HUDはdocument.bodyに描画済み ★★★ */}
-      {portalHud}
-
-      {/* ★★★ FIX-NO-BLANK: pending中は半透明オーバーレイ（背景は透けて見える）★★★ */}
       {isPending && (
         <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.7)', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ color: '#666', fontSize: '14px' }}>コメント情報を読み込み中...</div>
-        </div>
-      )}
-      
-      {/* DEBUG HUD: left panel (compressed) */}
-      {DEBUG_MODE && (
-        <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 9999, background: 'rgba(0,0,0,0.85)', color: '#0f0', padding: '4px 6px', fontSize: '9px', fontFamily: 'monospace', lineHeight: '1.3', maxWidth: '320px', maxHeight: '30vh', overflow: 'auto', borderBottomRightRadius: '4px' }}>
-          <div style={{ color: '#ff0', fontWeight: 'bold' }}>VC State</div>
-          <div>aCid:{debugHudData.activeCommentId?.substring(0,12)} eff:{debugHudData.effectiveActiveId?.substring(0,12)}</div>
-          <div>shapes:{debugHudData.renderedShapesLength} cids:{debugHudData.uniqueCommentIds.join(',') || '-'}</div>
         </div>
       )}
 
