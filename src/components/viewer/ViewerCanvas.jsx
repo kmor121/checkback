@@ -1717,27 +1717,14 @@ const ViewerCanvas = forwardRef(({
         startY: imgCoords.y,
       };
       
-      if (tool === 'pen') {
-        newShape.points = [imgCoords.x, imgCoords.y];
-        setCurrentShape(newShape);
-      } else {
-        setCurrentShape(newShape);
-      }
+      if (tool === 'pen') newShape.points = [imgCoords.x, imgCoords.y];
+      // P0-FIX: ref同期セット（useEffect経由だと初回moveでnull→points追記不能→消える）
+      currentShapeRef2.current = newShape;
+      setCurrentShape(newShape);
 
-      // onBeginPaintは非同期で投げるだけ（awaitしない）
       if (onBeginPaint && !activeCommentId) {
-        queueMicrotask(() => {
-          onBeginPaint(imgCoords.x, imgCoords.y, bgSize.width, bgSize.height);
-        });
+        queueMicrotask(() => onBeginPaint(imgCoords.x, imgCoords.y, bgSize.width, bgSize.height));
       }
-
-      // ★★★ P0-DIAG: 描画開始直後の currentShape 確認 ★★★
-      console.log('[🎨 DRAW_DIAG] currentShape created:', {
-        shapeId: newShape.id?.substring(0, 8),
-        comment_id: newShape.comment_id?.substring(0, 12),
-        tool: newShape.tool,
-        isDrawing: true,
-      });
       } catch (err) {
       console.error('PointerDown Error:', err);
       setError(`PointerDown Error: ${err.message}`);
