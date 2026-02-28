@@ -1618,12 +1618,8 @@ const ViewerCanvas = forwardRef(({
         });
       }
 
-      // CRITICAL: Map方式でupsert + dirty/localTs付与（★★★ 不変更新 ★★★）
-      const shapeWithDirty = { ...normalizedShape, _dirty: true, _localTs: Date.now() };
       addToUndoStack({ type: 'add', shapeId: normalizedShape.id });
-      const newMap = new Map(shapesMapRef.current);
-      newMap.set(shapeWithDirty.id, shapeWithDirty);
-      shapesMapRef.current = newMap;
+      shapesMapRef.current = mapUpsertDirty(shapesMapRef.current, normalizedShape);
       bump();
       onShapesChange?.(getAllShapes());
       setSelectedId(normalizedShape.id);
