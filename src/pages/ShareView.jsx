@@ -1191,27 +1191,18 @@ function ShareViewContent() {
     return [];
   }, [shareLink?.file_id]);
 
+  // P0-TOOLBAR: canPost正規化（undefined/null→true、明示falseのみNG）
+  const canPost = shareLink?.can_post_comments ?? true;
+
   const handlePaintModeChange = (mode) => {
     addDebugLog(`[paint] request: mode=${mode} composerMode=${composerMode} tool=${tool}`);
-
-    if (!mode) {
-      setPaintMode(false);
-      setTool('select');
-      return;
-    }
-    
-    // ★★★ 案B: ペイントモードON時は新規入力フラグを解除（描画表示に戻す）★★★
-    if (mode) {
-      setIsNewCommentInputActive(false);
-    }
-    
-    // ★★★ P0-V8: ペイントON時はtempプレビューOFF（編集モードへ移行）★★★
+    if (!mode) { setPaintMode(false); setTool('select'); return; }
+    // P0-TOOLBAR: ツールを出せない状態ではONにしない
+    if (!canPost) { showToast('コメント権限がありません', 'error'); return; }
+    if (!isReady) { showToast('準備中です', 'info'); return; }
+    if (mode) setIsNewCommentInputActive(false);
     setIsTempDraftPreview(false);
-
-    if (authStatus === 'guest' && !guestName.trim()) {
-      setShowNameDialog(true);
-      return;
-    }
+    if (authStatus === 'guest' && !guestName.trim()) { setShowNameDialog(true); return; }
     
     // ★★★ FIX-2削除: tool制御はuseEffectに集約（重複排除）★★★
 
