@@ -1641,9 +1641,8 @@ const ViewerCanvas = forwardRef(({
     if (onToolChange) onToolChange('select');
   };
 
-  // テキストキャンセル
   const handleTextCancel = () => {
-    setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
+    setTextEditor(TEXT_EDITOR_INITIAL);
     setIsComposing(false);
     if (onToolChange) onToolChange('select');
   };
