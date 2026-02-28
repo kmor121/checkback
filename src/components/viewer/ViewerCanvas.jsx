@@ -3474,95 +3474,30 @@ const ViewerCanvas = forwardRef(({
       {/* デバッグオーバーレイ（拡張版） */}
       {DEBUG_MODE && (
         <div style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.9)', color: '#0f0', padding: '10px', fontSize: '10px', fontFamily: 'monospace', borderRadius: '6px', pointerEvents: 'none', zIndex: 100, lineHeight: '1.5', maxWidth: '400px', maxHeight: '90vh', overflow: 'auto' }}>
-          <div style={{ color: '#ff0', fontWeight: 'bold', marginBottom: '8px' }}>🔍 ViewerCanvas Debug</div>
+          <div style={{ color: '#ff0', fontWeight: 'bold', marginBottom: '4px' }}>🔍 VC Debug</div>
 
-          {/* Ready状態 */}
-          {debugInfo && (
-            <div style={{ marginBottom: '8px', borderBottom: '1px solid #333', paddingBottom: '6px' }}>
-              <div><strong style={{ color: '#0ff' }}>Ready:</strong> {debugInfo.isReady ? '✓ TRUE' : '✗ FALSE'}</div>
-              {debugInfo.readyDetails && (
-                <div style={{ paddingLeft: '8px', fontSize: '9px' }}>
-                  {Object.entries(debugInfo.readyDetails).map(([key, val]) => (
-                    <div key={key} style={{ color: val ? '#0f0' : '#f00' }}>
-                      {key}: {val ? '✓' : '✗'}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Query情報 */}
-          {debugInfo && (
-            <div style={{ marginBottom: '8px', borderBottom: '1px solid #333', paddingBottom: '6px' }}>
-              <div><strong style={{ color: '#0ff' }}>Query:</strong></div>
-              <div style={{ fontSize: '9px', wordBreak: 'break-all' }}>
-                token: {debugInfo.token?.substring(0, 12)}...
-              </div>
-              <div style={{ fontSize: '9px' }}>fileId: {debugInfo.fileId?.substring(0, 15)}</div>
-              <div style={{ fontSize: '9px' }}>pageNo: {debugInfo.pageNo}</div>
-              <div style={{ fontSize: '9px' }}>guestId: {debugInfo.guestId?.substring(0, 20)}</div>
-            </div>
-          )}
-
-          {/* Counts */}
-          <div style={{ marginBottom: '8px', borderBottom: '1px solid #333', paddingBottom: '6px' }}>
-            <div><strong style={{ color: '#0ff' }}>Counts:</strong></div>
-            <div>fetchedCount: <span style={{ color: '#ff0', fontWeight: 'bold' }}>{debugInfo?.fetchedCount || 0}</span></div>
-            <div>renderedCount: <span style={{ color: '#0f0', fontWeight: 'bold' }}>{shapes.length}</span></div>
-            <div>existingShapes: {existingShapes?.length || 0}</div>
-            <div>renderedShapes: {renderedShapes?.length || 0}</div>
+          {/* ★★★ P0-COORD-DIAG: 最上部に固定（スクロール不要）★★★ */}
+          <div style={{ marginBottom: '6px', padding: '4px', background: 'rgba(255,255,0,0.15)', borderRadius: '3px', border: '1px solid #ff0' }}>
+            <div style={{ color: '#ff0', fontWeight: 'bold', fontSize: '10px', marginBottom: '2px' }}>🎯 COORD DIAG</div>
+            <div style={{ fontSize: '9px', color: '#0ff', wordBreak: 'break-all', lineHeight: '1.3' }}>ptr: {debugHudData.coordDiag?.ptrDiagStr || '(none)'}</div>
+            <div style={{ fontSize: '9px', color: '#f0f', wordBreak: 'break-all', lineHeight: '1.3' }}>cmt: {debugHudData.coordDiag?.commitDiagStr || '(none)'}</div>
           </div>
 
-          {/* Background & View */}
-          <div style={{ marginBottom: '8px', borderBottom: '1px solid #333', paddingBottom: '6px' }}>
-            <div><strong style={{ color: '#0ff' }}>Background:</strong></div>
-            <div>bgSize: {bgSize.width} x {bgSize.height}</div>
-            <div><strong style={{ color: '#0ff' }}>View:</strong></div>
-            <div>scale: {contentScale.toFixed(2)} (fit:{fitScale.toFixed(2)} * zoom:{userScale.toFixed(2)})</div>
-            <div>offset: {Math.round(offsetX)}, {Math.round(offsetY)}</div>
-            <div>stage: {containerSize.width} x {containerSize.height}</div>
+          {/* Counts + View (compressed) */}
+          <div style={{ marginBottom: '4px', fontSize: '9px' }}>
+            shapes:{renderedShapes?.length || 0} bg:{bgSize.width}x{bgSize.height} sc:{contentScale.toFixed(2)} off:{Math.round(offsetX)},{Math.round(offsetY)} stg:{containerSize.width}x{containerSize.height}
           </div>
 
-          {/* Sample Shape */}
-          {shapes.length > 0 && (
-            <div style={{ marginBottom: '8px', borderBottom: '1px solid #333', paddingBottom: '6px' }}>
-              <div><strong style={{ color: '#0ff' }}>Sample (first):</strong></div>
-              <div style={{ fontSize: '9px' }}>type: {shapes[0].tool}</div>
-              <div style={{ fontSize: '9px', wordBreak: 'break-all' }}>id: {shapes[0].id}</div>
-              <div style={{ fontSize: '9px' }}>has_nx: {shapes[0].nx !== undefined ? 'YES' : 'NO'}</div>
-              <div style={{ fontSize: '9px' }}>has_normalizedPoints: {shapes[0].normalizedPoints ? 'YES' : 'NO'}</div>
-            </div>
-          )}
-
-          {/* Drawing State */}
-          <div style={{ marginBottom: '8px', borderBottom: '1px solid #333', paddingBottom: '6px' }}>
-            <div><strong style={{ color: '#0ff' }}>Drawing:</strong></div>
-            <div>paintMode: {paintMode ? 'ON' : 'OFF'}</div>
-            <div>draftReady: {draftReady ? 'YES' : 'NO'}</div>
-            <div>tool: {tool}</div>
-            <div>canDrawNew: {canDrawNew ? 'YES' : 'NO'}</div>
-            <div>canMutateExisting: {canMutateExisting ? 'YES' : 'NO'}</div>
-            <div>canEdit: {canEdit ? 'YES' : 'NO'}</div>
-            <div>isDrawing: {isDrawing ? 'YES' : 'NO'}</div>
-            <div>lastEvent: {lastEvent}</div>
+          {/* Drawing State (compressed) */}
+          <div style={{ marginBottom: '4px', fontSize: '9px' }}>
+            pm:{paintMode?'Y':'N'} dr:{draftReady?'Y':'N'} tool:{tool} cDN:{canDrawNew?'Y':'N'} cME:{canMutateExisting?'Y':'N'} cE:{canEdit?'Y':'N'} drw:{isDrawing?'Y':'N'} evt:{lastEvent}
           </div>
 
-          {/* Save Status (compressed) */}
+          {/* Save Status */}
           <div style={{ marginBottom: '4px', fontSize: '9px' }}>
             <span style={{ color: lastSaveStatus === 'success' ? '#0f0' : lastSaveStatus === 'error' ? '#f00' : '#ff0' }}>save:{lastSaveStatus}</span>
             {lastError && <span style={{ color: '#f00' }}> err:{lastError.substring(0, 30)}</span>}
           </div>
-          
-          {/* ★★★ P0-COORD-DIAG: Paint Coords (ptrDiag + commitDiag) ★★★ */}
-          {debugHudData.coordDiag && (
-            <div style={{ borderTop: '1px solid #333', paddingTop: '4px', marginTop: '4px' }}>
-              <div style={{ color: '#ff0', fontWeight: 'bold', marginBottom: '2px' }}>🎯 Paint Coords</div>
-              <div style={{ fontSize: '9px' }}>seq: {debugHudData.coordDiag.paintEnterSeq}/{debugHudData.coordDiag.strokeSeqInSession} fs:{debugHudData.coordDiag.firstStroke ? 'Y' : 'N'} evt:{debugHudData.coordDiag.lastPointerEvent || '-'}</div>
-              <div style={{ fontSize: '9px', color: '#0ff', wordBreak: 'break-all' }}>ptrDiag: {debugHudData.coordDiag.ptrDiagStr || '-'}</div>
-              <div style={{ fontSize: '9px', color: '#f0f', wordBreak: 'break-all' }}>commitDiag: {debugHudData.coordDiag.commitDiagStr || '-'}</div>
-            </div>
-          )}
         </div>
       )}
     </div>
