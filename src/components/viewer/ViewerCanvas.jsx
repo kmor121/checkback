@@ -1558,53 +1558,10 @@ const ViewerCanvas = forwardRef(({
 
   // PointerDown: 描画開始（描画モード時のみ）
   const handlePointerDown = (e) => {
-    // ★★★ P0-DIAG: 描画開始直前の全状態を出力（描画失敗の根本原因特定用）★★★
-    const beforeIds = renderedShapes.map(s => s.id);
-    const uniqueCidsInRendered = [...new Set(renderedShapes.map(s => shapeCommentId(s)))].slice(0, 10);
-    const targetId = effectiveActiveId != null ? String(effectiveActiveId) : '';
-    
-    console.log('[🎨 DRAW_DIAG] handlePointerDown ENTRY:', {
-      // 描画許可判定
-      paintMode,
-      tool,
-      isSelectTool,
-      canDrawNew,
-      canCommitNew,
-      draftReady,
-      isDrawMode,
-      textEditorVisible: textEditor.visible,
-      // 対象ID
-      targetId,
-      effectiveActiveId: effectiveActiveId?.substring(0, 12) || 'null',
-      activeCommentId: activeCommentId?.substring(0, 12) || 'null',
-      draftCommentId: draftCommentId?.substring(0, 12) || 'null',
-      draftCommentIdRef: draftCommentIdRef.current?.substring(0, 12) || 'null',
-      renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
-      // 表示状態
-      showAllPaint,
-      hidePaintUntilSelect,
-      hidePaintOverlay,
-      renderedShapesLength: renderedShapes.length,
-      uniqueCommentIdsInRendered: uniqueCidsInRendered.map(id => String(id).substring(0, 12)),
-      beforeIds: beforeIds.slice(0, 5).map(id => id?.substring?.(0, 8)),
-      // その他
-      isDrawing,
-      currentShapeExists: !!currentShape,
-      mapSize: shapesMapRef.current.size,
-    });
-
     if (DEBUG_MODE) {
-      console.log('[ViewerCanvas] handlePointerDown called', {
-        tool,
-        paintMode,
-        draftReady,
-        canEdit,
-        isDrawMode,
-        isDrawing,
-        textEditorVisible: textEditor.visible,
-        activeCommentId,
-        hidePaintUntilSelect,
-        currentShapeCommentId: currentShape?.comment_id,
+      console.log('[🎨 DRAW_DIAG] handlePointerDown ENTRY:', {
+        paintMode, tool, isDrawMode, canDrawNew, effectiveActiveId: effectiveActiveId?.substring(0, 12) || 'null',
+        renderedShapesLength: renderedShapes.length, mapSize: shapesMapRef.current.size,
       });
     }
 
