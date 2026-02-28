@@ -179,20 +179,9 @@ const ViewerCanvas = forwardRef(({
   const coordDiagRef = useRef({ paintEnterSeq: 0, strokeSeqInSession: 0, firstStroke: false, lastPointerEvent: null, lastPointerRaw: null, lastPointerStage: null, lastPointerImage: null, viewAtEvent: null, ptrDiagStr: null, commitDiagStr: null, downK: null, firstPtr: null, firstCmt: null, lastPtr: null, lastCmt: null });
   const [diagTick, setDiagTick] = useState(0);
   
-  // ★ Map方式では shapes state は不要（getAllShapes()を使う）
-  // 後方互換のためのダミー（実際はMapを参照）
   const shapes = useMemo(() => getAllShapes(), [shapesVersion]);
-  
-  // setShapes互換関数（★★★ CRITICAL: 必ず新しいMapを作成して不変更新 ★★★）
   const setShapes = (updater) => {
-    let next;
-    if (typeof updater === 'function') {
-      const current = getAllShapes();
-      next = updater(current);
-    } else {
-      next = updater ?? [];
-    }
-    // ★★★ CRITICAL: 新しいMap参照を作成（不変更新）★★★
+    const next = typeof updater === 'function' ? updater(getAllShapes()) : (updater ?? []);
     shapesMapRef.current = new Map(next.map(s => [s.id, s]));
     bump();
   };
