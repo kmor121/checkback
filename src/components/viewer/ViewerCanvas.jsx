@@ -3549,52 +3549,10 @@ const ViewerCanvas = forwardRef(({
             >
               {!hidePaintOverlay && (
                   <>
-                    {/* ★★★ DEBUG: paintLayer内テストRect（diag=1時のみ表示）★★★ */}
-                    {DEBUG_MODE && (
-                      <Rect
-                        x={20}
-                        y={20}
-                        width={160}
-                        height={100}
-                        stroke="cyan"
-                        strokeWidth={6}
-                        fill="rgba(0,255,255,0.3)"
-                        listening={false}
-                      />
-                    )}
-
-                    {/* ★★★ DEBUG: デバッグマーカー（diag=1時のみ表示）★★★ */}
-                    {DEBUG_MODE && (
-                      <Rect
-                        x={40}
-                        y={40}
-                        width={120}
-                        height={120}
-                        stroke="magenta"
-                        strokeWidth={6}
-                        fill="rgba(255,0,255,0.2)"
-                        listening={false}
-                      />
-                    )}
-
-                    {/* ★★★ DEBUG: 描画直前の詳細ログ（diag=1時のみ）★★★ */}
-                    {DEBUG_MODE && console.log('[ViewerCanvas] RENDER:', {
-                      renderedShapesFinalCount: renderedShapesFinal.length,
-                      currentShapeExists: !!currentShape,
-                      currentShapeId: currentShape?.id?.substring(0, 8) || 'null',
-                      currentShapeTool: currentShape?.tool || 'null',
-                      currentShapeCommentId: currentShape?.comment_id?.substring(0, 12) || 'null',
-                      currentShapePoints: currentShape?.points?.length || 0,
-                      currentShapeX: currentShape?.x,
-                      currentShapeY: currentShape?.y,
-                      currentShapeWidth: currentShape?.width,
-                      currentShapeHeight: currentShape?.height,
-                      currentShapeRadius: currentShape?.radius,
-                      renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
-                      viewX,
-                      viewY,
-                      contentScale,
-                    }) || null}
+                    {/* DEBUG markers + render log (compressed) */}
+                    {DEBUG_MODE && <Rect x={20} y={20} width={160} height={100} stroke="cyan" strokeWidth={6} fill="rgba(0,255,255,0.3)" listening={false} />}
+                    {DEBUG_MODE && <Rect x={40} y={40} width={120} height={120} stroke="magenta" strokeWidth={6} fill="rgba(255,0,255,0.2)" listening={false} />}
+                    {DEBUG_MODE && console.log('[VC] RENDER:', { rsFinal: renderedShapesFinal.length, cur: !!currentShape, vX: viewX, vY: viewY, sc: contentScale }) || null}
 
                     {/* ★★★ P0-V5: 確定shapeも描画中shapeも contentReady 時のみ描画（リロード時フラッシュ完全防止）★★★ */}
                     {contentReady && (
