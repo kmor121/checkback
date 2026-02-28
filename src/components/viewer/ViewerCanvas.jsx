@@ -3190,85 +3190,16 @@ const ViewerCanvas = forwardRef(({
     console.log('[ViewerCanvas] Render:', { renderedShapesCount: renderedShapes.length, paintMode, isPending, contentReady, bgReady });
   }
 
-  // ★★★ P0-DIAG: Portal HUD診断情報（純粋な変数、hookなし）★★★
-  let portalHudData = null;
-  if (debugPaintLayerEnabled && containerRef.current) {
-    const parent = containerRef.current;
-    const stageContainer = stageRef.current?.container?.();
-    
-    const parentRect = parent?.getBoundingClientRect() || { width: 0, height: 0, left: 0, top: 0 };
-    const stageRect = stageContainer?.getBoundingClientRect() || { width: 0, height: 0, left: 0, top: 0 };
-    
-    const parentStyle = parent ? window.getComputedStyle(parent) : null;
-    const stageStyle = stageContainer ? window.getComputedStyle(stageContainer) : null;
-    
-    // Stage中央でelementFromPointを実行
-    const centerX = stageRect.left + stageRect.width / 2;
-    const centerY = stageRect.top + stageRect.height / 2;
-    const topEl = (centerX > 0 && centerY > 0) ? document.elementFromPoint(centerX, centerY) : null;
-    
-    const isStageOnTop = topEl && stageContainer && (topEl === stageContainer || stageContainer.contains(topEl));
-    
-    // 親のtransform（2階層分）
-    const wrapperTransform1 = parent?.parentElement ? window.getComputedStyle(parent.parentElement).transform : 'none';
-    const wrapperTransform2 = parent?.parentElement?.parentElement ? window.getComputedStyle(parent.parentElement.parentElement).transform : 'none';
-    
-    portalHudData = {
-      buildStamp: 'VC_BUILD_2025-01-17d',
-      parentRect: `${Math.round(parentRect.width)}x${Math.round(parentRect.height)}`,
-      stageRect: `${Math.round(stageRect.width)}x${Math.round(stageRect.height)}`,
-      containerSize: `${containerSize.width}x${containerSize.height}`,
-      bgReady: String(bgReady),
-      bgSize: `${bgSize.width}x${bgSize.height}`,
-      parentStyle: `disp:${parentStyle?.display || '?'} vis:${parentStyle?.visibility || '?'} op:${parentStyle?.opacity || '?'}`,
-      stageStyle: `disp:${stageStyle?.display || '?'} vis:${stageStyle?.visibility || '?'} op:${stageStyle?.opacity || '?'}`,
-      topElAtCenter: topEl ? `${topEl.tagName}.${topEl.className?.split?.(' ')?.[0] || ''}#${topEl.id || ''}` : 'null',
-      isStageOnTop: String(!!isStageOnTop),
-      wrapperTransform: `L1:${wrapperTransform1} L2:${wrapperTransform2}`,
-      centerPoint: `${Math.round(centerX)},${Math.round(centerY)}`,
-    };
+  // Portal HUD (compressed)
+  let portalHud = null;
+  if (debugPaintLayerEnabled && containerRef.current && typeof document !== 'undefined') {
+    const sc = stageRef.current?.container?.(), pr = containerRef.current?.getBoundingClientRect(), sr = sc?.getBoundingClientRect();
+    const cx = (sr?.left||0)+(sr?.width||0)/2, cy = (sr?.top||0)+(sr?.height||0)/2, topEl = (cx>0&&cy>0)?document.elementFromPoint(cx,cy):null;
+    const onTop = topEl && sc && (topEl===sc||sc.contains(topEl));
+    portalHud = createPortal(<div style={{position:'fixed',top:8,left:8,zIndex:2147483647,background:'magenta',color:'white',padding:'6px 10px',fontSize:'10px',fontFamily:'monospace',borderRadius:'4px',maxWidth:'400px',whiteSpace:'pre-wrap',lineHeight:'1.4',pointerEvents:'none'}}>
+      VC HUD | cnt:{containerSize.width}x{containerSize.height} stg:{Math.round(sr?.width||0)}x{Math.round(sr?.height||0)} bg:{bgSize.width}x{bgSize.height} rdy:{String(bgReady)}{'\n'}onTop:<span style={{color:onTop?'#0f0':'#f00'}}>{String(!!onTop)}</span> topEl:{topEl?topEl.tagName:'?'}
+    </div>, document.body);
   }
-
-  // Portal HUD（document.bodyに直接描画、z-index最大）
-  const portalHud = debugPaintLayerEnabled && typeof document !== 'undefined' && portalHudData ? createPortal(
-    <div style={{
-      position: 'fixed',
-      top: 8,
-      left: 8,
-      zIndex: 2147483647,
-      background: 'magenta',
-      color: 'white',
-      padding: '10px 14px',
-      fontSize: '11px',
-      fontFamily: 'monospace',
-      fontWeight: 'bold',
-      borderRadius: '6px',
-      maxWidth: '450px',
-      whiteSpace: 'pre-wrap',
-      lineHeight: '1.5',
-      boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-      pointerEvents: 'none',
-    }}>
-      <div style={{ marginBottom: '4px', fontSize: '13px', borderBottom: '1px solid white', paddingBottom: '4px' }}>
-        🔍 VC Portal HUD ({portalHudData.buildStamp})
-      </div>
-      <div>parentRect: {portalHudData.parentRect}</div>
-      <div>stageRect: {portalHudData.stageRect}</div>
-      <div>containerSize: {portalHudData.containerSize}</div>
-      <div>bgReady: {portalHudData.bgReady} | bgSize: {portalHudData.bgSize}</div>
-      <div>parentStyle: {portalHudData.parentStyle}</div>
-      <div>stageStyle: {portalHudData.stageStyle}</div>
-      <div>centerPoint: {portalHudData.centerPoint}</div>
-      <div>topElAtCenter: {portalHudData.topElAtCenter}</div>
-      <div style={{ color: portalHudData.isStageOnTop === 'true' ? '#0f0' : '#f00' }}>
-        isStageOnTop: {portalHudData.isStageOnTop}
-      </div>
-      <div style={{ fontSize: '9px', marginTop: '4px', opacity: 0.8 }}>
-        wrapperTransform: {portalHudData.wrapperTransform}
-      </div>
-    </div>,
-    document.body
-  ) : null;
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative', overflow: 'auto', background: '#e0e0e0' }}>
