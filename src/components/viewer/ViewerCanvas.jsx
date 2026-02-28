@@ -1951,18 +1951,14 @@ const ViewerCanvas = forwardRef(({
 
       const { shape, x, y } = p;
 
-      // tool別にMapを追従させる（保存はしない）（★★★ 不変更新 ★★★）
       const cur = shapesMapRef.current.get(shape.id);
       if (!cur) return;
-      
-      const newMap = new Map(shapesMapRef.current);
       if (shape.tool === 'rect' || shape.tool === 'circle' || shape.tool === 'text') {
         const { nx, ny } = normalizeCoords(x, y);
-        newMap.set(shape.id, { ...cur, nx, ny });
+        shapesMapRef.current = mapPatchShape(shapesMapRef.current, shape.id, { nx, ny });
       } else if (shape.tool === 'pen' || shape.tool === 'arrow') {
-        newMap.set(shape.id, { ...cur, dragX: x, dragY: y });
+        shapesMapRef.current = mapPatchShape(shapesMapRef.current, shape.id, { dragX: x, dragY: y });
       }
-      shapesMapRef.current = newMap;
       bump();
     });
   };
