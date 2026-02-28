@@ -200,7 +200,7 @@ const ViewerCanvas = forwardRef(({
     lastPointerRaw: null,    // {clientX, clientY}
     lastPointerStage: null,  // {x, y}
     lastPointerImage: null,  // {x, y, stageX, stageY}
-    viewAtEvent: null, ptrDiagStr: null, commitDiagStr: null, downK: null,
+    viewAtEvent: null, ptrDiagStr: null, commitDiagStr: null, downK: null, firstPtr: null, firstCmt: null, lastPtr: null, lastCmt: null,
   });
   const [diagTick, setDiagTick] = useState(0); // HUD更新用tick
   
@@ -1021,11 +1021,10 @@ const ViewerCanvas = forwardRef(({
   // ★★★ P0-COORD-DIAG: paintMode ON時に enterSeq++ / strokeSeqInSession=0 ★★★
   useEffect(() => {
     if (paintMode) {
-      coordDiagRef.current.paintEnterSeq += 1;
-      coordDiagRef.current.strokeSeqInSession = 0;
-      coordDiagRef.current.firstStroke = false;
-      coordDiagRef.current.lastPointerEvent = null;
-      console.log('[COORD-DIAG] paintMode ON, enterSeq=', coordDiagRef.current.paintEnterSeq);
+      const cdr = coordDiagRef.current;
+      cdr.paintEnterSeq += 1; cdr.strokeSeqInSession = 0; cdr.firstStroke = false; cdr.lastPointerEvent = null;
+      cdr.firstPtr = null; cdr.firstCmt = null; cdr.lastPtr = null; cdr.lastCmt = null;
+      console.log('[COORD-DIAG] paintMode ON, enterSeq=', cdr.paintEnterSeq);
     }
   }, [paintMode]);
   
@@ -1645,8 +1644,8 @@ const ViewerCanvas = forwardRef(({
       const vU = imgCoords._view || frozenView;
       cd.downK = { x: k.x, y: k.y };
       cd.ptrDiagStr = `fs=${cd.firstStroke?'Y':'N'} k=(${Math.round(k.x)},${Math.round(k.y)}) m=(${Math.round(m.x)},${Math.round(m.y)}) d=(${Math.round(k.x-m.x)},${Math.round(k.y-m.y)}) br=${br} vX=${Math.round(vU.viewX)} vY=${Math.round(vU.viewY)} sc=${vU.contentScale.toFixed(3)} off=(${Math.round(offsetX)},${Math.round(offsetY)}) tool=${tool}`;
-      cd.commitDiagStr = null;
-      setDiagTick(t => t + 1);
+      cd.lastPtr = cd.ptrDiagStr; if (cd.strokeSeqInSession===1 && !cd.firstPtr) cd.firstPtr = cd.ptrDiagStr;
+      cd.commitDiagStr = null; setDiagTick(t => t + 1);
 
       // ★★★ CRITICAL: comment_idを取得（draftCommentId優先、fallback禁止）★★★
       const commentId = getCommentIdForDrawing();
@@ -2117,7 +2116,7 @@ const ViewerCanvas = forwardRef(({
       }
 
       // commitDiag: shape確定座標 vs down時k座標（A/B切り分け）
-      if (DEBUG_MODE && coordDiagRef.current.downK) { const dK=coordDiagRef.current.downK; let ix=0,iy=0; if(normalizedShape.nx!==undefined){const p=denormalizeCoords(normalizedShape.nx,normalizedShape.ny);ix=p.x;iy=p.y;}else if(normalizedShape.normalizedPoints?.length>=2){const p=denormalizeCoords(normalizedShape.normalizedPoints[0],normalizedShape.normalizedPoints[1]);ix=p.x;iy=p.y;} const sx=ix*contentScale+viewX,sy=iy*contentScale+viewY; coordDiagRef.current.commitDiagStr=`img=(${Math.round(ix)},${Math.round(iy)}) stg=(${Math.round(sx)},${Math.round(sy)}) k0=(${Math.round(dK.x)},${Math.round(dK.y)}) Δ=(${Math.round(sx-dK.x)},${Math.round(sy-dK.y)})`; setDiagTick(t=>t+1); }
+      if (DEBUG_MODE && coordDiagRef.current.downK) { const dK=coordDiagRef.current.downK,cd2=coordDiagRef.current; let ix=0,iy=0; if(normalizedShape.nx!==undefined){const p=denormalizeCoords(normalizedShape.nx,normalizedShape.ny);ix=p.x;iy=p.y;}else if(normalizedShape.normalizedPoints?.length>=2){const p=denormalizeCoords(normalizedShape.normalizedPoints[0],normalizedShape.normalizedPoints[1]);ix=p.x;iy=p.y;} const sx=ix*contentScale+viewX,sy=iy*contentScale+viewY; cd2.commitDiagStr=`img=(${Math.round(ix)},${Math.round(iy)}) stg=(${Math.round(sx)},${Math.round(sy)}) k0=(${Math.round(dK.x)},${Math.round(dK.y)}) Δ=(${Math.round(sx-dK.x)},${Math.round(sy-dK.y)})`; cd2.lastCmt=cd2.commitDiagStr; if(cd2.strokeSeqInSession===1&&!cd2.firstCmt) cd2.firstCmt=cd2.commitDiagStr; setDiagTick(t=>t+1); }
 
       // 親コンポーネントに保存を依頼（createモード）
       if (onSaveShape) {
@@ -2629,8 +2628,8 @@ const ViewerCanvas = forwardRef(({
       strokeSeqInSession: coordDiagRef.current.strokeSeqInSession,
       firstStroke: coordDiagRef.current.firstStroke,
       lastPointerEvent: coordDiagRef.current.lastPointerEvent,
-      ptrDiagStr: coordDiagRef.current.ptrDiagStr,
-      commitDiagStr: coordDiagRef.current.commitDiagStr,
+      ptrDiagStr: coordDiagRef.current.ptrDiagStr, commitDiagStr: coordDiagRef.current.commitDiagStr,
+      firstPtr: coordDiagRef.current.firstPtr, firstCmt: coordDiagRef.current.firstCmt, lastPtr: coordDiagRef.current.lastPtr, lastCmt: coordDiagRef.current.lastCmt,
     } : null;
     
     return {
@@ -3190,11 +3189,12 @@ const ViewerCanvas = forwardRef(({
         <div style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.9)', color: '#0f0', padding: '10px', fontSize: '10px', fontFamily: 'monospace', borderRadius: '6px', pointerEvents: 'none', zIndex: 100, lineHeight: '1.5', maxWidth: '400px', maxHeight: '90vh', overflow: 'auto' }}>
           <div style={{ color: '#ff0', fontWeight: 'bold', marginBottom: '4px' }}>🔍 VC Debug</div>
 
-          {/* ★★★ P0-COORD-DIAG: 最上部に固定（スクロール不要）★★★ */}
-          <div style={{ marginBottom: '6px', padding: '4px', background: 'rgba(255,255,0,0.15)', borderRadius: '3px', border: '1px solid #ff0' }}>
-            <div style={{ color: '#ff0', fontWeight: 'bold', fontSize: '10px', marginBottom: '2px' }}>🎯 COORD DIAG</div>
-            <div style={{ fontSize: '9px', color: '#0ff', wordBreak: 'break-all', lineHeight: '1.3' }}>ptr: {debugHudData.coordDiag?.ptrDiagStr || '(none)'}</div>
-            <div style={{ fontSize: '9px', color: '#f0f', wordBreak: 'break-all', lineHeight: '1.3' }}>cmt: {debugHudData.coordDiag?.commitDiagStr || '(none)'}</div>
+          <div style={{ marginBottom: '4px', padding: '3px', background: 'rgba(255,255,0,0.15)', borderRadius: '3px', border: '1px solid #ff0' }}>
+            <div style={{ color: '#ff0', fontWeight: 'bold', fontSize: '9px' }}>DIAG seq:{debugHudData.coordDiag?.strokeSeqInSession||0}</div>
+            <div style={{ fontSize: '8px', color: '#0f0', wordBreak: 'break-all', lineHeight: '1.2' }}>1P:{debugHudData.coordDiag?.firstPtr||'-'}</div>
+            <div style={{ fontSize: '8px', color: '#0f0', wordBreak: 'break-all', lineHeight: '1.2' }}>1C:{debugHudData.coordDiag?.firstCmt||'-'}</div>
+            <div style={{ fontSize: '8px', color: '#0ff', wordBreak: 'break-all', lineHeight: '1.2' }}>LP:{debugHudData.coordDiag?.lastPtr||'-'}</div>
+            <div style={{ fontSize: '8px', color: '#f0f', wordBreak: 'break-all', lineHeight: '1.2' }}>LC:{debugHudData.coordDiag?.lastCmt||'-'}</div>
           </div>
 
           {/* Counts + View (compressed) */}
