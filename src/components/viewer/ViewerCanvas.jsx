@@ -2011,15 +2011,8 @@ const ViewerCanvas = forwardRef(({
         }
       }
 
-      // ★★★ CRITICAL FIX: fallback禁止、shape.comment_id が無い場合は早期return ★★★
       const resolvedCommentId = shape.comment_id;
-      if (!resolvedCommentId) {
-        console.error('[ViewerCanvas] shape.comment_id is missing, skipping save:', shape.id?.substring(0, 8));
-        setCurrentShape(null);
-        setIsDrawing(false);
-        drawViewRef.current = null;
-        return;
-      }
+      if (!resolvedCommentId) { console.error('[VC] no comment_id, skip'); setCurrentShape(null); setIsDrawing(false); drawViewRef.current = null; return; }
       const normalizedShape = {
         id: shape.id,
         comment_id: resolvedCommentId,
