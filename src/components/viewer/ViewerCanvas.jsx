@@ -206,7 +206,7 @@ const ViewerCanvas = forwardRef(({
     lastPointerRaw: null,    // {clientX, clientY}
     lastPointerStage: null,  // {x, y}
     lastPointerImage: null,  // {x, y, stageX, stageY}
-    viewAtEvent: null,       // {viewX, viewY, contentScale, baseFitScale, userScale, stageW, stageH, drawViewRefExists, drawViewRefSnapshot}
+    viewAtEvent: null, ptrDiagStr: null, commitDiagStr: null, downK: null,
   });
   const [diagTick, setDiagTick] = useState(0); // HUD更新用tick
   
