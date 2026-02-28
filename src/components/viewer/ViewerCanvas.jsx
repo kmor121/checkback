@@ -1646,24 +1646,22 @@ const ViewerCanvas = forwardRef(({
       
       setIsDrawing(true);
       
-      // ★★★ P0-COORD-DIAG: down時の座標情報を記録 ★★★
-      const rawPointer = { clientX: e.evt?.clientX ?? 0, clientY: e.evt?.clientY ?? 0 };
-      const stagePointer = stageRef.current?.getPointerPosition() ?? null;
-      coordDiagRef.current.strokeSeqInSession += 1;
-      coordDiagRef.current.firstStroke = (coordDiagRef.current.strokeSeqInSession === 1);
-      coordDiagRef.current.lastPointerEvent = 'down';
-      coordDiagRef.current.lastPointerRaw = rawPointer;
-      coordDiagRef.current.lastPointerStage = stagePointer;
-      coordDiagRef.current.lastPointerImage = { x: imgCoords.x, y: imgCoords.y, stageX: imgCoords.stageX, stageY: imgCoords.stageY };
-      coordDiagRef.current.viewAtEvent = {
-        viewX, viewY, contentScale, offsetX, offsetY,
-        baseFitScale,
-        userScale: zoom / 100,
-        stageW: containerSize.width,
-        stageH: containerSize.height,
-        drawViewRefExists: !!drawViewRef.current,
-        drawViewRefSnapshot: drawViewRef.current ? { ...drawViewRef.current } : null,
-      };
+      // ★ P0-COORD-DIAG: down時の座標情報を記録 + ptrDiag 1行生成
+      const rp = { clientX: e.evt?.clientX ?? 0, clientY: e.evt?.clientY ?? 0 };
+      const k = stageRef.current?.getPointerPosition() || { x: 0, y: 0 };
+      const cd = coordDiagRef.current;
+      cd.strokeSeqInSession += 1; cd.firstStroke = (cd.strokeSeqInSession === 1);
+      cd.lastPointerEvent = 'down'; cd.lastPointerRaw = rp; cd.lastPointerStage = k;
+      cd.lastPointerImage = { x: imgCoords.x, y: imgCoords.y, stageX: imgCoords.stageX, stageY: imgCoords.stageY };
+      cd.viewAtEvent = { viewX, viewY, contentScale, offsetX, offsetY, baseFitScale, userScale: zoom / 100, stageW: containerSize.width, stageH: containerSize.height, drawViewRefExists: !!drawViewRef.current, drawViewRefSnapshot: drawViewRef.current ? { ...drawViewRef.current } : null };
+      // ptrDiag: k(Konva) vs m(manual from clientXY) + branch/view
+      const sr = stageRef.current?.container?.()?.getBoundingClientRect() || { left: 0, top: 0 };
+      const m = { x: rp.clientX - sr.left, y: rp.clientY - sr.top };
+      const br = imgCoords._branch || '?';
+      const vU = imgCoords._view || frozenView;
+      cd.downK = { x: k.x, y: k.y };
+      cd.ptrDiagStr = `fs=${cd.firstStroke?'Y':'N'} k=(${Math.round(k.x)},${Math.round(k.y)}) m=(${Math.round(m.x)},${Math.round(m.y)}) d=(${Math.round(k.x-m.x)},${Math.round(k.y-m.y)}) br=${br} vX=${Math.round(vU.viewX)} vY=${Math.round(vU.viewY)} sc=${vU.contentScale.toFixed(3)} off=(${Math.round(offsetX)},${Math.round(offsetY)}) tool=${tool}`;
+      cd.commitDiagStr = null;
       setDiagTick(t => t + 1);
 
       // ★★★ CRITICAL: comment_idを取得（draftCommentId優先、fallback禁止）★★★
