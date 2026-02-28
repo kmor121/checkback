@@ -1627,22 +1627,16 @@ const ViewerCanvas = forwardRef(({
       if (onSaveShape) {
         try {
           const result = await onSaveShape(normalizedShape, 'create');
-          // CRITICAL: dirty解除（★★★ 不変更新 ★★★）
-          const cur = shapesMapRef.current.get(normalizedShape.id);
-          if (cur) {
-            const dirtyMap = new Map(shapesMapRef.current);
-            dirtyMap.set(normalizedShape.id, { ...cur, dbId: result?.dbId, _dirty: false });
-            shapesMapRef.current = dirtyMap;
-            bump();
-            onShapesChange?.(getAllShapes());
-          }
+          shapesMapRef.current = mapClearDirty(shapesMapRef.current, normalizedShape.id, result?.dbId);
+          bump();
+          onShapesChange?.(getAllShapes());
         } catch (err) {
           console.error('Save text error:', err);
         }
       }
     }
 
-    setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
+    setTextEditor(TEXT_EDITOR_INITIAL);
     setIsComposing(false);
     if (onToolChange) onToolChange('select');
   };
