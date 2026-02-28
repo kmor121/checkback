@@ -353,9 +353,6 @@ const ViewerCanvas = forwardRef(({
     return null;
   };
   
-  // ★ CRITICAL: Mapが唯一の真実（mergedShapesはMap由来）
-  const mergedShapes = useMemo(() => getAllShapes(), [shapesVersion]);
-  
   // ★★★ P0-V5: 表示対象決定（統一ルール固定：showDraftOnly 最優先）★★★
   const renderedShapes = useMemo(() => {
     const mapShapes = getAllShapes();
