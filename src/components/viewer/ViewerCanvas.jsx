@@ -1568,12 +1568,9 @@ const ViewerCanvas = forwardRef(({
           fontSize,
         };
 
-        // CRITICAL: Map方式でupsert + dirty/localTs付与（★★★ 不変更新 ★★★）
         const updatedWithDirty = { ...updatedShape, _dirty: true, _localTs: Date.now() };
         addToUndoStack({ type: 'update', shapeId, before: existingShape, after: updatedWithDirty });
-        const newMap = new Map(shapesMapRef.current);
-        newMap.set(shapeId, updatedWithDirty);
-        shapesMapRef.current = newMap;
+        shapesMapRef.current = mapUpsertDirty(shapesMapRef.current, updatedShape);
         bump();
         onShapesChange?.(getAllShapes());
 
