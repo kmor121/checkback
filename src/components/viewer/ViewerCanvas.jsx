@@ -1210,9 +1210,7 @@ const ViewerCanvas = forwardRef(({
         console.error('[ViewerCanvas] Delete shape error:', err);
         debugRef.current.saveStatus = 'error';
         debugRef.current.error = err.message;
-        const revertMap = new Map(shapesMapRef.current);
-        revertMap.set(shape.id, shape);
-        shapesMapRef.current = revertMap;
+        shapesMapRef.current = mapPatchShape(shapesMapRef.current, shape.id, shape);
         bump();
         onShapesChange?.(getAllShapes());
       }
