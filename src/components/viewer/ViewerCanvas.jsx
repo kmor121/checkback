@@ -1731,12 +1731,11 @@ const ViewerCanvas = forwardRef(({
       }
       };
   
-  // PointerMove: 描画中（CRITICAL: refベースで判定、propsに依存しない）
   const handlePointerMove = (e) => {
-    // テキスト編集中は処理しない
     if (textEditor.visible) return;
-    
     try {
+      // P0-FIX: 描画中は初回moveで座標が古い問題を防止
+      if (isDrawingRef2.current && stageRef.current && e.evt) stageRef.current.setPointersPositions(e.evt);
       const imgCoords = stagePointToImagePoint();
       if (!imgCoords) return;
       
