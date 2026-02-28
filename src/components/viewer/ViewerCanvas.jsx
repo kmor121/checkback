@@ -3203,54 +3203,12 @@ const ViewerCanvas = forwardRef(({
         </div>
       )}
       
-      {/* ★★★ DEBUG HUD: DEBUG_MODE時のみ表示 ★★★ */}
+      {/* DEBUG HUD: left panel (compressed) */}
       {DEBUG_MODE && (
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          zIndex: 9999,
-          background: 'rgba(0, 0, 0, 0.85)',
-          color: '#0f0',
-          padding: '8px',
-          fontSize: '11px',
-          fontFamily: 'monospace',
-          lineHeight: '1.4',
-          maxWidth: '400px',
-          maxHeight: '40vh',
-          overflow: 'auto',
-          borderBottomRightRadius: '4px',
-        }}>
-          <div style={{ color: '#ff0', fontWeight: 'bold', marginBottom: '4px' }}>🎯 ViewerCanvas State</div>
-          <div>activeCommentId: <span style={{ color: '#0ff' }}>{debugHudData.activeCommentId}</span></div>
-          <div>effectiveActiveId: <span style={{ color: '#0ff' }}>{debugHudData.effectiveActiveId}</span></div>
-          <div>draftCommentId: <span style={{ color: '#0ff' }}>{debugHudData.draftCommentId}</span></div>
-          <div>renderedShapes.length: <span style={{ color: '#ff0' }}>{debugHudData.renderedShapesLength}</span></div>
-          <div>uniqueCommentIds: <span style={{ color: '#f0f' }}>{debugHudData.uniqueCommentIds.join(', ') || '(none)'}</span></div>
-          
-          {Object.keys(debugHudData.countsByCommentId).length > 0 && (
-            <div style={{ marginTop: '4px', borderTop: '1px solid #333', paddingTop: '4px' }}>
-              <div style={{ color: '#ff0', fontSize: '10px' }}>Counts by CommentID:</div>
-              {Object.entries(debugHudData.countsByCommentId).map(([cid, count]) => (
-                <div key={cid} style={{ fontSize: '9px', marginTop: '2px' }}>
-                  {cid}: <span style={{ color: '#ff0' }}>{count}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          
-          {debugHudLogs.length > 0 && (
-            <>
-              <div style={{ borderTop: '1px solid #333', marginTop: '6px', paddingTop: '6px', color: '#ff0' }}>
-                Recent Events:
-              </div>
-              {debugHudLogs.map((log, i) => (
-                <div key={i} style={{ fontSize: '9px', marginTop: '2px' }}>
-                  {log.event}: targetId={log.targetId.substring(0, 12)} tool={log.tool}
-                </div>
-              ))}
-            </>
-          )}
+        <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 9999, background: 'rgba(0,0,0,0.85)', color: '#0f0', padding: '4px 6px', fontSize: '9px', fontFamily: 'monospace', lineHeight: '1.3', maxWidth: '320px', maxHeight: '30vh', overflow: 'auto', borderBottomRightRadius: '4px' }}>
+          <div style={{ color: '#ff0', fontWeight: 'bold' }}>VC State</div>
+          <div>aCid:{debugHudData.activeCommentId?.substring(0,12)} eff:{debugHudData.effectiveActiveId?.substring(0,12)}</div>
+          <div>shapes:{debugHudData.renderedShapesLength} cids:{debugHudData.uniqueCommentIds.join(',') || '-'}</div>
         </div>
       )}
 
