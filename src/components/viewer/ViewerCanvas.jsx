@@ -687,13 +687,7 @@ const ViewerCanvas = forwardRef(({
         prevMapSize,
       });
       
-      // dirtyShapes保持（既存ロジック）
-      const dirtyShapes = new Map();
-      for (const [id, shape] of shapesMapRef.current.entries()) {
-        if (shape._dirty) {
-          dirtyShapes.set(id, shape);
-        }
-      }
+      const dirtyShapes = extractDirtyShapes(shapesMapRef.current);
 
       // newMap構築（既存ロジック）
       const newMap = new Map();
