@@ -571,12 +571,8 @@ const ViewerCanvas = forwardRef(({
     setSelectedId(null);
     setCurrentShape(null);
     setIsDrawing(false);
-    setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
-    if (transformerRef.current) {
-      transformerRef.current.nodes([]);
-      transformerRef.current.getLayer()?.batchDraw();
-    }
-
+    setTextEditor(TEXT_EDITOR_INITIAL);
+    if (transformerRef.current) { transformerRef.current.nodes([]); transformerRef.current.getLayer()?.batchDraw(); }
     console.log('[P0] forceClearToken complete: UI cleared, Map preserved');
     }, [forceClearToken]);
 
