@@ -1483,22 +1483,8 @@ const ViewerCanvas = forwardRef(({
   };
   
   // ★★★ P0-FIT: window pointerup で描画取りこぼし防止（Stage外で離した場合）★★★
-  const commitInFlightRef = useRef(false); // 二重commit防止
-  // ★★★ FIX: handlePointerUpをrefに保持してstale closure問題を解消 ★★★
-  const handlePointerUpRef = useRef(handlePointerUp);
-  handlePointerUpRef.current = handlePointerUp;
-  useEffect(() => {
-    const handleWindowPointerUp = (e) => {
-      if (!isDrawingRef2.current) return;
-      if (commitInFlightRef.current) return;
-      console.log('[P0-FIT] window pointerUp detected during drawing, committing shape');
-      commitInFlightRef.current = true;
-      handlePointerUpRef.current(e);
-      requestAnimationFrame(() => { commitInFlightRef.current = false; });
-    };
-    window.addEventListener('pointerup', handleWindowPointerUp);
-    return () => window.removeEventListener('pointerup', handleWindowPointerUp);
-  }, []);
+  const commitInFlightRef = useRef(false);
+  const handlePointerUpRef = useRef(null);
 
   // PointerDown: 描画開始（描画モード時のみ）
   const handlePointerDown = (e) => {
