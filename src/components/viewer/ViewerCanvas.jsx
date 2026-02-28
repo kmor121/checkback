@@ -1897,37 +1897,15 @@ const ViewerCanvas = forwardRef(({
     applyStyleToSelected({ strokeWidth });
   }, [strokeWidth, canEdit, selectedId]);
 
-  // ★★★ CRITICAL: debugHudData の useMemo は全ての hooks の後、早期return の前に配置 ★★★
   const debugHudData = useMemo(() => {
-    const uniqueCids = [...new Set(renderedShapes.map(s => shapeCommentId(s)).filter(Boolean))].slice(0, 10);
-    
-    // comment_idごとの件数を集計
     const countsByCommentId = {};
-    renderedShapes.forEach(s => {
-      const cid = shapeCommentId(s);
-      if (cid != null && cid !== '') {
-        const cidStr = String(cid).substring(0, 12);
-        countsByCommentId[cidStr] = (countsByCommentId[cidStr] || 0) + 1;
-      }
-    });
-    
-    const coordDiag = DEBUG_MODE ? {
-      paintEnterSeq: coordDiagRef.current.paintEnterSeq,
-      strokeSeqInSession: coordDiagRef.current.strokeSeqInSession,
-      firstStroke: coordDiagRef.current.firstStroke,
-      lastPointerEvent: coordDiagRef.current.lastPointerEvent,
-      ptrDiagStr: coordDiagRef.current.ptrDiagStr, commitDiagStr: coordDiagRef.current.commitDiagStr,
-      firstPtr: coordDiagRef.current.firstPtr, firstCmt: coordDiagRef.current.firstCmt, lastPtr: coordDiagRef.current.lastPtr, lastCmt: coordDiagRef.current.lastCmt,
-    } : null;
-    
+    renderedShapes.forEach(s => { const cid = shapeCommentId(s); if (cid) { const k = String(cid).substring(0, 12); countsByCommentId[k] = (countsByCommentId[k] || 0) + 1; } });
     return {
-      activeCommentId: String(activeCommentId ?? 'null'),
-      effectiveActiveId: String(effectiveActiveId ?? 'null'),
-      draftCommentId: String(draftCommentIdRef.current ?? 'null'),
-      renderedShapesLength: renderedShapes.length,
-      uniqueCommentIds: uniqueCids.map(id => String(id).substring(0, 12)),
+      activeCommentId: String(activeCommentId ?? 'null'), effectiveActiveId: String(effectiveActiveId ?? 'null'),
+      draftCommentId: String(draftCommentIdRef.current ?? 'null'), renderedShapesLength: renderedShapes.length,
+      uniqueCommentIds: [...new Set(renderedShapes.map(s => shapeCommentId(s)).filter(Boolean))].slice(0, 10).map(id => String(id).substring(0, 12)),
       countsByCommentId,
-      coordDiag, // ★★★ P0-COORD-DIAG: 座標診断データ追加 ★★★
+      coordDiag: DEBUG_MODE ? { ...coordDiagRef.current } : null,
     };
   }, [activeCommentId, effectiveActiveId, renderedShapes, diagTick]);
 
