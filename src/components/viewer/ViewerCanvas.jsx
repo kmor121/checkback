@@ -2224,26 +2224,16 @@ const ViewerCanvas = forwardRef(({
           debugRef.current.saveStatus = 'success';
           debugRef.current.error = null;
 
-          // CRITICAL: dirty解除（★★★ 不変更新 ★★★）
-          const cur = shapesMapRef.current.get(updatedShape.id);
-          if (cur) {
-            const dirtyMap = new Map(shapesMapRef.current);
-            dirtyMap.set(updatedShape.id, { ...cur, dbId: result?.dbId, _dirty: false });
-            shapesMapRef.current = dirtyMap;
-            bump();
-            onShapesChange?.(getAllShapes());
-          }
+          shapesMapRef.current = mapClearDirty(shapesMapRef.current, updatedShape.id, result?.dbId);
+          bump();
+          onShapesChange?.(getAllShapes());
         } catch (err) {
           console.error('[ViewerCanvas] onSaveShape error:', err);
           debugRef.current.saveStatus = 'error';
           debugRef.current.error = err.message;
-          // 失敗時はrevert（★★★ 不変更新 ★★★）
-          const revertMap = new Map(shapesMapRef.current);
-          revertMap.set(shape.id, shape);
-          shapesMapRef.current = revertMap;
+          shapesMapRef.current = mapPatchShape(shapesMapRef.current, shape.id, shape);
           bump();
           onShapesChange?.(getAllShapes());
-          console.log('[ViewerCanvas] onSaveShape failed, reverted to original size:', { shapeId: shape.id?.substring(0, 8) });
         } finally {
           setIsSaving(prev => ({ ...prev, [shape.id]: false }));
         }
