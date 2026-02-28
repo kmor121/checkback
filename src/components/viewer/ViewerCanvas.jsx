@@ -2034,18 +2034,11 @@ const ViewerCanvas = forwardRef(({
       updatedShape.ny = ny;
     }
     
-    // CRITICAL: Map方式でupsert + dirty/localTs付与（★★★ 不変更新 ★★★）
-    const updatedWithDirty = { ...updatedShape, _dirty: true, _localTs: Date.now() };
-    addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: updatedWithDirty });
-
-    // CRITICAL: Map更新 + 親に全量同期（★★★ 不変更新 ★★★）
-    const newMap = new Map(shapesMapRef.current);
-    newMap.set(updatedWithDirty.id, updatedWithDirty);
-    shapesMapRef.current = newMap;
+    addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: { ...updatedShape, _dirty: true, _localTs: Date.now() } });
+    shapesMapRef.current = mapUpsertDirty(shapesMapRef.current, updatedShape);
     bump();
     onShapesChange?.(getAllShapes());
 
-    // ドラッグ終了
     isDraggingRef.current = false;
     isInteractingRef.current = false;
     if (pendingIncomingShapesRef.current) {
