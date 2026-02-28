@@ -491,8 +491,6 @@ const ViewerCanvas = forwardRef(({
     }
   }, [clearAfterSubmitNonce]);
 
-  // ★★★ REMOVED: hidePaintUntilSelect解除処理 - 不要なフラグ操作を削除 ★★★
-
   // CRITICAL: 仮commentIdで描いたshapeを、activeCommentId確定後に付け替える
   useEffect(() => {
     if (!activeCommentId) return;
