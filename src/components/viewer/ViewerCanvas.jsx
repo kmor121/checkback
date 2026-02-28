@@ -815,12 +815,6 @@ const ViewerCanvas = forwardRef(({
         });
       }
 
-      // ★★★ P0-FINAL: P1 FIX を削除（誤発火でdb>0でもMapクリア→描画消失の原因）★★★
-      // renderTargetCommentId だけでは「真に描画がないコメント」か判定できない
-      // → ctx変更（canvasContextKey変化）で既にMapクリア済み（L442-459）
-      // → 追加の empty判定は不要（二重クリアで誤発火の温床）
-
-      // 既存のロジック：描画がないコメント選択以外のケース（例：初回ロードなど）
       // ★★★ Hunk2: 遷移中でも「空にしたい意図」があれば空にする ★★★
       if (isCanvasTransitioning) {
           // hidePaintOverlay または allowIntentionalEmpty 時は空表示を優先
