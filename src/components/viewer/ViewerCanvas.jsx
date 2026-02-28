@@ -134,11 +134,8 @@ const ViewerCanvas = forwardRef(({
   const [error, setError] = useState(null);
   const [bgReady, setBgReady] = useState(false); // P2 FIX: 背景ロード完了フラグ
   
-  // ★★★ P0-V5: contentReady判定（bgReady フラグベース、リロード時フラッシュ防止）★★★
   const contentReady = bgReady && bgSize.width > 0 && bgSize.height > 0;
-
-  
-  // 描画状態（CRITICAL: Map方式で置換禁止）
+  // 描画状態
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentShape, setCurrentShape] = useState(null);
   const shapesMapRef = useRef(new Map()); // ★ CRITICAL: Mapが唯一の真実
