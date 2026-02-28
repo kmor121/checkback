@@ -859,13 +859,7 @@ const ViewerCanvas = forwardRef(({
       prevMapSize,
     });
 
-    // ★★★ CRITICAL: dirtyなローカルshapeを保持するために一時保存 ★★★
-    const dirtyShapes = new Map();
-    for (const [id, shape] of shapesMapRef.current.entries()) {
-      if (shape._dirty) {
-        dirtyShapes.set(id, shape);
-      }
-    }
+    const dirtyShapes = extractDirtyShapes(shapesMapRef.current);
 
     console.log('[ViewerCanvas] existingShapes useEffect (FULL SYNC):', {
       incomingRawLength: incomingRaw.length,
