@@ -3568,15 +3568,10 @@ const ViewerCanvas = forwardRef(({
             </Group>
         </Layer>
         
-        {/* ★★★ DEBUG: Stage直下のデバッグLayer（diag=1時のみ表示）★★★ */}
         {DEBUG_MODE && (
           <Layer listening={false}>
-            <Rect x={40} y={40} width={180} height={120} stroke="magenta" strokeWidth={8} fill="rgba(255,0,255,0.3)" />
-            <Text x={50} y={55} text="DEBUG LAYER" fontSize={18} fill="magenta" fontStyle="bold" />
-            <Text x={50} y={80} text={`stage: ${containerSize.width}x${containerSize.height}`} fontSize={12} fill="magenta" />
-            <Text x={50} y={100} text={`bg: ${bgSize.width}x${bgSize.height}`} fontSize={12} fill="magenta" />
-            <Text x={50} y={120} text={`scale: ${contentScale.toFixed(2)}`} fontSize={12} fill="magenta" />
-            <Text x={50} y={140} text={`bgReady: ${bgReady}`} fontSize={12} fill="magenta" />
+            <Rect x={40} y={40} width={180} height={80} stroke="magenta" strokeWidth={4} fill="rgba(255,0,255,0.2)" />
+            <Text x={50} y={50} text={`stg:${containerSize.width}x${containerSize.height} bg:${bgSize.width}x${bgSize.height} sc:${contentScale.toFixed(2)} rdy:${bgReady}`} fontSize={10} fill="magenta" />
           </Layer>
         )}
         </Stage>
