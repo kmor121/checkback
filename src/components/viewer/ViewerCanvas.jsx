@@ -171,10 +171,8 @@ const ViewerCanvas = forwardRef(({
   const dragRafRef = useRef(null); // RAF間引き用
   const pendingDragRef = useRef(null); // ドラッグ座標バッファ
   
-  // CRITICAL: 描画中の強制リセット防止用ref
   const isDrawingRef2 = useRef(false);
   const currentShapeRef2 = useRef(null);
-  const suppressResetRef = useRef(false);
   
   // CRITICAL: activeCommentId変化検知用
   const prevActiveCommentIdRef = useRef(activeCommentId);
@@ -187,8 +185,7 @@ const ViewerCanvas = forwardRef(({
   const prevEmptyCountRef = useRef(0); // Hunk E: empty連続カウント（2回連続でクリア）
   const lastEmptyAppliedCtxRef = useRef(null); // ★★★ P0-FIX: 意図的空表示の重複防止 ★★★
   
-  // デバッグHUD用ログ履歴
-  const [debugHudLogs, setDebugHudLogs] = useState([]);
+  const debugHudLogsRef = useRef([]);
   
   // ★★★ P0-COORD-DIAG: ペイント座標診断用ref（?diag=1で観測、ロジック変更なし）★★★
   const coordDiagRef = useRef({
@@ -282,8 +279,7 @@ const ViewerCanvas = forwardRef(({
   const [isComposing, setIsComposing] = useState(false);
   const textInputRef = useRef(null);
 
-  // CRITICAL: 送信後の強制非表示フラグ
-  const [hidePaintUntilSelect, setHidePaintUntilSelect] = useState(false);
+  const hidePaintUntilSelectRef = useRef(false);
   
   // Undo/Redo
   const [undoStack, setUndoStack] = useState([]);
@@ -443,8 +439,7 @@ const ViewerCanvas = forwardRef(({
     setIsDrawing(false);
     isDrawingRef2.current = false;
     
-    // hidePaintUntilSelect
-    setHidePaintUntilSelect(false);
+    hidePaintUntilSelectRef.current = false;
     
     // 選択中shapeId
     setSelectedId(null);
@@ -998,17 +993,7 @@ const ViewerCanvas = forwardRef(({
     }
   }, [shapesVersion, selectedId]);
 
-  // マウント検知（デバッグ用）
-  useEffect(() => {
-    if (DEBUG_MODE) {
-      console.log('[ViewerCanvas] Component MOUNTED', { fileUrl, pageNumber });
-    }
-    return () => {
-      if (DEBUG_MODE) {
-        console.log('[ViewerCanvas] Component UNMOUNTED');
-      }
-    };
-  }, []);
+  // mount/unmount debug removed for size
 
   // ★★★ P0-COORD-DIAG: paintMode ON時に enterSeq++ / strokeSeqInSession=0 ★★★
   useEffect(() => {
@@ -1647,7 +1632,7 @@ const ViewerCanvas = forwardRef(({
         commentId,
         tool,
       };
-      setDebugHudLogs(prev => [...prev.slice(-9), drawStartLog]);
+      debugHudLogsRef.current = [...debugHudLogsRef.current.slice(-9), drawStartLog];
 
       // CRITICAL: clientShapeId は1回だけ発行して固定（移動・編集で絶対に再生成しない）
       const newShape = {
@@ -1926,9 +1911,6 @@ const ViewerCanvas = forwardRef(({
     try {
       debugRef.current.lastEvent = 'up';
       setIsDrawing(false);
-      
-      // CRITICAL: 描画終了時に抑止解除
-      suppressResetRef.current = false;
       
       const shapeTool = shape.tool; // CRITICAL: refから取得したshape.tool
       
