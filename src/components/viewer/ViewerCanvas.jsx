@@ -2640,16 +2640,13 @@ const ViewerCanvas = forwardRef(({
       }
     });
     
-    // ★★★ P0-COORD-DIAG: 座標診断データをスナップショット化（?diag=1時のみ）★★★
     const coordDiag = DEBUG_MODE ? {
       paintEnterSeq: coordDiagRef.current.paintEnterSeq,
       strokeSeqInSession: coordDiagRef.current.strokeSeqInSession,
       firstStroke: coordDiagRef.current.firstStroke,
       lastPointerEvent: coordDiagRef.current.lastPointerEvent,
-      lastPointerRaw: coordDiagRef.current.lastPointerRaw ? { ...coordDiagRef.current.lastPointerRaw } : null,
-      lastPointerStage: coordDiagRef.current.lastPointerStage ? { ...coordDiagRef.current.lastPointerStage } : null,
-      lastPointerImage: coordDiagRef.current.lastPointerImage ? { ...coordDiagRef.current.lastPointerImage } : null,
-      viewAtEvent: coordDiagRef.current.viewAtEvent ? { ...coordDiagRef.current.viewAtEvent } : null,
+      ptrDiagStr: coordDiagRef.current.ptrDiagStr,
+      commitDiagStr: coordDiagRef.current.commitDiagStr,
     } : null;
     
     return {
