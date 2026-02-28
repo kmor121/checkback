@@ -168,9 +168,7 @@ const ViewerCanvas = forwardRef(({
   // CRITICAL: activeCommentId変化検知用
   const prevActiveCommentIdRef = useRef(activeCommentId);
   const draftCommentIdRef = useRef(null); // 仮コメントID（描画開始時にactiveCommentIdが無い場合）
-  // ★★★ REMOVED: lastStableCommentIdRef - fallback禁止のため完全削除 ★★★
-  
-  // ★★★ CRITICAL: 描画コンテキスト変化検知用（Map残留根絶）★★★
+  // CRITICAL: 描画コンテキスト変化検知用（Map残留根絶）
   const prevCanvasContextKeyRef = useRef(null);
   const pendingCtxRef = useRef(null); // ★ FIX-PENDING: 新ctx待機用（Map即クリア禁止）
   const prevEmptyCountRef = useRef(0); // Hunk E: empty連続カウント（2回連続でクリア）
