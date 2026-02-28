@@ -1416,11 +1416,8 @@ const ViewerCanvas = forwardRef(({
     });
   };
   
-  // ★★★ P0-FIT: window pointerup で描画取りこぼし防止（Stage外で離した場合）★★★
   const commitInFlightRef = useRef(false);
   const handlePointerUpRef = useRef(null);
-
-  // PointerDown: 描画開始（描画モード時のみ）
   const handlePointerDown = (e) => {
     if (DEBUG_MODE) {
       console.log('[🎨 DRAW_DIAG] handlePointerDown ENTRY:', {
