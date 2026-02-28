@@ -290,15 +290,11 @@ const ViewerCanvas = forwardRef(({
   const [undoStack, setUndoStack] = useState([]);
   const [redoStack, setRedoStack] = useState([]);
   
-  // デバッグ用
-  const [lastEvent, setLastEvent] = useState('none');
-  const [pointerPos, setPointerPos] = useState(null);
-  const [imgPos, setImgPos] = useState(null);
-  const [lastSaveStatus, setLastSaveStatus] = useState('idle');
-  const [lastError, setLastError] = useState(null);
-  const [lastMutation, setLastMutation] = useState(null);
-  const [lastPayload, setLastPayload] = useState(null);
-  const [lastSuccessId, setLastSuccessId] = useState(null);
+  // デバッグ用（DEBUG_MODE時のみstate更新、本番では初期値固定）
+  const [lastEvent, setLastEvent] = DEBUG_MODE ? useState('none') : ['none', ()=>{}];
+  const [pointerPos, setPointerPos] = DEBUG_MODE ? useState(null) : [null, ()=>{}];
+  const [imgPos, setImgPos] = DEBUG_MODE ? useState(null) : [null, ()=>{}];
+  const debugSaveRef = useRef({ status: 'idle', error: null, mutation: null, payload: null, successId: null });
   const [isSaving, setIsSaving] = useState({});
   
   const isImage = mimeType?.startsWith('image/');
@@ -2302,17 +2298,9 @@ const ViewerCanvas = forwardRef(({
 
     // ドラッグ終了
     isDraggingRef.current = false;
-    isInteractingRef.current = false; // ★ B) 操作終了
-
-    // ★ B) 保留されていたshapesがあれば同期をトリガー
-    if (pendingIncomingShapesRef.current) {
-        console.log('[SYNC] handleDragEnd: applying pending shapes');
-        bump();
-    }
     isInteractingRef.current = false;
-
-    // 保留中のshapesがあれば同期をトリガー
     if (pendingIncomingShapesRef.current) {
+      console.log('[SYNC] handleDragEnd: applying pending shapes');
       bump();
     }
     
