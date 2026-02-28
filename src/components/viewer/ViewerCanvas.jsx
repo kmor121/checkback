@@ -2067,11 +2067,11 @@ const ViewerCanvas = forwardRef(({
         setError(`PointerUp Error: ${err.message}`);
         debugRef.current.saveStatus = 'error';
         debugRef.current.error = err.message;
-        drawViewRef.current = null; // エラー時も解除
+        drawViewRef.current = null;
         }
         };
-  
-  // CRITICAL: ドラッグ開始（残像防止）
+  handlePointerUpRef.current = handlePointerUp;
+  useEffect(() => { const h=(e)=>{if(!isDrawingRef2.current||commitInFlightRef.current)return;commitInFlightRef.current=true;handlePointerUpRef.current?.(e);requestAnimationFrame(()=>{commitInFlightRef.current=false;});}; window.addEventListener('pointerup',h); return()=>window.removeEventListener('pointerup',h); }, []);
   const handleDragStart = (shape, e) => {
     isInteractingRef.current = true;
     isDraggingRef.current = true;
