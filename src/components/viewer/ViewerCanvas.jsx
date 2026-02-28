@@ -706,9 +706,6 @@ const ViewerCanvas = forwardRef(({
       }
     }
     
-    // ★★★ P0-V2: 案B allowIntentionalEmpty 削除（renderTargetCommentId=activeCommentId なので不要）★★★
-    // REMOVED: allowIntentionalEmpty block (過剰Map clear の元凶)
-
     // ★★★ FIX-PENDING: pending中のincomingEmpty は何もしない（旧Map保持）★★★
     if (isPending && incomingEmpty) {
       // ★★★ FIX-INIT: prevMapSize=0 の場合は pending解除（空×空で固着防止）★★★
