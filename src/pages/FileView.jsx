@@ -1240,6 +1240,16 @@ function FileViewContent() {
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
+
+                      {/* 返信スレッド（選択中のみ表示） */}
+                      {isSelected && (
+                        <ReplyThread
+                          parentCommentId={comment.id}
+                          fileId={fileId}
+                          replies={repliesByParent[comment.id] || []}
+                          user={user}
+                        />
+                      )}
                     </CardContent>
                   </Card>
                 );
