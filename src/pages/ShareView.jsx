@@ -2495,7 +2495,7 @@ function ShareViewContent() {
       showToast(newResolved ? '対応済みにしました' : '未対応に戻しました', 'success');
     } catch (error) {
       // 失敗時はrevert
-      queryClient.setQueryData(['sharedComments', shareLink.file_id, token], (old) => {
+      queryClient.setQueryData(['sharedComments', shareLink.file_id], (old) => {
         return old.map(c => c.id === comment.id ? { ...c, resolved: !newResolved } : c);
       });
       showToast(`更新失敗: ${error.message}`, 'error');
