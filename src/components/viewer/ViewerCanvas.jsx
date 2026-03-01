@@ -4,8 +4,47 @@ import useImage from 'use-image';
 import TextEditorOverlay from './TextEditorOverlay';
 import CanvasDebugHud from './CanvasDebugHud';
 import { renderShapeFactory } from './ShapeRenderer';
-import { generateUUID, DEBUG_MODE, normalizeFileUrl, resolveCommentId, normalizeShape, shapeCommentId, sameId, TEXT_EDITOR_INITIAL } from './canvasUtils';
-import { mapUpsertDirty, mapDelete, mapClearDirty, mapPatchShape, mapFromArray, extractDirtyShapes } from './canvasMapHelpers';
+function generateUUID() { return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16); }); }
+const DEBUG_MODE = (typeof window !== 'undefined') && (new URLSearchParams(window.location.search).get('diag') === '1' || localStorage.getItem('debugPaintLayer') === '1' || import.meta.env.VITE_DEBUG === 'true');
+
+// ★ CRITICAL: fileUrlを正規化（クエリ違いを同一ファイルとして扱う）
+function normalizeFileUrl(url) {
+  if (!url) return "";
+  try {
+    const u = new URL(url);
+    return `${u.origin}${u.pathname}`; // queryを無視
+  } catch {
+    return String(url).split("?")[0]; // フォールバック
+  }
+}
+
+// ★★★ CRITICAL: commentId解決ユーティリティ（キー揺れ完全吸収、入れ子対応）★★★
+const resolveCommentId = (s) => {
+  const v = s?.comment_id ?? s?.commentId ?? s?.commentID ?? 
+            s?.comment?.id ?? 
+            s?.data?.comment_id ?? s?.data?.commentId ?? s?.data?.commentID ??
+            s?.shape?.comment_id ?? s?.shape?.commentId ?? s?.shape?.commentID;
+  return v == null ? null : String(v);
+};
+
+// ★★★ CRITICAL: shape正規化（入れ子を平坦化、comment_id を canonical 化）★★★
+// defaultCommentId: shapeにcomment_idが無い場合のみ使用（既存値は上書きしない）
+const normalizeShape = (s, defaultCommentId = null) => {
+  if (!s) return null;
+  const base = s.data ? { ...s, ...s.data } : (s.shape ? { ...s, ...s.shape } : s);
+  let commentId = resolveCommentId(base);
+  if (commentId == null || commentId === '') {
+    commentId = defaultCommentId != null ? String(defaultCommentId) : null;
+  }
+  return {
+    ...base,
+    comment_id: commentId,
+    id: base.id ?? base.client_shape_id ?? base._local_id ?? (base._local_id = generateUUID()),
+  };
+};
+
+const shapeCommentId = resolveCommentId;  // 後方互換エイリアス
+const sameId = (a, b) => String(a ?? '') === String(b ?? '');
 
 // 背景画像コンポーネント（チラつき防止：前の画像を保持）
 function BackgroundImage({ src, onLoad }) {
@@ -156,9 +195,17 @@ const ViewerCanvas = forwardRef(({
   // 後方互換のためのダミー（実際はMapを参照）
   const shapes = useMemo(() => getAllShapes(), [shapesVersion]);
   
+  // setShapes互換関数（★★★ CRITICAL: 必ず新しいMapを作成して不変更新 ★★★）
   const setShapes = (updater) => {
-    const next = typeof updater === 'function' ? updater(getAllShapes()) : (updater ?? []);
-    shapesMapRef.current = mapFromArray(next);
+    let next;
+    if (typeof updater === 'function') {
+      const current = getAllShapes();
+      next = updater(current);
+    } else {
+      next = updater ?? [];
+    }
+    // ★★★ CRITICAL: 新しいMap参照を作成（不変更新）★★★
+    shapesMapRef.current = new Map(next.map(s => [s.id, s]));
     bump();
   };
   
@@ -389,7 +436,7 @@ const ViewerCanvas = forwardRef(({
     setSelectedId(null);
     
     // テキストエディタ
-    setTextEditor(TEXT_EDITOR_INITIAL);
+    setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
 
     // ★★★ CRITICAL: draftCommentIdRefをクリア（前コメントのドラフト参照をリセット）★★★
     draftCommentIdRef.current = null;
@@ -432,8 +479,17 @@ const ViewerCanvas = forwardRef(({
       // isDrawing
       setIsDrawing(false);
       
-      setTextEditor(TEXT_EDITOR_INITIAL);
-      if (transformerRef.current) { transformerRef.current.nodes([]); transformerRef.current.getLayer()?.batchDraw(); }
+      // テキストエディタ
+      setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
+
+      // Transformer解除
+      if (transformerRef.current) {
+        transformerRef.current.nodes([]);
+        const layer = transformerRef.current.getLayer();
+        if (layer?.batchDraw) {
+          layer.batchDraw();
+        }
+      }
     }
   }, [clearAfterSubmitNonce]);
 
@@ -563,8 +619,12 @@ const ViewerCanvas = forwardRef(({
     setSelectedId(null);
     setCurrentShape(null);
     setIsDrawing(false);
-    setTextEditor(TEXT_EDITOR_INITIAL);
-    if (transformerRef.current) { transformerRef.current.nodes([]); transformerRef.current.getLayer()?.batchDraw(); }
+    setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
+    if (transformerRef.current) {
+      transformerRef.current.nodes([]);
+      transformerRef.current.getLayer()?.batchDraw();
+    }
+
     console.log('[P0] forceClearToken complete: UI cleared, Map preserved');
     }, [forceClearToken]);
 
@@ -687,7 +747,13 @@ const ViewerCanvas = forwardRef(({
         prevMapSize,
       });
       
-      const dirtyShapes = extractDirtyShapes(shapesMapRef.current);
+      // dirtyShapes保持（既存ロジック）
+      const dirtyShapes = new Map();
+      for (const [id, shape] of shapesMapRef.current.entries()) {
+        if (shape._dirty) {
+          dirtyShapes.set(id, shape);
+        }
+      }
 
       // newMap構築（既存ロジック）
       const newMap = new Map();
@@ -853,7 +919,13 @@ const ViewerCanvas = forwardRef(({
       prevMapSize,
     });
 
-    const dirtyShapes = extractDirtyShapes(shapesMapRef.current);
+    // ★★★ CRITICAL: dirtyなローカルshapeを保持するために一時保存 ★★★
+    const dirtyShapes = new Map();
+    for (const [id, shape] of shapesMapRef.current.entries()) {
+      if (shape._dirty) {
+        dirtyShapes.set(id, shape);
+      }
+    }
 
     console.log('[ViewerCanvas] existingShapes useEffect (FULL SYNC):', {
       incomingRawLength: incomingRaw.length,
@@ -1133,9 +1205,16 @@ const ViewerCanvas = forwardRef(({
     return { x: (p.x - v.viewX) / v.contentScale, y: (p.y - v.viewY) / v.contentScale, stageX: p.x, stageY: p.y, _branch, _view: v };
   };
   
-  // 正規化座標（0-1の範囲）— bgSizeをバインドしたローカル版
-  const normalizeCoords = (imgX, imgY) => ({ nx: imgX / bgSize.width, ny: imgY / bgSize.height });
-  const denormalizeCoords = (nx, ny) => ({ x: nx * bgSize.width, y: ny * bgSize.height });
+  // 正規化座標（0-1の範囲）
+  const normalizeCoords = (imgX, imgY) => ({
+    nx: imgX / bgSize.width,
+    ny: imgY / bgSize.height,
+  });
+  
+  const denormalizeCoords = (nx, ny) => ({
+    x: nx * bgSize.width,
+    y: ny * bgSize.height,
+  });
   
   // 操作履歴追加
   const addToUndoStack = (action) => {
@@ -1143,29 +1222,46 @@ const ViewerCanvas = forwardRef(({
     setRedoStack([]); // 新しい操作でredoスタックはクリア
   };
 
+  // Undo実行（★★★ CRITICAL: 不変更新で新しいMapを作成 ★★★）
   const performUndo = () => {
     if (undoStack.length === 0) return;
+    
     const action = undoStack[undoStack.length - 1];
     setUndoStack(prev => prev.slice(0, -1));
     setRedoStack(prev => [...prev, action]);
-    const m = new Map(shapesMapRef.current);
-    if (action.type === 'add') m.delete(action.shapeId);
-    else if (action.type === 'update') m.set(action.shapeId, action.before);
-    else if (action.type === 'delete') m.set(action.shape.id, action.shape);
-    shapesMapRef.current = m;
+    
+    // ★★★ CRITICAL: 新しいMapを作成（不変更新）★★★
+    const newMap = new Map(shapesMapRef.current);
+    if (action.type === 'add') {
+      newMap.delete(action.shapeId);
+    } else if (action.type === 'update') {
+      newMap.set(action.shapeId, action.before);
+    } else if (action.type === 'delete') {
+      newMap.set(action.shape.id, action.shape);
+    }
+    shapesMapRef.current = newMap;
     bump();
     onShapesChange?.(getAllShapes());
   };
 
+  // Redo実行（★★★ CRITICAL: 不変更新で新しいMapを作成 ★★★）
   const performRedo = () => {
     if (redoStack.length === 0) return;
+    
     const action = redoStack[redoStack.length - 1];
     setRedoStack(prev => prev.slice(0, -1));
     setUndoStack(prev => [...prev, action]);
-    const m = new Map(shapesMapRef.current);
-    if (action.type === 'update') m.set(action.shapeId, action.after);
-    else if (action.type === 'delete') m.delete(action.shape.id);
-    shapesMapRef.current = m;
+    
+    // ★★★ CRITICAL: 新しいMapを作成（不変更新）★★★
+    const newMap = new Map(shapesMapRef.current);
+    if (action.type === 'add') {
+      // 再追加は困難なので省略
+    } else if (action.type === 'update') {
+      newMap.set(action.shapeId, action.after);
+    } else if (action.type === 'delete') {
+      newMap.delete(action.shape.id);
+    }
+    shapesMapRef.current = newMap;
     bump();
     onShapesChange?.(getAllShapes());
   };
@@ -1180,8 +1276,19 @@ const ViewerCanvas = forwardRef(({
     const shape = selectedShape;
     addToUndoStack({ type: 'delete', shape, index: 0 });
     
-    if (transformerRef.current) { transformerRef.current.nodes([]); transformerRef.current.getLayer()?.batchDraw(); }
-    shapesMapRef.current = mapDelete(shapesMapRef.current, selectedId);
+    // Transformer解除（先に）
+    if (transformerRef.current) {
+      transformerRef.current.nodes([]);
+      const layer = transformerRef.current.getLayer();
+      if (layer?.batchDraw) {
+        layer.batchDraw();
+      }
+    }
+    
+    // Optimistic update（★★★ CRITICAL: 新しいMapを作成 ★★★）
+    const newMap = new Map(shapesMapRef.current);
+    newMap.delete(selectedId);
+    shapesMapRef.current = newMap;
     bump();
     onShapesChange?.(getAllShapes());
     setSelectedId(null);
@@ -1198,7 +1305,9 @@ const ViewerCanvas = forwardRef(({
         console.error('[ViewerCanvas] Delete shape error:', err);
         debugRef.current.saveStatus = 'error';
         debugRef.current.error = err.message;
-        shapesMapRef.current = mapPatchShape(shapesMapRef.current, shape.id, shape);
+        const revertMap = new Map(shapesMapRef.current);
+        revertMap.set(shape.id, shape);
+        shapesMapRef.current = revertMap;
         bump();
         onShapesChange?.(getAllShapes());
       }
@@ -1568,18 +1677,27 @@ const ViewerCanvas = forwardRef(({
           fontSize,
         };
 
+        // CRITICAL: Map方式でupsert + dirty/localTs付与（★★★ 不変更新 ★★★）
         const updatedWithDirty = { ...updatedShape, _dirty: true, _localTs: Date.now() };
         addToUndoStack({ type: 'update', shapeId, before: existingShape, after: updatedWithDirty });
-        shapesMapRef.current = mapUpsertDirty(shapesMapRef.current, updatedShape);
+        const newMap = new Map(shapesMapRef.current);
+        newMap.set(shapeId, updatedWithDirty);
+        shapesMapRef.current = newMap;
         bump();
         onShapesChange?.(getAllShapes());
 
         if (onSaveShape) {
           try {
             await onSaveShape(updatedShape, 'upsert');
-            shapesMapRef.current = mapClearDirty(shapesMapRef.current, shapeId);
-            bump();
-            onShapesChange?.(getAllShapes());
+            // CRITICAL: dirty解除（★★★ 不変更新 ★★★）
+            const cur = shapesMapRef.current.get(shapeId);
+            if (cur) {
+              const dirtyMap = new Map(shapesMapRef.current);
+              dirtyMap.set(shapeId, { ...cur, _dirty: false });
+              shapesMapRef.current = dirtyMap;
+              bump();
+              onShapesChange?.(getAllShapes());
+            }
           } catch (err) {
             console.error('Save text error:', err);
           }
@@ -1618,8 +1736,12 @@ const ViewerCanvas = forwardRef(({
         });
       }
 
+      // CRITICAL: Map方式でupsert + dirty/localTs付与（★★★ 不変更新 ★★★）
+      const shapeWithDirty = { ...normalizedShape, _dirty: true, _localTs: Date.now() };
       addToUndoStack({ type: 'add', shapeId: normalizedShape.id });
-      shapesMapRef.current = mapUpsertDirty(shapesMapRef.current, normalizedShape);
+      const newMap = new Map(shapesMapRef.current);
+      newMap.set(shapeWithDirty.id, shapeWithDirty);
+      shapesMapRef.current = newMap;
       bump();
       onShapesChange?.(getAllShapes());
       setSelectedId(normalizedShape.id);
@@ -1627,22 +1749,29 @@ const ViewerCanvas = forwardRef(({
       if (onSaveShape) {
         try {
           const result = await onSaveShape(normalizedShape, 'create');
-          shapesMapRef.current = mapClearDirty(shapesMapRef.current, normalizedShape.id, result?.dbId);
-          bump();
-          onShapesChange?.(getAllShapes());
+          // CRITICAL: dirty解除（★★★ 不変更新 ★★★）
+          const cur = shapesMapRef.current.get(normalizedShape.id);
+          if (cur) {
+            const dirtyMap = new Map(shapesMapRef.current);
+            dirtyMap.set(normalizedShape.id, { ...cur, dbId: result?.dbId, _dirty: false });
+            shapesMapRef.current = dirtyMap;
+            bump();
+            onShapesChange?.(getAllShapes());
+          }
         } catch (err) {
           console.error('Save text error:', err);
         }
       }
     }
 
-    setTextEditor(TEXT_EDITOR_INITIAL);
+    setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
     setIsComposing(false);
     if (onToolChange) onToolChange('select');
   };
 
+  // テキストキャンセル
   const handleTextCancel = () => {
-    setTextEditor(TEXT_EDITOR_INITIAL);
+    setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
     setIsComposing(false);
     if (onToolChange) onToolChange('select');
   };
@@ -1848,7 +1977,11 @@ const ViewerCanvas = forwardRef(({
       // Undo履歴に追加
       addToUndoStack({ type: 'add', shapeId: normalizedShape.id });
 
-      shapesMapRef.current = mapUpsertDirty(shapesMapRef.current, normalizedShape);
+      // CRITICAL: Map方式でupsert（追加）+ dirty/localTs付与（★★★ 不変更新 ★★★）
+      const shapeWithDirty = { ...normalizedShape, _dirty: true, _localTs: Date.now() };
+      const newMap = new Map(shapesMapRef.current);
+      newMap.set(shapeWithDirty.id, shapeWithDirty);
+      shapesMapRef.current = newMap;
       bump();
       console.log('[🎨 DRAW_DIAG] Map updated after commit:', {
         shapeId: shapeWithDirty.id.substring(0, 8),
@@ -1897,9 +2030,15 @@ const ViewerCanvas = forwardRef(({
           debugRef.current.successId = result?.dbId || normalizedShape.id;
           debugRef.current.error = null;
 
-          shapesMapRef.current = mapClearDirty(shapesMapRef.current, normalizedShape.id, result?.dbId);
-          bump();
-          onShapesChange?.(getAllShapes());
+          // CRITICAL: DBから返ってきた_idを既存shapeに上書き + dirty解除（★★★ 不変更新 ★★★）
+          const cur = shapesMapRef.current.get(normalizedShape.id);
+          if (cur) {
+            const newMap = new Map(shapesMapRef.current);
+            newMap.set(normalizedShape.id, { ...cur, dbId: result?.dbId, _dirty: false });
+            shapesMapRef.current = newMap;
+            bump();
+            onShapesChange?.(getAllShapes());
+          }
         } catch (err) {
           debugRef.current.saveStatus = 'error';
           debugRef.current.error = err.message || String(err);
@@ -1951,14 +2090,18 @@ const ViewerCanvas = forwardRef(({
 
       const { shape, x, y } = p;
 
+      // tool別にMapを追従させる（保存はしない）（★★★ 不変更新 ★★★）
       const cur = shapesMapRef.current.get(shape.id);
       if (!cur) return;
+      
+      const newMap = new Map(shapesMapRef.current);
       if (shape.tool === 'rect' || shape.tool === 'circle' || shape.tool === 'text') {
         const { nx, ny } = normalizeCoords(x, y);
-        shapesMapRef.current = mapPatchShape(shapesMapRef.current, shape.id, { nx, ny });
+        newMap.set(shape.id, { ...cur, nx, ny });
       } else if (shape.tool === 'pen' || shape.tool === 'arrow') {
-        shapesMapRef.current = mapPatchShape(shapesMapRef.current, shape.id, { dragX: x, dragY: y });
+        newMap.set(shape.id, { ...cur, dragX: x, dragY: y });
       }
+      shapesMapRef.current = newMap;
       bump();
     });
   };
@@ -2034,11 +2177,18 @@ const ViewerCanvas = forwardRef(({
       updatedShape.ny = ny;
     }
     
-    addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: { ...updatedShape, _dirty: true, _localTs: Date.now() } });
-    shapesMapRef.current = mapUpsertDirty(shapesMapRef.current, updatedShape);
+    // CRITICAL: Map方式でupsert + dirty/localTs付与（★★★ 不変更新 ★★★）
+    const updatedWithDirty = { ...updatedShape, _dirty: true, _localTs: Date.now() };
+    addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: updatedWithDirty });
+
+    // CRITICAL: Map更新 + 親に全量同期（★★★ 不変更新 ★★★）
+    const newMap = new Map(shapesMapRef.current);
+    newMap.set(updatedWithDirty.id, updatedWithDirty);
+    shapesMapRef.current = newMap;
     bump();
     onShapesChange?.(getAllShapes());
 
+    // ドラッグ終了
     isDraggingRef.current = false;
     isInteractingRef.current = false;
     if (pendingIncomingShapesRef.current) {
@@ -2057,14 +2207,22 @@ const ViewerCanvas = forwardRef(({
         debugRef.current.saveStatus = 'success';
         debugRef.current.error = null;
         
-        shapesMapRef.current = mapClearDirty(shapesMapRef.current, updatedShape.id, result?.dbId);
-        bump();
-        onShapesChange?.(getAllShapes());
+        const cur = shapesMapRef.current.get(updatedShape.id);
+        if (cur) {
+          const newMap = new Map(shapesMapRef.current);
+          newMap.set(updatedShape.id, { ...cur, dbId: result?.dbId, _dirty: false });
+          shapesMapRef.current = newMap;
+          bump();
+          onShapesChange?.(getAllShapes());
+        }
       } catch (err) {
         console.error('Update shape error:', err);
         debugRef.current.saveStatus = 'error';
         debugRef.current.error = err.message;
-        shapesMapRef.current = mapPatchShape(shapesMapRef.current, shape.id, shape);
+        // 失敗時はrevert（★★★ 不変更新 ★★★）
+        const revertMap = new Map(shapesMapRef.current);
+        revertMap.set(shape.id, shape);
+        shapesMapRef.current = revertMap;
         bump();
         onShapesChange?.(getAllShapes());
       } finally {
@@ -2197,12 +2355,19 @@ const ViewerCanvas = forwardRef(({
       delete updatedShape.height;
       delete updatedShape.radius;
 
-      addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: { ...updatedShape, _dirty: true, _localTs: Date.now() } });
-      shapesMapRef.current = mapUpsertDirty(shapesMapRef.current, updatedShape);
+      // CRITICAL: Map方式でupsert + dirty/localTs付与（★★★ 不変更新 ★★★）
+      const updatedWithDirty = { ...updatedShape, _dirty: true, _localTs: Date.now() };
+      addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: updatedWithDirty });
+
+      // CRITICAL: Map更新 + 親に全量同期（★★★ 不変更新 ★★★）
+      const newMap = new Map(shapesMapRef.current);
+      newMap.set(updatedWithDirty.id, updatedWithDirty);
+      shapesMapRef.current = newMap;
       bump();
       onShapesChange?.(getAllShapes());
 
-      isInteractingRef.current = false;
+      // DB更新（upsertモード）
+      isInteractingRef.current = false; // ★ B) 操作終了
       if (onSaveShape) {
         // ★ B) 保留されていたshapesがあれば同期をトリガー
         if (pendingIncomingShapesRef.current) {
@@ -2224,16 +2389,26 @@ const ViewerCanvas = forwardRef(({
           debugRef.current.saveStatus = 'success';
           debugRef.current.error = null;
 
-          shapesMapRef.current = mapClearDirty(shapesMapRef.current, updatedShape.id, result?.dbId);
-          bump();
-          onShapesChange?.(getAllShapes());
+          // CRITICAL: dirty解除（★★★ 不変更新 ★★★）
+          const cur = shapesMapRef.current.get(updatedShape.id);
+          if (cur) {
+            const dirtyMap = new Map(shapesMapRef.current);
+            dirtyMap.set(updatedShape.id, { ...cur, dbId: result?.dbId, _dirty: false });
+            shapesMapRef.current = dirtyMap;
+            bump();
+            onShapesChange?.(getAllShapes());
+          }
         } catch (err) {
           console.error('[ViewerCanvas] onSaveShape error:', err);
           debugRef.current.saveStatus = 'error';
           debugRef.current.error = err.message;
-          shapesMapRef.current = mapPatchShape(shapesMapRef.current, shape.id, shape);
+          // 失敗時はrevert（★★★ 不変更新 ★★★）
+          const revertMap = new Map(shapesMapRef.current);
+          revertMap.set(shape.id, shape);
+          shapesMapRef.current = revertMap;
           bump();
           onShapesChange?.(getAllShapes());
+          console.log('[ViewerCanvas] onSaveShape failed, reverted to original size:', { shapeId: shape.id?.substring(0, 8) });
         } finally {
           setIsSaving(prev => ({ ...prev, [shape.id]: false }));
         }
