@@ -969,17 +969,11 @@ const ViewerCanvas = forwardRef(({
         tool,
       });
 
-      // ★★★ DEBUG HUD: 描画開始ログを追加 ★★★
-      const drawStartLog = {
-        timestamp: new Date().toISOString(),
-        event: 'DRAW_START',
-        targetId: effectiveActiveId != null ? String(effectiveActiveId) : '',
-        activeCommentId: String(activeCommentId ?? ''),
-        draftCommentId: String(draftCommentIdRef.current ?? ''),
-        commentId,
-        tool,
-      };
-      debugHudLogsRef.current = [...debugHudLogsRef.current.slice(-9), drawStartLog];
+        if (DEBUG_MODE) {
+        debugHudLogsRef.current = [...debugHudLogsRef.current.slice(-9), {
+          timestamp: new Date().toISOString(), event: 'DRAW_START', commentId, tool,
+        }];
+      }
 
       // CRITICAL: clientShapeId は1回だけ発行して固定（移動・編集で絶対に再生成しない）
       const newShape = {
@@ -1308,40 +1302,16 @@ const ViewerCanvas = forwardRef(({
 
       // ★★★ P0-FIX: 新規shape確定は canCommitNew のみで判定（draftReady不要）★★★
       // draftReady は「既存shape編集」の権限であり、新規描画の確定には不要
-      console.log('[🎨 DRAW_DIAG] commit check:', {
-        canCommitNew,
-        paintMode,
-        draftReady,
-        normalizedShapeCommentId: normalizedShape.comment_id?.substring(0, 12) || 'null',
-        shapeTool,
-      });
-
       if (!canCommitNew) {
-        console.warn('[🎨 DRAW_DIAG] COMMIT BLOCKED: canCommitNew=false', { 
-          paintMode, 
-          canCommitNew,
-          tool: shapeTool,
-        });
         setCurrentShape(null);
         setIsDrawing(false);
         drawViewRef.current = null;
         return;
       }
 
-      console.log('[🎨 DRAW_DIAG] COMMIT new shape -> addToMap + onSaveShape:', {
-        shapeId: normalizedShape.id.substring(0, 8),
-        comment_id: normalizedShape.comment_id?.substring(0, 12),
-        tool: shapeTool,
-        canCommitNew,
-        draftReady,
-        mapSizeBefore: shapesMapRef.current.size,
-      });
-
-      // Undo履歴に追加
       addToUndoStack({ type: 'add', shapeId: normalizedShape.id });
 
-      const shapeWithDirty = commitShapeToMap(shapesMapRef, normalizedShape, bump, onShapesChange);
-      if (DEBUG_MODE) console.log('[🎨 DRAW_DIAG] Map updated after commit:', { shapeId: shapeWithDirty.id.substring(0, 8), mapSizeAfter: shapesMapRef.current.size });
+      commitShapeToMap(shapesMapRef, normalizedShape, bump, onShapesChange);
       
       setCurrentShape(null);
 
@@ -1370,19 +1340,8 @@ const ViewerCanvas = forwardRef(({
         debugRef.current.saveStatus = 'saving';
         debugRef.current.mutation = 'create';
 
-        console.log('[🎨 DRAW_DIAG] calling onSaveShape:', {
-          shapeId: normalizedShape.id.substring(0, 8),
-          comment_id: normalizedShape.comment_id?.substring(0, 12),
-          mode: 'create',
-          tool: normalizedShape.tool,
-        });
-
         try {
           const result = await onSaveShape(normalizedShape, 'create');
-          console.log('[🎨 DRAW_DIAG] onSaveShape SUCCESS:', {
-            shapeId: normalizedShape.id.substring(0, 8),
-            result,
-          });
           debugRef.current.saveStatus = 'success';
           debugRef.current.successId = result?.dbId || normalizedShape.id;
           debugRef.current.error = null;
@@ -1397,11 +1356,7 @@ const ViewerCanvas = forwardRef(({
         }
         }
 
-        // ★★★ CRITICAL: 描画完了時にview固定を解除 ★★★
-        drawViewRef.current = null;
-        if (DEBUG_MODE) {
-          console.log('[ViewerCanvas] drawViewRef cleared (draw complete)');
-        }
+          drawViewRef.current = null;
         } catch (err) {
         console.error('PointerUp Error:', err);
         setError(`PointerUp Error: ${err.message}`);
