@@ -1266,14 +1266,7 @@ const ViewerCanvas = forwardRef(({
         bgHeight: bgSize.height,
       };
       
-      // ★ console.log：描画確定直後に comment_id が入ってるか確認
-      console.log("[paint] normalizedShape ids:", {
-        id: normalizedShape?.id,
-        comment_id: normalizedShape?.comment_id,
-        commentId: normalizedShape?.commentId,
-        activeCommentId,
-        draftCommentId: draftCommentIdRef.current,
-      });
+
 
         if (shapeTool === 'pen' && shape.points) {
           const normalizedPoints = [];
@@ -1360,8 +1353,16 @@ const ViewerCanvas = forwardRef(({
         onToolChange('select');
       }
 
-      // commitDiag: shape確定座標 vs down時k座標（A/B切り分け）
-      if (DEBUG_MODE && coordDiagRef.current.downK) { const dK=coordDiagRef.current.downK,cd2=coordDiagRef.current; let ix=0,iy=0; if(normalizedShape.nx!==undefined){const p=denormalizeCoords(normalizedShape.nx,normalizedShape.ny);ix=p.x;iy=p.y;}else if(normalizedShape.normalizedPoints?.length>=2){const p=denormalizeCoords(normalizedShape.normalizedPoints[0],normalizedShape.normalizedPoints[1]);ix=p.x;iy=p.y;} const sx=ix*contentScale+viewX,sy=iy*contentScale+viewY; cd2.commitDiagStr=`img=(${Math.round(ix)},${Math.round(iy)}) stg=(${Math.round(sx)},${Math.round(sy)}) k0=(${Math.round(dK.x)},${Math.round(dK.y)}) Δ=(${Math.round(sx-dK.x)},${Math.round(sy-dK.y)})`; cd2.lastCmt=cd2.commitDiagStr; if(cd2.strokeSeqInSession===1&&!cd2.firstCmt) cd2.firstCmt=cd2.commitDiagStr; setDiagTick(t=>t+1); }
+      if (DEBUG_MODE && coordDiagRef.current.downK) {
+        const dK = coordDiagRef.current.downK, cd2 = coordDiagRef.current;
+        let ix = 0, iy = 0;
+        if (normalizedShape.nx !== undefined) { const p = denormalizeCoords(normalizedShape.nx, normalizedShape.ny); ix = p.x; iy = p.y; }
+        else if (normalizedShape.normalizedPoints?.length >= 2) { const p = denormalizeCoords(normalizedShape.normalizedPoints[0], normalizedShape.normalizedPoints[1]); ix = p.x; iy = p.y; }
+        const sx = ix * contentScale + viewX, sy = iy * contentScale + viewY;
+        cd2.commitDiagStr = `img=(${Math.round(ix)},${Math.round(iy)}) stg=(${Math.round(sx)},${Math.round(sy)}) k0=(${Math.round(dK.x)},${Math.round(dK.y)}) Δ=(${Math.round(sx-dK.x)},${Math.round(sy-dK.y)})`;
+        cd2.lastCmt = cd2.commitDiagStr; if (cd2.strokeSeqInSession === 1 && !cd2.firstCmt) cd2.firstCmt = cd2.commitDiagStr;
+        setDiagTick(t => t + 1);
+      }
 
       // 親コンポーネントに保存を依頼（createモード）
       if (onSaveShape) {
@@ -1760,29 +1761,11 @@ const ViewerCanvas = forwardRef(({
     applyStyleToSelected({ strokeWidth });
   }, [strokeWidth, canEdit, selectedId]);
 
-  // ★★★ CRITICAL: debugHudData の useMemo は全ての hooks の後、早期return の前に配置 ★★★
   const debugHudData = useMemo(() => {
+    if (!DEBUG_MODE) return null;
     const uniqueCids = [...new Set(renderedShapes.map(s => shapeCommentId(s)).filter(Boolean))].slice(0, 10);
-    
-    // comment_idごとの件数を集計
     const countsByCommentId = {};
-    renderedShapes.forEach(s => {
-      const cid = shapeCommentId(s);
-      if (cid != null && cid !== '') {
-        const cidStr = String(cid).substring(0, 12);
-        countsByCommentId[cidStr] = (countsByCommentId[cidStr] || 0) + 1;
-      }
-    });
-    
-    const coordDiag = DEBUG_MODE ? {
-      paintEnterSeq: coordDiagRef.current.paintEnterSeq,
-      strokeSeqInSession: coordDiagRef.current.strokeSeqInSession,
-      firstStroke: coordDiagRef.current.firstStroke,
-      lastPointerEvent: coordDiagRef.current.lastPointerEvent,
-      ptrDiagStr: coordDiagRef.current.ptrDiagStr, commitDiagStr: coordDiagRef.current.commitDiagStr,
-      firstPtr: coordDiagRef.current.firstPtr, firstCmt: coordDiagRef.current.firstCmt, lastPtr: coordDiagRef.current.lastPtr, lastCmt: coordDiagRef.current.lastCmt,
-    } : null;
-    
+    renderedShapes.forEach(s => { const cid = shapeCommentId(s); if (cid) { const k = String(cid).substring(0, 12); countsByCommentId[k] = (countsByCommentId[k] || 0) + 1; } });
     return {
       activeCommentId: String(activeCommentId ?? 'null'),
       effectiveActiveId: String(effectiveActiveId ?? 'null'),
@@ -1790,7 +1773,7 @@ const ViewerCanvas = forwardRef(({
       renderedShapesLength: renderedShapes.length,
       uniqueCommentIds: uniqueCids.map(id => String(id).substring(0, 12)),
       countsByCommentId,
-      coordDiag, // ★★★ P0-COORD-DIAG: 座標診断データ追加 ★★★
+      coordDiag: { ...coordDiagRef.current },
     };
   }, [activeCommentId, effectiveActiveId, renderedShapes, diagTick]);
 
