@@ -2037,54 +2037,28 @@ const ViewerCanvas = forwardRef(({
       updatedShape.ny = ny;
     }
     
-    // CRITICAL: Map方式でupsert + dirty/localTs付与（★★★ 不変更新 ★★★）
-    const updatedWithDirty = { ...updatedShape, _dirty: true, _localTs: Date.now() };
+    const updatedWithDirty = markDirty(updatedShape);
     addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: updatedWithDirty });
+    commitShapeToMap(shapesMapRef, updatedWithDirty, bump, onShapesChange);
 
-    // CRITICAL: Map更新 + 親に全量同期（★★★ 不変更新 ★★★）
-    const newMap = new Map(shapesMapRef.current);
-    newMap.set(updatedWithDirty.id, updatedWithDirty);
-    shapesMapRef.current = newMap;
-    bump();
-    onShapesChange?.(getAllShapes());
-
-    // ドラッグ終了
     isDraggingRef.current = false;
     isInteractingRef.current = false;
-    if (pendingIncomingShapesRef.current) {
-      console.log('[SYNC] handleDragEnd: applying pending shapes');
-      bump();
-    }
+    if (pendingIncomingShapesRef.current) bump();
     
-    // DB更新（upsertモード）
     if (onSaveShape) {
       setIsSaving(prev => ({ ...prev, [shape.id]: true }));
       debugRef.current.mutation = 'update-drag';
       debugRef.current.saveStatus = 'saving';
-      
       try {
         const result = await onSaveShape(updatedShape, 'upsert');
         debugRef.current.saveStatus = 'success';
         debugRef.current.error = null;
-        
-        const cur = shapesMapRef.current.get(updatedShape.id);
-        if (cur) {
-          const newMap = new Map(shapesMapRef.current);
-          newMap.set(updatedShape.id, { ...cur, dbId: result?.dbId, _dirty: false });
-          shapesMapRef.current = newMap;
-          bump();
-          onShapesChange?.(getAllShapes());
-        }
+        onSaveSuccess(shapesMapRef, updatedShape.id, result?.dbId, bump, onShapesChange);
       } catch (err) {
         console.error('Update shape error:', err);
         debugRef.current.saveStatus = 'error';
         debugRef.current.error = err.message;
-        // 失敗時はrevert（★★★ 不変更新 ★★★）
-        const revertMap = new Map(shapesMapRef.current);
-        revertMap.set(shape.id, shape);
-        shapesMapRef.current = revertMap;
-        bump();
-        onShapesChange?.(getAllShapes());
+        onSaveRevert(shapesMapRef, shape, bump, onShapesChange);
       } finally {
         setIsSaving(prev => ({ ...prev, [shape.id]: false }));
       }
