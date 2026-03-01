@@ -1632,28 +1632,14 @@ const ViewerCanvas = forwardRef(({
         });
       }
 
-      // CRITICAL: Map方式でupsert + dirty/localTs付与（★★★ 不変更新 ★★★）
-      const shapeWithDirty = { ...normalizedShape, _dirty: true, _localTs: Date.now() };
       addToUndoStack({ type: 'add', shapeId: normalizedShape.id });
-      const newMap = new Map(shapesMapRef.current);
-      newMap.set(shapeWithDirty.id, shapeWithDirty);
-      shapesMapRef.current = newMap;
-      bump();
-      onShapesChange?.(getAllShapes());
+      commitShapeToMap(shapesMapRef, normalizedShape, bump, onShapesChange);
       setSelectedId(normalizedShape.id);
 
       if (onSaveShape) {
         try {
           const result = await onSaveShape(normalizedShape, 'create');
-          // CRITICAL: dirty解除（★★★ 不変更新 ★★★）
-          const cur = shapesMapRef.current.get(normalizedShape.id);
-          if (cur) {
-            const dirtyMap = new Map(shapesMapRef.current);
-            dirtyMap.set(normalizedShape.id, { ...cur, dbId: result?.dbId, _dirty: false });
-            shapesMapRef.current = dirtyMap;
-            bump();
-            onShapesChange?.(getAllShapes());
-          }
+          onSaveSuccess(shapesMapRef, normalizedShape.id, result?.dbId, bump, onShapesChange);
         } catch (err) {
           console.error('Save text error:', err);
         }
