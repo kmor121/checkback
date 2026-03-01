@@ -130,28 +130,14 @@ const ViewerCanvas = forwardRef(({
   // 後方互換のためのダミー（実際はMapを参照）
   const shapes = useMemo(() => getAllShapes(), [shapesVersion]);
   
-  // setShapes互換関数（★★★ CRITICAL: 必ず新しいMapを作成して不変更新 ★★★）
   const setShapes = (updater) => {
-    let next;
-    if (typeof updater === 'function') {
-      const current = getAllShapes();
-      next = updater(current);
-    } else {
-      next = updater ?? [];
-    }
-    // ★★★ CRITICAL: 新しいMap参照を作成（不変更新）★★★
+    const next = typeof updater === 'function' ? updater(getAllShapes()) : (updater ?? []);
     shapesMapRef.current = new Map(next.map(s => [s.id, s]));
     bump();
   };
   
-  // CRITICAL: 描画状態をrefに同期（activeCommentIdリセットガード用）
-  useEffect(() => {
-    isDrawingRef2.current = isDrawing;
-  }, [isDrawing]);
-  
-  useEffect(() => {
-    currentShapeRef2.current = currentShape;
-  }, [currentShape]);
+  useEffect(() => { isDrawingRef2.current = isDrawing; }, [isDrawing]);
+  useEffect(() => { currentShapeRef2.current = currentShape; }, [currentShape]);
   
   // パン状態（★★★ FIT: 親制御とローカル制御の統合 ★★★）
   const [localPan, setLocalPan] = useState({ x: 0, y: 0 });
@@ -304,8 +290,7 @@ const ViewerCanvas = forwardRef(({
   // ★★★ Hunk1: hidePaintOverlay時は描画を確実に空にする（表示レイヤー制御）★★★
   const renderedShapesFinal = hidePaintOverlay ? [] : renderedShapes;
   
-  // P0-DIAG: 最終表示配列
-  if (DEBUG_MODE) console.log('[VC] final:', { hide: hidePaintOverlay, cnt: renderedShapesFinal.length, cur: !!currentShape });
+
   
   const isEditableShape = (shape) => {
     if (!canEdit || effectiveActiveId == null) return false;
@@ -373,9 +358,7 @@ const ViewerCanvas = forwardRef(({
     });
   }, [activeCommentId]);
   
-  // ★★★ REMOVED: lastStableCommentIdRef更新処理 - fallback禁止のため削除 ★★★
-
-  // CRITICAL: 送信完了後のキャンバスクリア（nonce変化で発火）
+  // 送信完了後のキャンバスクリア
   const prevNonceRef = useRef(clearAfterSubmitNonce);
   useEffect(() => {
     if (clearAfterSubmitNonce !== prevNonceRef.current) {
@@ -393,15 +376,13 @@ const ViewerCanvas = forwardRef(({
     }
   }, [clearAfterSubmitNonce]);
 
-  // ★★★ REMOVED: hidePaintUntilSelect解除処理 - 不要なフラグ操作を削除 ★★★
-
-  // CRITICAL: 仮commentIdで描いたshapeを、activeCommentId確定後に付け替える
+  // 仮commentIdで描いたshapeを、activeCommentId確定後に付け替える
   useEffect(() => {
     if (!activeCommentId) return;
     if (!draftCommentIdRef.current) return;
 
     const draftId = draftCommentIdRef.current;
-    if (DEBUG_MODE) console.log('[ViewerCanvas] attaching draft shapes to real comment', { draftId, activeCommentId });
+
 
     setShapes(prev => prev.map(s => s.comment_id === draftId ? { ...s, comment_id: activeCommentId } : s));
     draftCommentIdRef.current = null;
@@ -413,24 +394,17 @@ const ViewerCanvas = forwardRef(({
 
     const prev = prevCanvasContextKeyRef.current;
     if (prev !== canvasContextKey) {
-      console.log('[B-FIX] CTX CHANGED -> Map/pending/lastNonEmpty/emptyStreak cleared', { prev, next: canvasContextKey });
-
-      // B) 描画混在対策: コンテキスト変更時は即座にMapをクリアし、古い描画の残留を根絶
-      shapesMapRef.current = new Map();
+        shapesMapRef.current = new Map();
       pendingCtxRef.current = null;
-      // ★★★ Hunk1: lastNonEmpty/emptyStreakを必ずリセット（跨ぎ温存防止）★★★
       lastNonEmptyShapesRef.current = { key: null, shapes: null };
       emptyStreakCountRef.current = 0;
       prevEmptyCountRef.current = 0;
       lastEmptyAppliedCtxRef.current = null;
-      bump(); // 画面を確実に更新
-
+      bump();
       setSelectedId(null);
       setCurrentShape(null);
       setIsDrawing(false);
       prevCanvasContextKeyRef.current = canvasContextKey;
-
-      console.log('[B-FIX] CTX CHANGED complete: shapesVersion bumped, Map size=0');
     }
   }, [canvasContextKey, bump]);
 
@@ -454,21 +428,15 @@ const ViewerCanvas = forwardRef(({
     
     prevFileIdentityRef.current = next;
     prevFileIdentityRef.pageNumber = pageNumber;
-    
-    console.log('[P0-V4] fileIdentity/pageNumber CHANGED, resetting state:', { prev: prev?.substring(0, 30), next: next?.substring(0, 30), pageNumber, mapSizeBefore: shapesMapRef.current.size });
-    shapesMapRef.current = new Map(); // ★ Mapをクリア（ファイル/ページ変更時のみ）
+    shapesMapRef.current = new Map();
     bump();
     setSelectedId(null);
     setCurrentShape(null);
     setUndoStack([]);
     setRedoStack([]);
-    // ★★★ FIT-FIX: pan リセットは親制御時のみローカルに適用（外部制御なら親が責任を持つ）★★★
-    if (!externalPan) {
-      setLocalPan({ x: 0, y: 0 });
-    }
-    setBgReady(false); // P2 FIX: ファイル変更時に背景ロード状態をリセット
-    console.log('[P0-V4] bgReady reset to false (file changed)');
-  }, [fileIdentity, pageNumber]); // ★★★ P0-V4: externalPan を依存配列から除外（pan変更でresetさせない）★★★
+    if (!externalPan) setLocalPan({ x: 0, y: 0 });
+    setBgReady(false);
+  }, [fileIdentity, pageNumber]);
 
   // zoom変更時はpanのクランプのみ（shapesは触らない）
   // ★★★ FIT-FIX: pan/setPanを依存配列から除外（無限ループ防止）★★★
@@ -495,12 +463,8 @@ const ViewerCanvas = forwardRef(({
     const currentPan = panRef.current;
     const clamped = clampPan(currentPan.x, currentPan.y, currentScaledWidth, currentScaledHeight);
     
-    // 同値ガード（無限ループ防止）
     if (clamped.x !== currentPan.x || clamped.y !== currentPan.y) {
-      console.log('[FIT] zoom/size changed, clamping pan:', { from: currentPan, to: clamped });
       setPanRef.current(clamped);
-    } else if (DEBUG_MODE) {
-      console.log('[FIT] zoom/size changed, pan already clamped (skip setPan)');
     }
   }, [zoom, containerSize.width, containerSize.height, bgSize.width, bgSize.height, clampPan]);
 
