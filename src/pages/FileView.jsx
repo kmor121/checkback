@@ -930,8 +930,21 @@ function FileViewContent() {
 
   const toggleResolveMutation = useMutation({
     mutationFn: ({ id, resolved }) => base44.entities.ReviewComment.update(id, { resolved }),
-    onSuccess: () => {
-      queryClient.invalidateQueries(['comments']);
+    onMutate: async ({ id, resolved }) => {
+      // ★★★ P0-FV-RESOLVE-OPTIMISTIC: 楽観更新 ★★★
+      await queryClient.cancelQueries(['comments', fileId]);
+      const prev = queryClient.getQueryData(['comments', fileId]);
+      queryClient.setQueryData(['comments', fileId], (old) =>
+        (old || []).map(c => String(c.id) === String(id) ? { ...c, resolved } : c)
+      );
+      return { prev };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.prev) queryClient.setQueryData(['comments', fileId], context.prev);
+      showToast('対応済みの更新に失敗しました', 'error');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries(['comments', fileId]);
     },
   });
 
