@@ -28,7 +28,8 @@ import {
   Trash,
   Check,
   Circle as CircleIcon,
-  Copy
+  Copy,
+  Paperclip
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
@@ -73,6 +74,9 @@ function FileViewContent() {
   // ★★★ 選択抑制: 新規テキスト入力中フラグ（ShareView同等）★★★
   const [isNewCommentInputActive, setIsNewCommentInputActive] = useState(false);
   
+  // 添付ファイル state
+  const [pendingFiles, setPendingFiles] = useState([]);
+
   // CRITICAL: 送信完了後のキャンバスクリア用nonce & 連打防止
   const [clearAfterSubmitNonce, setClearAfterSubmitNonce] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -169,6 +173,23 @@ function FileViewContent() {
     refetchOnWindowFocus: false,
     staleTime: 60000,
   });
+
+  // 添付ファイル取得
+  const { data: attachments = [] } = useQuery({
+    queryKey: ['commentAttachments', fileId],
+    queryFn: () => base44.entities.ReviewCommentAttachment.filter({ file_id: fileId }),
+    enabled: !!fileId,
+    staleTime: 30000,
+  });
+
+  const attachmentsByComment = React.useMemo(() => {
+    const map = {};
+    attachments.forEach(att => {
+      if (!map[att.comment_id]) map[att.comment_id] = [];
+      map[att.comment_id].push(att);
+    });
+    return map;
+  }, [attachments]);
 
   useEffect(() => {
     if (file && user) {
@@ -322,9 +343,20 @@ function FileViewContent() {
     return clean;
   };
 
+  // 添付ファイル操作
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files || []);
+    setPendingFiles(prev => [...prev, ...files]);
+    e.target.value = ''; // 同じファイルを再選択可能にする
+  };
+
+  const handleRemoveFile = (index) => {
+    setPendingFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
   // CRITICAL: useMutationで送信処理を管理（React Queryが重複防止を担当）
   const createCommentMutation = useMutation({
-    mutationFn: async ({ body, shapes }) => {
+    mutationFn: async ({ body, shapes, files }) => {
       const clientMutationId = crypto.randomUUID();
       console.log(`[comment] create called mid=${clientMutationId}`);
       
@@ -391,6 +423,24 @@ function FileViewContent() {
         }
       }
 
+      // 添付ファイルアップロード
+      if (files && files.length > 0) {
+        for (const file of files) {
+          const { file_url } = await base44.integrations.Core.UploadFile({ file });
+          await base44.entities.ReviewCommentAttachment.create({
+            file_id: fileId,
+            comment_id: comment.id,
+            uploader_type: 'user',
+            uploader_key: user?.id,
+            uploader_name: user?.full_name,
+            file_url,
+            original_filename: file.name,
+            mime_type: file.type,
+            size_bytes: file.size,
+          });
+        }
+      }
+
       return comment;
     },
     onSuccess: () => {
@@ -402,6 +452,7 @@ function FileViewContent() {
       // リセット処理
       setCommentBody('');
       setDraftShapes([]);
+      setPendingFiles([]);
       setComposerMode('new');
       setComposerTargetCommentId(null);
       setPaintSessionCommentId(null);
@@ -415,6 +466,7 @@ function FileViewContent() {
       setTimeout(() => {
         queryClient.invalidateQueries(['comments']);
         queryClient.invalidateQueries(['paintShapes']);
+        queryClient.invalidateQueries(['commentAttachments']);
       }, 100);
     },
     onError: (error) => {
@@ -423,7 +475,7 @@ function FileViewContent() {
   });
 
   const updateCommentMutation = useMutation({
-    mutationFn: async ({ targetId, body, hasShapes, shapes }) => {
+    mutationFn: async ({ targetId, body, hasShapes, shapes, files }) => {
       await base44.entities.ReviewComment.update(targetId, {
         body,
         has_paint: hasShapes,
@@ -449,6 +501,24 @@ function FileViewContent() {
           });
         }
       }
+
+      // 添付ファイルアップロード（編集時）
+      if (files && files.length > 0) {
+        for (const file of files) {
+          const { file_url } = await base44.integrations.Core.UploadFile({ file });
+          await base44.entities.ReviewCommentAttachment.create({
+            file_id: fileId,
+            comment_id: targetId,
+            uploader_type: 'user',
+            uploader_key: user?.id,
+            uploader_name: user?.full_name,
+            file_url,
+            original_filename: file.name,
+            mime_type: file.type,
+            size_bytes: file.size,
+          });
+        }
+      }
     },
     onSuccess: () => {
       showToast('コメントを更新しました', 'success');
@@ -459,6 +529,7 @@ function FileViewContent() {
       // リセット処理
       setCommentBody('');
       setDraftShapes([]);
+      setPendingFiles([]);
       setComposerMode('new');
       setComposerTargetCommentId(null);
       setPaintSessionCommentId(null);
@@ -472,6 +543,7 @@ function FileViewContent() {
       setTimeout(() => {
         queryClient.invalidateQueries(['comments']);
         queryClient.invalidateQueries(['paintShapes']);
+        queryClient.invalidateQueries(['commentAttachments']);
       }, 100);
     },
     onError: (error) => {
@@ -519,13 +591,14 @@ function FileViewContent() {
     // 現在の値をキャプチャ（クロージャの問題を避ける）
     const currentBody = commentBody;
     const currentDraftShapes = [...draftShapes];
+    const currentFiles = [...pendingFiles];
     const currentComposerMode = composerMode;
     const currentTargetId = composerTargetCommentId || activeCommentId;
     
     // CRITICAL: 編集モード or activeCommentIdがある場合は「更新」
     if ((currentComposerMode === 'edit' && currentTargetId) || activeCommentId) {
       updateCommentMutation.mutate(
-        { targetId: currentTargetId, body: currentBody, hasShapes: currentDraftShapes.length > 0, shapes: currentDraftShapes },
+        { targetId: currentTargetId, body: currentBody, hasShapes: currentDraftShapes.length > 0, shapes: currentDraftShapes, files: currentFiles },
         {
           onSettled: () => {
             console.log("[submit] === LOCK RELEASED (update) ===", new Date().toISOString());
@@ -537,7 +610,7 @@ function FileViewContent() {
     } else {
       // 新規モード
       createCommentMutation.mutate(
-        { body: currentBody, shapes: currentDraftShapes },
+        { body: currentBody, shapes: currentDraftShapes, files: currentFiles },
         {
           onSettled: () => {
             console.log("[submit] === LOCK RELEASED (create) ===", new Date().toISOString());
@@ -552,6 +625,7 @@ function FileViewContent() {
     commentBody,
     user,
     draftShapes,
+    pendingFiles,
     composerMode,
     composerTargetCommentId,
     activeCommentId,
@@ -999,7 +1073,7 @@ function FileViewContent() {
                     </Button>
 
                     {/* 本文入力 */}
-                    <div className="flex-1">
+                    <div className="flex-1 space-y-2">
                       <Textarea
                         placeholder={composerMode === 'edit' ? '編集中...' : 'コメントを入力...'}
                         value={commentBody}
@@ -1012,7 +1086,50 @@ function FileViewContent() {
                         className="text-sm resize-none"
                         disabled={isLocked}
                       />
+
+                      {/* 添付ファイル一覧 */}
+                      {pendingFiles.length > 0 && (
+                        <div className="space-y-1">
+                          {pendingFiles.map((f, idx) => (
+                            <div key={idx} className="flex items-center gap-2 text-xs text-gray-600">
+                              <Paperclip className="w-3 h-3" />
+                              <span className="flex-1 truncate">{f.name}</span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-auto p-0 text-red-600"
+                                onClick={() => handleRemoveFile(idx)}
+                              >
+                                <X className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
+
+                    {/* 添付ボタン */}
+                    <input
+                      type="file"
+                      multiple
+                      className="hidden"
+                      id="fv-file-input"
+                      onChange={handleFileSelect}
+                      disabled={isLocked}
+                    />
+                    <label htmlFor="fv-file-input">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-1"
+                        asChild
+                        disabled={isLocked}
+                      >
+                        <span>
+                          <Paperclip className="w-4 h-4" />
+                        </span>
+                      </Button>
+                    </label>
 
                     {/* 送信ボタン */}
                     <Button
@@ -1166,6 +1283,25 @@ function FileViewContent() {
                             )}
                           </div>
                           <p className="text-sm text-gray-700">{comment.body || '（本文なし）'}</p>
+
+                          {/* 添付ファイル表示 */}
+                          {(attachmentsByComment[comment.id] || []).length > 0 && (
+                            <div className="mt-2 space-y-1">
+                              {(attachmentsByComment[comment.id]).map((att) => (
+                                <a
+                                  key={att.id}
+                                  href={att.file_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-2 text-xs text-blue-600 hover:underline"
+                                >
+                                  <Paperclip className="w-3 h-3" />
+                                  {att.original_filename}
+                                </a>
+                              ))}
+                            </div>
+                          )}
+
                           <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
                             <span>{comment.page_no}枚目</span>
                             <span>•</span>
