@@ -519,7 +519,7 @@ function FileViewContent() {
     // CRITICAL: 編集モード or activeCommentIdがある場合は「更新」
     if ((currentComposerMode === 'edit' && currentTargetId) || activeCommentId) {
       updateCommentMutation.mutate(
-        { targetId: currentTargetId, body: currentBody, hasShapes: currentDraftShapes.length > 0 },
+        { targetId: currentTargetId, body: currentBody, hasShapes: currentDraftShapes.length > 0, shapes: currentDraftShapes },
         {
           onSettled: () => {
             console.log("[submit] === LOCK RELEASED (update) ===", new Date().toISOString());
