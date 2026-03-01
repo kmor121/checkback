@@ -971,43 +971,25 @@ const ViewerCanvas = forwardRef(({
     }
   }, [tool]);
 
-  // Transformer selection（編集モード時のみ、Rect/Circle/Textに対応）
+  // Transformer selection
   useEffect(() => {
     if (!transformerRef.current) return;
-    
+    const tr = transformerRef.current;
     if (isEditMode && selectedId && shapeRefs.current[selectedId]) {
       const selectedShape = shapes.find(s => s.id === selectedId);
-      const canTransform = selectedShape && (selectedShape.tool === 'rect' || selectedShape.tool === 'circle' || selectedShape.tool === 'text' || selectedShape.tool === 'arrow');
-
+      const canTransform = selectedShape && ['rect', 'circle', 'text', 'arrow'].includes(selectedShape.tool);
       if (canTransform) {
-        transformerRef.current.nodes([shapeRefs.current[selectedId]]);
-        // テキストの場合：Group内のRectを対象にする
-        if (selectedShape.tool === 'text') {
-          transformerRef.current.padding(0);
-          transformerRef.current.boundBoxFunc(null);
-        } else {
-          transformerRef.current.padding(0);
-          transformerRef.current.boundBoxFunc(null);
-        }
-        const layer = transformerRef.current.getLayer();
-        if (layer?.batchDraw) {
-          layer.batchDraw();
-        }
+        tr.nodes([shapeRefs.current[selectedId]]);
+        tr.padding(0);
+        tr.boundBoxFunc(null);
       } else {
-        transformerRef.current.nodes([]);
-        const layer = transformerRef.current.getLayer();
-        if (layer?.batchDraw) {
-          layer.batchDraw();
-        }
+        tr.nodes([]);
       }
     } else {
-      transformerRef.current.nodes([]);
-      const layer = transformerRef.current.getLayer();
-      if (layer?.batchDraw) {
-        layer.batchDraw();
-      }
+      tr.nodes([]);
     }
-    }, [selectedId, isEditMode, shapes]);
+    tr.getLayer()?.batchDraw();
+  }, [selectedId, isEditMode, shapes]);
 
   // テキストエディタフォーカス
   useEffect(() => {
