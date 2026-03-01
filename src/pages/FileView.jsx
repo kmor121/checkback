@@ -42,8 +42,9 @@ function FileViewContent() {
   const [draftShapes, setDraftShapes] = useState([]);
   const [activeCommentId, setActiveCommentId] = useState(null);
   
-  // ★★★ V-06 FIX: 新規コメント用の temp ID（ViewerCanvas の draftCommentId に渡す）★★★
-  const [tempCommentId, setTempCommentId] = useState(null);
+  // ★★★ P0-FV: 新規コメント用の temp ID（ViewerCanvas の draftCommentId に渡す）★★★
+  // ★★★ 初期値を即座に生成（paintMode ON前でも有効にする）★★★
+  const [tempCommentId, setTempCommentId] = useState(() => 'temp_' + crypto.randomUUID());
   
   // Composer mode (new or edit)
   const [composerMode, setComposerMode] = useState('new');
