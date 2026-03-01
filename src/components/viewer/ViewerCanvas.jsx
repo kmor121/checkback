@@ -80,38 +80,32 @@ const ViewerCanvas = forwardRef(({
 
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentShape, setCurrentShape] = useState(null);
-  const shapesMapRef = useRef(new Map()); // ★ CRITICAL: Mapが唯一の真実
-  const [shapesVersion, setShapesVersion] = useState(0); // 再描画トリガー
+  const shapesMapRef = useRef(new Map());
+  const [shapesVersion, setShapesVersion] = useState(0);
   const [selectedId, setSelectedId] = useState(null);
   const transformerRef = useRef(null);
   const shapeRefs = useRef({});
   
-  // Map操作ヘルパー
-  // A) 無限ループ対策: bumpの参照を安定化
   const bump = useCallback(() => setShapesVersion(v => v + 1), []);
   const getAllShapes = () => Array.from(shapesMapRef.current.values());
-  
-  // 後方互換用（shapesRef.currentを参照している箇所向け）
   const shapesRef = { get current() { return getAllShapes(); } };
-  // ★★★ CRITICAL: 描画開始時のview/scale情報を固定（ジャンプ防止の核心）★★★
-  const drawViewRef = useRef(null); // { viewX, viewY, contentScale } を描画開始時に保存
-  const isInteractingRef = useRef(false); // ★ B) 操作中はtrue（drag/transform）
-  const pendingIncomingShapesRef = useRef(null); // ★ B) 操作中に保留された外部Shapes
-  const isDraggingRef = useRef(false); // CRITICAL: ドラッグ中フラグ（残像防止）
-  const dragRafRef = useRef(null); // RAF間引き用
-  const pendingDragRef = useRef(null); // ドラッグ座標バッファ
+
+  const drawViewRef = useRef(null);
+  const isInteractingRef = useRef(false);
+  const pendingIncomingShapesRef = useRef(null);
+  const isDraggingRef = useRef(false);
+  const dragRafRef = useRef(null);
+  const pendingDragRef = useRef(null);
   
   const isDrawingRef2 = useRef(false);
   const currentShapeRef2 = useRef(null);
   
-  // CRITICAL: activeCommentId変化検知用
   const prevActiveCommentIdRef = useRef(activeCommentId);
-  const draftCommentIdRef = useRef(null); // 仮コメントID（描画開始時にactiveCommentIdが無い場合）
-  // 描画コンテキスト変化検知用
+  const draftCommentIdRef = useRef(null);
   const prevCanvasContextKeyRef = useRef(null);
-  const pendingCtxRef = useRef(null); // ★ FIX-PENDING: 新ctx待機用（Map即クリア禁止）
-  const prevEmptyCountRef = useRef(0); // Hunk E: empty連続カウント（2回連続でクリア）
-  const lastEmptyAppliedCtxRef = useRef(null); // ★★★ P0-FIX: 意図的空表示の重複防止 ★★★
+  const pendingCtxRef = useRef(null);
+  const prevEmptyCountRef = useRef(0);
+  const lastEmptyAppliedCtxRef = useRef(null);
   
   const debugHudLogsRef = useRef([]);
   
@@ -123,8 +117,6 @@ const ViewerCanvas = forwardRef(({
   });
   const [diagTick, setDiagTick] = useState(0); // HUD更新用tick
   
-  // ★ Map方式では shapes state は不要（getAllShapes()を使う）
-  // 後方互換のためのダミー（実際はMapを参照）
   const shapes = useMemo(() => getAllShapes(), [shapesVersion]);
   
   const setShapes = (updater) => {
@@ -136,41 +128,18 @@ const ViewerCanvas = forwardRef(({
   useEffect(() => { isDrawingRef2.current = isDrawing; }, [isDrawing]);
   useEffect(() => { currentShapeRef2.current = currentShape; }, [currentShape]);
   
-  // パン状態（★★★ FIT: 親制御とローカル制御の統合 ★★★）
   const [localPan, setLocalPan] = useState({ x: 0, y: 0 });
   const pan = externalPan || localPan;
   const setPan = onPanChange || setLocalPan;
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0, px: 0, py: 0 });
 
-  // ★★★ FIT-FIX: clampPan をここで定義（TDZ回避のため useEffect より前に配置）★★★
-  // ★★★ P1-FIX: 同値ガード追加（無限更新防止）、prevPan引数追加 ★★★
   const clampPan = useCallback((nx, ny, currentScaledW, currentScaledH, prevPan = null) => {
-    // overflow判定（1px epsilon で揺れ防止）
     const overflowX = currentScaledW > containerSize.width + 1;
     const overflowY = currentScaledH > containerSize.height + 1;
-    
-    if (!overflowX) {
-      nx = 0; // 中央寄せ（はみ出していない軸は固定）
-    } else {
-      const minX = containerSize.width - currentScaledW;
-      const maxX = 0;
-      nx = Math.min(maxX, Math.max(minX, nx));
-    }
-    
-    if (!overflowY) {
-      ny = 0; // 中央寄せ（はみ出していない軸は固定）
-    } else {
-      const minY = containerSize.height - currentScaledH;
-      const maxY = 0;
-      ny = Math.min(maxY, Math.max(minY, ny));
-    }
-    
-    // ★★★ 同値ガード: 変化がなければ同じ参照を返す（無限更新防止）★★★
-    if (prevPan && nx === prevPan.x && ny === prevPan.y) {
-      return prevPan;
-    }
-    
+    if (!overflowX) { nx = 0; } else { nx = Math.min(0, Math.max(containerSize.width - currentScaledW, nx)); }
+    if (!overflowY) { ny = 0; } else { ny = Math.min(0, Math.max(containerSize.height - currentScaledH, ny)); }
+    if (prevPan && nx === prevPan.x && ny === prevPan.y) return prevPan;
     return { x: nx, y: ny };
   }, [containerSize.width, containerSize.height]);
   
@@ -192,40 +161,27 @@ const ViewerCanvas = forwardRef(({
   const isEditMode = tool === 'select';
   const isDrawMode = !isEditMode && (paintMode || tool === 'text');
   
-  // ★ CRITICAL: fileUrlを正規化してリセット判定に使う（クエリ違いでリセットしない）
   const fileIdentity = useMemo(() => normalizeFileUrl(fileUrl), [fileUrl]);
-  
-  // ★ CRITICAL: 選択に使うIDは activeCommentId または draftCommentId（ShareViewからの仮ID）
-  // ★★★ A: draftCommentIdRef.currentではなく、propsのdraftCommentIdを優先 ★★★
   const effectiveActiveId = activeCommentId ?? draftCommentId ?? draftCommentIdRef.current ?? null;
 
-  // ★★★ FIX-1: 権限分離（新規描画と既存編集を完全分離）★★★
+  // Permission flags
   const isSelectTool = tool === 'select';
-  const canDrawNew = !!paintMode;                          // 新規描画：paintMode だけでOK（T1/T2）
-  const canCommitNew = !!paintMode;                        // 新規確定：paintMode だけでOK
-  const canSelectExisting = !!paintMode && isSelectTool;   // 既存選択：paintMode && selectツール
-  const canMutateExisting = !!paintMode && !!draftReady && isSelectTool;  // 既存編集：paintMode && draftReady && selectツール（T2編集）
-  const canEdit = canMutateExisting;                       // 後方互換
-  // ★★★ FIX-DELETE: 削除は isEditMode && paintMode で許可（draftReady不要）★★★
-  const canDeleteExisting = !!paintMode && isEditMode;     // 削除：paintMode && selectツール のみ
-  
-  // ★★★ NEW: 削除専用フラグ（paintMode不問、targetIdがあれば削除可能）★★★
+  const canDrawNew = !!paintMode;
+  const canCommitNew = !!paintMode;
+  const canSelectExisting = !!paintMode && isSelectTool;
+  const canMutateExisting = !!paintMode && !!draftReady && isSelectTool;
+  const canEdit = canMutateExisting;
+  const canDeleteExisting = !!paintMode && isEditMode;
   const targetIdForDelete = effectiveActiveId != null ? String(effectiveActiveId) : '';
-  const canEditPaint = targetIdForDelete !== '';  // 削除操作の可否
+  const canEditPaint = targetIdForDelete !== '';
 
-  // ★★★ FIX-DELETE: 選択可能性（編集モード時はDB shapeも選択可能に）★★★
   const isSelectableShape = (shape) => {
-    // ★★★ CRITICAL: paintMode && selectツール の時のみ選択可能 ★★★
     if (!paintMode || !isSelectTool) return false;
     if (effectiveActiveId == null) return false;
     return sameId(shapeCommentId(shape), effectiveActiveId);
   };
-
-  // ★★★ CRITICAL: 編集可能性（選択可能 = 編集可能）★★★
   const isEditableShape2 = (shape) => isSelectableShape(shape);
-  
-  // CRITICAL: 描画に使うcomment_idを取得（paintContextId = draftCommentId が最優先）
-  // ★★★ CRITICAL: draftCommentId（= paintContextId）を最優先、UUID生成禁止 ★★★
+
   const getCommentIdForDrawing = () => {
     if (draftCommentId != null && draftCommentId !== '') return String(draftCommentId);
     if (renderTargetCommentId != null && renderTargetCommentId !== '') return String(renderTargetCommentId);
@@ -249,7 +205,6 @@ const ViewerCanvas = forwardRef(({
     return [];
   }, [shapesVersion, showAllPaint, renderTargetCommentId, currentShape, showDraftOnly]);
 
-  // ★★★ Hunk1: hidePaintOverlay時は描画を確実に空にする（表示レイヤー制御）★★★
   const renderedShapesFinal = hidePaintOverlay ? [] : renderedShapes;
   
 
@@ -452,26 +407,19 @@ const ViewerCanvas = forwardRef(({
 
   // mount/unmount debug removed for size
 
-  // ★★★ P0-COORD-DIAG: paintMode ON時に enterSeq++ / strokeSeqInSession=0 ★★★
   useEffect(() => {
     if (paintMode) {
       const cdr = coordDiagRef.current;
       cdr.paintEnterSeq += 1; cdr.strokeSeqInSession = 0; cdr.firstStroke = false; cdr.lastPointerEvent = null;
       cdr.firstPtr = null; cdr.firstCmt = null; cdr.lastPtr = null; cdr.lastCmt = null;
-      console.log('[COORD-DIAG] paintMode ON, enterSeq=', cdr.paintEnterSeq);
     }
   }, [paintMode]);
   
-  // ★★★ CRITICAL: 描画ツール切替時のみ選択解除（select→pen等の時のみ）★★★
   const prevToolRef = useRef(tool);
   useEffect(() => {
     const prevTool = prevToolRef.current;
     prevToolRef.current = tool;
-    
-    // select以外のツールに切り替わった時のみ選択解除
-    if (prevTool === 'select' && tool !== 'select') {
-      setSelectedId(null);
-    }
+    if (prevTool === 'select' && tool !== 'select') setSelectedId(null);
   }, [tool]);
 
   // Transformer selection
