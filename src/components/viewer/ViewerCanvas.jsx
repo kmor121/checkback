@@ -353,9 +353,7 @@ const ViewerCanvas = forwardRef(({
     setSelectedId(null);
     
     // テキストエディタ
-    setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
-
-    // ★★★ CRITICAL: draftCommentIdRefをクリア（前コメントのドラフト参照をリセット）★★★
+    setTextEditor(TEXT_EDITOR_INITIAL);
     draftCommentIdRef.current = null;
     
     // ★★★ CRITICAL: drawViewRefもクリア（座標系の混乱防止）★★★
@@ -383,29 +381,14 @@ const ViewerCanvas = forwardRef(({
     if (clearAfterSubmitNonce !== prevNonceRef.current) {
       prevNonceRef.current = clearAfterSubmitNonce;
 
-      // ★★★ CRITICAL: 送信完了後は全ての編集状態を完全リセット ★★★
-      // draftCommentIdRef（前コメントのドラフト参照）
       draftCommentIdRef.current = null;
-      
-      // 選択中shapeId
       setSelectedId(null);
-      
-      // currentShape（描画中オブジェクト）
       setCurrentShape(null);
-      
-      // isDrawing
       setIsDrawing(false);
-      
-      // テキストエディタ
-      setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
-
-      // Transformer解除
+      setTextEditor(TEXT_EDITOR_INITIAL);
       if (transformerRef.current) {
         transformerRef.current.nodes([]);
-        const layer = transformerRef.current.getLayer();
-        if (layer?.batchDraw) {
-          layer.batchDraw();
-        }
+        transformerRef.current.getLayer()?.batchDraw();
       }
     }
   }, [clearAfterSubmitNonce]);
@@ -527,22 +510,14 @@ const ViewerCanvas = forwardRef(({
     if (forceClearToken === prevForceClearTokenRef.current) return;
     prevForceClearTokenRef.current = forceClearToken;
 
-    console.log('[P0] forceClearToken changed, clearing UI state only (Map preserved):', {
-      forceClearToken,
-      canvasContextKey: canvasContextKey?.substring(0, 20) || 'null',
-    });
-
-    // ★★★ P0: UI状態のみクリア（Map/lastNonEmpty/emptyStreakは保持）★★★
     setSelectedId(null);
     setCurrentShape(null);
     setIsDrawing(false);
-    setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
+    setTextEditor(TEXT_EDITOR_INITIAL);
     if (transformerRef.current) {
       transformerRef.current.nodes([]);
       transformerRef.current.getLayer()?.batchDraw();
     }
-
-    console.log('[P0] forceClearToken complete: UI cleared, Map preserved');
     }, [forceClearToken]);
 
   // Sync engine refs
