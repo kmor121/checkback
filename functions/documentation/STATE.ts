@@ -41,6 +41,7 @@
 
 | 日付       | 要点                                   | 影響範囲                    | Verify要約                   |
 | :--------- | :------------------------------------- | :-------------------------- | :--------------------------- |
+| 2026-03-01 | V-06 FIX: renderedShapesにdraftCommentIdフォールバック追加 | ViewerCanvas (renderedShapes) | V-06 Verify待ち |
 | 2026-03-01 | ViewerCanvas Round1〜3 リファクタ完了  | ViewerCanvas + 10関連ファイル | V-01〜V-06 確認待ち          |
 | 2026-01-16 | BUGS.md / VERIFY.md / STATE.md 作成    | 運用体系                    | -（ドキュメント）            |
 | 2026-01-xx | handoff/freeze 機構実装               | ShareView / ViewerCanvas    | V-05 検査中                  |
@@ -132,10 +133,13 @@
 
 ## 次にやること（優先順）
 
-1. **【必須】リファクタ後の回帰テスト V-01〜V-06:**
-   -   全項目OKを確認してからP0/P1バグ修正に進む。
+1. **【P0】V-06 修正のVerify:**
+   -   renderedShapesのdraftCommentIdフォールバック追加済み。ユーザー確認待ち。
 
-2. **【P0】B-0003 詳細検査:**
+2. **【必須】リファクタ後の回帰テスト V-01〜V-05:**
+   -   V-06 OK確認後、残りの回帰テストを実施。
+
+3. **【P0】B-0003 詳細検査:**
    -   `handoffRef` / `freezeRef` 生成・解除のタイムスタンプを console.log で記録。
    -   `react-query` の `isFetching` / `isLoading` 状態遷移と照合。
    -   低速回線（Slow 3G）での実行記録を BUGS.md に追加。
