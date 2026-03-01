@@ -27,7 +27,8 @@ import {
   Edit,
   Trash,
   Check,
-  Circle as CircleIcon
+  Circle as CircleIcon,
+  Copy
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
