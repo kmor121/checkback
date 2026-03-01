@@ -74,11 +74,8 @@ const ViewerCanvas = forwardRef(({
   const [error, setError] = useState(null);
   const [bgReady, setBgReady] = useState(false); // P2 FIX: 背景ロード完了フラグ
   
-  // ★★★ P0-V5: contentReady判定（bgReady フラグベース、リロード時フラッシュ防止）★★★
   const contentReady = bgReady && bgSize.width > 0 && bgSize.height > 0;
 
-  
-  // 描画状態（CRITICAL: Map方式で置換禁止）
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentShape, setCurrentShape] = useState(null);
   const shapesMapRef = useRef(new Map()); // ★ CRITICAL: Mapが唯一の真実
@@ -269,12 +266,8 @@ const ViewerCanvas = forwardRef(({
     }
   }, [fileUrl]);
 
-  // ★★★ P0: hidePaintOverlay時は選択解除のみ（Map破壊禁止、Layer key切替で残像根絶）★★★
   useEffect(() => {
-    if (hidePaintOverlay && selectedId) {
-      setSelectedId(null);
-      console.log('[P0] hidePaintOverlay=true: selection cleared (Map preserved)');
-    }
+    if (hidePaintOverlay && selectedId) setSelectedId(null);
   }, [hidePaintOverlay, selectedId]);
 
 
@@ -885,23 +878,23 @@ const ViewerCanvas = forwardRef(({
       
       setIsDrawing(true);
       
-      // ★ P0-COORD-DIAG: down時の座標情報を記録 + ptrDiag 1行生成
-      const rp = { clientX: e.evt?.clientX ?? 0, clientY: e.evt?.clientY ?? 0 };
-      const k = stageRef.current?.getPointerPosition() || { x: 0, y: 0 };
-      const cd = coordDiagRef.current;
-      cd.strokeSeqInSession += 1; cd.firstStroke = (cd.strokeSeqInSession === 1);
-      cd.lastPointerEvent = 'down'; cd.lastPointerRaw = rp; cd.lastPointerStage = k;
-      cd.lastPointerImage = { x: imgCoords.x, y: imgCoords.y, stageX: imgCoords.stageX, stageY: imgCoords.stageY };
-      cd.viewAtEvent = { viewX, viewY, contentScale, offsetX, offsetY, baseFitScale, userScale: zoom / 100, stageW: containerSize.width, stageH: containerSize.height, drawViewRefExists: !!drawViewRef.current, drawViewRefSnapshot: drawViewRef.current ? { ...drawViewRef.current } : null };
-      // ptrDiag: k(Konva) vs m(manual from clientXY) + branch/view
-      const sr = stageRef.current?.container?.()?.getBoundingClientRect() || { left: 0, top: 0 };
-      const m = { x: rp.clientX - sr.left, y: rp.clientY - sr.top };
-      const br = imgCoords._branch || '?';
-      const vU = imgCoords._view || frozenView;
-      cd.downK = { x: k.x, y: k.y };
-      cd.ptrDiagStr = `fs=${cd.firstStroke?'Y':'N'} k=(${Math.round(k.x)},${Math.round(k.y)}) m=(${Math.round(m.x)},${Math.round(m.y)}) d=(${Math.round(k.x-m.x)},${Math.round(k.y-m.y)}) br=${br} vX=${Math.round(vU.viewX)} vY=${Math.round(vU.viewY)} sc=${vU.contentScale.toFixed(3)} off=(${Math.round(offsetX)},${Math.round(offsetY)}) tool=${tool}`;
-      cd.lastPtr = cd.ptrDiagStr; if (cd.strokeSeqInSession===1 && !cd.firstPtr) cd.firstPtr = cd.ptrDiagStr;
-      cd.commitDiagStr = null; setDiagTick(t => t + 1);
+          if (DEBUG_MODE) {
+        const rp = { clientX: e.evt?.clientX ?? 0, clientY: e.evt?.clientY ?? 0 };
+        const k = stageRef.current?.getPointerPosition() || { x: 0, y: 0 };
+        const cd = coordDiagRef.current;
+        cd.strokeSeqInSession += 1; cd.firstStroke = (cd.strokeSeqInSession === 1);
+        cd.lastPointerEvent = 'down'; cd.lastPointerRaw = rp; cd.lastPointerStage = k;
+        cd.lastPointerImage = { x: imgCoords.x, y: imgCoords.y, stageX: imgCoords.stageX, stageY: imgCoords.stageY };
+        cd.viewAtEvent = { viewX, viewY, contentScale, offsetX, offsetY, baseFitScale, userScale: zoom / 100, stageW: containerSize.width, stageH: containerSize.height };
+        const sr = stageRef.current?.container?.()?.getBoundingClientRect() || { left: 0, top: 0 };
+        const m = { x: rp.clientX - sr.left, y: rp.clientY - sr.top };
+        const br = imgCoords._branch || '?';
+        const vU = imgCoords._view || frozenView;
+        cd.downK = { x: k.x, y: k.y };
+        cd.ptrDiagStr = `fs=${cd.firstStroke?'Y':'N'} k=(${Math.round(k.x)},${Math.round(k.y)}) m=(${Math.round(m.x)},${Math.round(m.y)}) br=${br} vX=${Math.round(vU.viewX)} sc=${vU.contentScale.toFixed(3)} tool=${tool}`;
+        cd.lastPtr = cd.ptrDiagStr; if (cd.strokeSeqInSession === 1 && !cd.firstPtr) cd.firstPtr = cd.ptrDiagStr;
+        cd.commitDiagStr = null; setDiagTick(t => t + 1);
+      }
 
       const commentId = getCommentIdForDrawing();
       if (!commentId) { setIsDrawing(false); return; }
@@ -950,8 +943,7 @@ const ViewerCanvas = forwardRef(({
         debugRef.current.imgPos = { x: imgCoords.x, y: imgCoords.y };
       }
       
-        // P0-COORD-DIAG: move時（最初3点のみ記録）
-      if (isDrawingRef2.current && (Math.floor((currentShapeRef2.current?.points?.length ?? 0) / 2)) <= 3) {
+      if (DEBUG_MODE && isDrawingRef2.current && (Math.floor((currentShapeRef2.current?.points?.length ?? 0) / 2)) <= 3) {
         coordDiagRef.current.lastPointerEvent = 'move';
         coordDiagRef.current.lastPointerImage = { x: imgCoords.x, y: imgCoords.y, stageX: imgCoords.stageX, stageY: imgCoords.stageY };
       }
@@ -1289,9 +1281,7 @@ const ViewerCanvas = forwardRef(({
     isInteractingRef.current = true;
   };
 
-  // CRITICAL: ドラッグ中の追従更新（Map方式）
   const handleDragMove = (shape, e) => {
-    // ★★★ CRITICAL: 既存shape編集は canMutateExisting 必須 ★★★
     if (!canMutateExisting) return;
     const node = e.target;
 
@@ -1318,25 +1308,8 @@ const ViewerCanvas = forwardRef(({
     });
   };
 
-  // ドラッグ終了時の更新（CRITICAL: 増殖防止のため置換処理）
   const handleDragEnd = async (shape, e) => {
-    // ★★★ CRITICAL: 既存shape編集は canMutateExisting 必須 ★★★
-    if (!canMutateExisting) {
-      console.log('[ViewerCanvas] DragEnd blocked: canMutateExisting=false');
-      isDraggingRef.current = false;
-      return;
-    }
-
-    // CRITICAL: 編集不可なら即return（isEditableShape関数で判定）
-    if (!isEditableShape(shape)) {
-      console.log('[ViewerCanvas] DragEnd blocked: not editable');
-      isDraggingRef.current = false;
-      return;
-    }
-
-    // 多重保存防止
-    if (isSaving[shape.id]) {
-      console.log('[ViewerCanvas] Already saving:', shape.id);
+    if (!canMutateExisting || !isEditableShape(shape) || isSaving[shape.id]) {
       isDraggingRef.current = false;
       return;
     }
@@ -1417,25 +1390,8 @@ const ViewerCanvas = forwardRef(({
     }
   };
 
-  // Transform終了時の更新（CRITICAL: 増殖防止のため置換処理、Rect/Circle/Arrowに対応）
   const handleTransformEnd = async (shape, e) => {
-    // ★★★ CRITICAL: 既存shape編集は canMutateExisting 必須 ★★★
-    if (!canMutateExisting) {
-      console.log('[ViewerCanvas] TransformEnd blocked: canMutateExisting=false');
-      return;
-    }
-
-    // CRITICAL: 編集不可なら即return（isEditableShape関数で判定）
-    if (!isEditableShape(shape)) {
-      console.log('[ViewerCanvas] TransformEnd blocked: not editable');
-      return;
-    }
-
-    // 多重保存防止
-    if (isSaving[shape.id]) {
-      console.log('[ViewerCanvas] Already saving:', shape.id);
-      return;
-    }
+    if (!canMutateExisting || !isEditableShape(shape) || isSaving[shape.id]) return;
 
     const node = e.target;
     const scaleX = node.scaleX();
