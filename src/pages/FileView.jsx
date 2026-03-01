@@ -49,6 +49,9 @@ function FileViewContent() {
   const [strokeColor, setStrokeColor] = useState('#ff0000');
   const [strokeWidth, setStrokeWidth] = useState(4);
   const [zoom, setZoom] = useState(100);
+  const [fitMode, setFitMode] = useState('all');
+  const [displayPercent, setDisplayPercent] = useState(100);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   
   // Draft paint session state
@@ -895,6 +898,10 @@ function FileViewContent() {
               showDraftOnly={isUnselected && draftShapes.length > 0}
               draftReady={true}
               canvasContextKey={`${fileId}:1:${paintContextId}`}
+              fitMode={fitMode}
+              externalPan={pan}
+              onPanChange={setPan}
+              onScaleInfoChange={(info) => setDisplayPercent(info.effectivePercent)}
               onShapesChange={(updated) => {
                 if (updated.length === 0 && draftShapes.length > 0) {
                   console.log('[FileView] onShapesChange IGNORED (empty would overwrite draft)');
@@ -917,13 +924,39 @@ function FileViewContent() {
 
             {/* ズーム制御 */}
             <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-2 flex items-center gap-2">
-              <Button variant="outline" size="icon" onClick={() => setZoom(Math.max(50, zoom - 25))}>
+              <Button variant="outline" size="icon" onClick={() => setZoom(Math.max(25, zoom - 25))}>
                 <ZoomOut className="w-4 h-4" />
               </Button>
-              <span className="text-sm font-medium w-16 text-center">{zoom}%</span>
-              <Button variant="outline" size="icon" onClick={() => setZoom(Math.min(200, zoom + 25))}>
+              <span className="text-sm font-medium w-16 text-center">{displayPercent}%</span>
+              <Button variant="outline" size="icon" onClick={() => setZoom(Math.min(400, zoom + 25))}>
                 <ZoomIn className="w-4 h-4" />
               </Button>
+              <div className="border-l pl-2 ml-1 flex gap-1">
+                <Button
+                  variant={fitMode === 'all' ? 'default' : 'outline'}
+                  size="sm"
+                  className="text-xs px-2"
+                  onClick={() => { setFitMode('all'); setZoom(100); setPan({ x: 0, y: 0 }); }}
+                >
+                  全体
+                </Button>
+                <Button
+                  variant={fitMode === 'width' ? 'default' : 'outline'}
+                  size="sm"
+                  className="text-xs px-2"
+                  onClick={() => { setFitMode('width'); setZoom(100); setPan({ x: 0, y: 0 }); }}
+                >
+                  横幅
+                </Button>
+                <Button
+                  variant={fitMode === 'height' ? 'default' : 'outline'}
+                  size="sm"
+                  className="text-xs px-2"
+                  onClick={() => { setFitMode('height'); setZoom(100); setPan({ x: 0, y: 0 }); }}
+                >
+                  縦幅
+                </Button>
+              </div>
             </div>
           </div>
 
