@@ -738,17 +738,6 @@ const ViewerCanvas = forwardRef(({
     const stage = e.target.getStage();
     if (!stage) return;
 
-    if (DEBUG_MODE) {
-      console.log('[ViewerCanvas] StagePointerDown', {
-        paintMode,
-        tool,
-        isEditMode,
-        isDrawMode,
-        isPanMode: canPan,
-        textEditorVisible: textEditor.visible
-      });
-    }
-
     // 描画モードは従来処理
     if (isDrawMode) {
       handlePointerDown(e);
@@ -829,31 +818,8 @@ const ViewerCanvas = forwardRef(({
   const commitInFlightRef = useRef(false);
   const handlePointerUpRef = useRef(null);
   const handlePointerDown = (e) => {
-    if (DEBUG_MODE) {
-      console.log('[🎨 DRAW_DIAG] handlePointerDown ENTRY:', {
-        paintMode, tool, isDrawMode, canDrawNew, effectiveActiveId: effectiveActiveId?.substring(0, 12) || 'null',
-        renderedShapesLength: renderedShapes.length, mapSize: shapesMapRef.current.size,
-      });
-    }
-
-    // ★★★ FIX-1: selectツール時は描画開始しない（選択は別処理）★★★
-    if (isSelectTool) {
-      console.log('[🎨 DRAW_DIAG] PointerDown BLOCKED: isSelectTool=true');
-      return;
-    }
-    
-    // ★★★ FIX-1: 新規描画はpaintModeだけでOK（T1/T2即描画）★★★
-    if (!paintMode && tool !== 'text') {
-      console.warn('[🎨 DRAW_DIAG] PointerDown BLOCKED: paintMode=false', { paintMode, tool });
-      return;
-    }
-
-    // ★★★ P0-FIX: draftReadyチェックを削除（paintMode ON なら描画開始を許可）★★★
-    // draftReady は「既存shape編集」の権限であり、新規描画には不要
-    // 描画開始後の commit 時に draftReady をチェックする（L2148）
-
-    // ★★★ CRITICAL: 描画開始時に古いcurrentShapeを強制クリア（前コメントのdraft残り防止）★★★
-    // currentShapeのcomment_idがactiveCommentIdと異なる場合は古いdraftなので破棄
+    if (isSelectTool) return;
+    if (!paintMode && tool !== 'text') return;
     if (currentShape && activeCommentId != null) {
       const currentCid = currentShape.comment_id;
       if (currentCid != null && String(currentCid) !== String(activeCommentId)) {
@@ -863,19 +829,7 @@ const ViewerCanvas = forwardRef(({
       }
     }
 
-    // ★★★ CRITICAL FIX: 描画開始時にhidePaintUntilSelectを解除しない ★★★
-    // この解除が過去shapeを表示させる原因になっている可能性が高い
-    // 代わりに、新規描画中はeffectiveActiveId(draftCommentId)のshapeのみ表示される
-    // if (hidePaintUntilSelect && paintMode && tool !== 'select') {
-    //   if (DEBUG_MODE) console.log('[ViewerCanvas] Clearing hidePaintUntilSelect on draw start');
-    //   setHidePaintUntilSelect(false);
-    // }
-
-    // ★ CRITICAL: activeCommentIdがnullでもonBeginPaintがあれば描画を許可
-    if (activeCommentId == null && tool !== 'select' && !onBeginPaint) {
-      console.warn('[🎨 DRAW_DIAG] PointerDown BLOCKED: activeCommentId is null and onBeginPaint is missing');
-      return;
-    }
+    if (activeCommentId == null && tool !== 'select' && !onBeginPaint) return;
 
     // CRITICAL: tool='text' のときは最優先で処理（paintMode不問）
     if (tool === 'text' && !textEditor.visible) {
@@ -949,25 +903,8 @@ const ViewerCanvas = forwardRef(({
       cd.lastPtr = cd.ptrDiagStr; if (cd.strokeSeqInSession===1 && !cd.firstPtr) cd.firstPtr = cd.ptrDiagStr;
       cd.commitDiagStr = null; setDiagTick(t => t + 1);
 
-      // ★★★ CRITICAL: comment_idを取得（draftCommentId優先、fallback禁止）★★★
       const commentId = getCommentIdForDrawing();
-      if (!commentId) {
-        console.error('[🎨 DRAW_DIAG] PointerDown BLOCKED: no commentId available', {
-          draftCommentId: draftCommentId?.substring(0, 12) || 'null',
-          renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
-          activeCommentId: activeCommentId?.substring(0, 12) || 'null',
-        });
-        setIsDrawing(false);
-        return;
-      }
-
-      // ★★★ DEBUG: 描画開始時のcomment_id確認 ★★★
-      console.log('[🎨 DRAW_DIAG] Drawing START with commentId:', {
-        commentId: commentId?.substring(0, 12),
-        draftCommentId: draftCommentId?.substring(0, 12) || 'null',
-        effectiveActiveId: effectiveActiveId?.substring(0, 12) || 'null',
-        tool,
-      });
+      if (!commentId) { setIsDrawing(false); return; }
 
         if (DEBUG_MODE) {
         debugHudLogsRef.current = [...debugHudLogsRef.current.slice(-9), {
@@ -1182,33 +1119,8 @@ const ViewerCanvas = forwardRef(({
 
   // PointerUp: 描画終了（CRITICAL: refベースで判定、propsに依存しない）
   const handlePointerUp = async () => {
-    if (DEBUG_MODE) {
-      console.log('[🎨 DRAW_DIAG] pointerUp ENTRY:', {
-        isDrawing: isDrawingRef2.current,
-        tool,
-        canDrawNew,
-        canCommitNew,
-        paintMode,
-        draftReady,
-        renderTargetCommentId: renderTargetCommentId?.substring(0, 12) || 'null',
-        draftCommentId: draftCommentId?.substring(0, 12) || 'null',
-        currentShapeExists: !!currentShapeRef2.current,
-        currentShapeCommentId: currentShapeRef2.current?.comment_id?.substring(0, 12) || 'null',
-        mapSize: shapesMapRef.current.size,
-      });
-    }
-
-    // ★★★ P0-FIT: currentShape がある場合は isDrawing が false でも commit を試みる（取りこぼし防止）★★★
     const shape = currentShapeRef2.current;
-    if (!shape) {
-      if (DEBUG_MODE) console.log('[DRAW_DEBUG] pointerUp aborted: no currentShape');
-      return;
-    }
-    
-    // ★★★ P0-FIT: isDrawing=false でも shape があれば commit 続行（Stage外pointerUp対策）★★★
-    if (!isDrawingRef2.current) {
-      console.log('[P0-FIT] pointerUp: isDrawing=false but currentShape exists, proceeding with commit');
-    }
+    if (!shape) return;
     
     try {
       debugRef.current.lastEvent = 'up';
@@ -1248,7 +1160,7 @@ const ViewerCanvas = forwardRef(({
       }
 
       const resolvedCommentId = shape.comment_id;
-      if (!resolvedCommentId) { console.error('[VC] no comment_id, skip'); setCurrentShape(null); setIsDrawing(false); drawViewRef.current = null; return; }
+      if (!resolvedCommentId) { setCurrentShape(null); setIsDrawing(false); drawViewRef.current = null; return; }
       const normalizedShape = {
         id: shape.id,
         comment_id: resolvedCommentId,
