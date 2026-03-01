@@ -7,46 +7,23 @@ import { renderShapeFactory } from './ShapeRenderer';
 import { generateUUID, normalizeFileUrl, resolveCommentId, normalizeShape, shapeCommentId, sameId } from './canvasUtils';
 import { mapSet, mapDelete, mapUpdateIfExists, markDirty, commitShapeToMap, onSaveSuccess, onSaveRevert } from './canvasMapHelpers';
 import { performUndoAction, performRedoAction } from './canvasUndoRedo';
-const DEBUG_MODE = (typeof window !== 'undefined') && (new URLSearchParams(window.location.search).get('diag') === '1' || localStorage.getItem('debugPaintLayer') === '1' || import.meta.env.VITE_DEBUG === 'true');
+import { syncExistingShapes } from './canvasSyncEngine';
+import { TEXT_EDITOR_INITIAL, DEBUG_MODE } from './canvasConstants';
 
-// 背景画像コンポーネント（チラつき防止：前の画像を保持）
 function BackgroundImage({ src, onLoad }) {
   const [image, status] = useImage(src, 'anonymous');
   const lastImageRef = useRef(null);
   const onLoadCalledRef = useRef(false);
-  
   useEffect(() => {
-    console.log('[BackgroundImage] Load status:', { src: src?.substring(0, 50), status, hasImage: !!image });
-    
-    if (status === 'failed') {
-      console.error('[BackgroundImage] Failed to load image:', src);
-      onLoadCalledRef.current = false;
-    }
-    
+    if (status === 'failed') { onLoadCalledRef.current = false; }
     if (image && !onLoadCalledRef.current) {
       lastImageRef.current = image;
       onLoadCalledRef.current = true;
-      console.log('[P0-FIX] BackgroundImage onLoad CALLED:', { width: image.width, height: image.height });
-      if (onLoad) {
-        onLoad({ width: image.width, height: image.height });
-      }
+      if (onLoad) onLoad({ width: image.width, height: image.height });
     }
   }, [image, status, onLoad, src]);
-  
   const imgToRender = image || lastImageRef.current;
-  
-  if (status === 'loading') {
-    console.log('[BackgroundImage] Loading...', src?.substring(0, 50));
-  }
-  
-  return imgToRender ? (
-    <KonvaImage 
-      image={imgToRender} 
-      width={imgToRender.width} 
-      height={imgToRender.height} 
-      listening={false} 
-    />
-  ) : null;
+  return imgToRender ? <KonvaImage image={imgToRender} width={imgToRender.width} height={imgToRender.height} listening={false} /> : null;
 }
 
 const ViewerCanvas = forwardRef(({
