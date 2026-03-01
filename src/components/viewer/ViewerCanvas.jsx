@@ -518,27 +518,12 @@ const ViewerCanvas = forwardRef(({
     }
   }, []);
   
-  // ★★★ P1-FIT: スケール計算 - fitModeに応じたbaseFitScaleとユーザーズーム ★★★
   const baseFitScale = useMemo(() => {
-    if (!containerSize.width || !containerSize.height || !bgSize.width || !bgSize.height) {
-      return 1;
-    }
-    if (fitMode === 'width') {
-      // 横幅フィット: 左右ぴったり（余白があっても拡大）
-      return containerSize.width / bgSize.width;
-    }
-    if (fitMode === 'height') {
-      // 縦幅フィット: 上下ぴったり（余白があっても拡大）
-      return containerSize.height / bgSize.height;
-    }
-    // 全体フィット: 全体が収まる（デフォルト）
-    return Math.min(
-      containerSize.width / bgSize.width,
-      containerSize.height / bgSize.height
-    );
+    if (!containerSize.width || !containerSize.height || !bgSize.width || !bgSize.height) return 1;
+    if (fitMode === 'width') return containerSize.width / bgSize.width;
+    if (fitMode === 'height') return containerSize.height / bgSize.height;
+    return Math.min(containerSize.width / bgSize.width, containerSize.height / bgSize.height);
   }, [fitMode, containerSize.width, containerSize.height, bgSize.width, bgSize.height]);
-  
-  // 後方互換用（既存コードで fitScale を参照している箇所用）
   const fitScale = baseFitScale;
   
   const userScale = zoom / 100;
@@ -556,11 +541,8 @@ const ViewerCanvas = forwardRef(({
   const scaledWidth = bgSize.width * contentScale;
   const scaledHeight = bgSize.height * contentScale;
   
-  // 中央寄せオフセット（CRITICAL: Math.max削除で左上スナップ防止）
   const offsetX = (containerSize.width - scaledWidth) / 2;
   const offsetY = (containerSize.height - scaledHeight) / 2;
-  
-  // 実際の表示位置（パンを考慮）
   const viewX = offsetX + pan.x;
   const viewY = offsetY + pan.y;
 
@@ -573,16 +555,8 @@ const ViewerCanvas = forwardRef(({
     if (onBgLoad) onBgLoad(size, containerSize);
   }, [containerSize, onBgLoad]);
   
-  // CRITICAL: パンは非ペイント時 or selectツール時（描画ツールとの競合回避）
-  // ★★★ FIT: zoom>=100 なら常にパン可能（はみ出し時の移動を復活）★★★
   const canPan = (!paintMode || tool === 'select') && !textEditor.visible && !isDrawing;
-  
-  // ★★★ clampPan は useEffect より前（L219付近）で定義済み ★★★
-  
 
-
-  // ★★★ CRITICAL: 座標変換（描画中は開始時のview/scaleを使用してジャンプ防止）★★★
-  // P0-FIX: viewOverride引数で1点目のズレ防止（frozenViewを渡す）
   const stagePointToImagePoint = (viewOverride) => {
     const stage = stageRef.current;
     if (!stage) return null;
@@ -593,7 +567,6 @@ const ViewerCanvas = forwardRef(({
     return { x: (p.x - v.viewX) / v.contentScale, y: (p.y - v.viewY) / v.contentScale, stageX: p.x, stageY: p.y, _branch, _view: v };
   };
   
-  // 正規化座標（0-1の範囲）
   const normalizeCoords = (imgX, imgY) => ({
     nx: imgX / bgSize.width,
     ny: imgY / bgSize.height,
@@ -604,16 +577,15 @@ const ViewerCanvas = forwardRef(({
     y: ny * bgSize.height,
   });
   
-  // 操作履歴追加
   const addToUndoStack = (action) => {
     setUndoStack(prev => [...prev, action]);
-    setRedoStack([]); // 新しい操作でredoスタックはクリア
+    setRedoStack([]);
   };
 
   const performUndo = () => performUndoAction(undoStack, setUndoStack, setRedoStack, shapesMapRef, bump, onShapesChange);
   const performRedo = () => performRedoAction(redoStack, setRedoStack, setUndoStack, shapesMapRef, bump, onShapesChange);
 
-  // CRITICAL: 単体削除（★★★ canMutateExisting で判定、paintMode && draftReady 必須 ★★★）
+  // Delete selected shape
   const handleDelete = async () => {
     if (!canDeleteExisting || !selectedId) return;
     const selectedShape = shapesMapRef.current.get(selectedId);
@@ -648,20 +620,15 @@ const ViewerCanvas = forwardRef(({
     }
   };
 
-  // Stage統合ハンドラ：パン、選択解除、描画開始
   const handleStagePointerDown = (e) => {
     const stage = e.target.getStage();
     if (!stage) return;
-
-    // 描画モードは従来処理
     if (isDrawMode) {
       handlePointerDown(e);
       return;
     }
 
     const clickedOnEmpty = e.target === stage;
-
-    // パン開始（背景の空白を掴んだ時のみ）
     if (canPan && clickedOnEmpty && !textEditor.visible) {
       const p = stage.getPointerPosition();
       if (!p) return;
@@ -670,7 +637,6 @@ const ViewerCanvas = forwardRef(({
       return;
     }
 
-    // 空白クリックで選択解除
     if (isEditMode && clickedOnEmpty) {
       setSelectedId(null);
     }
@@ -680,36 +646,22 @@ const ViewerCanvas = forwardRef(({
     const stage = e.target.getStage();
     if (!stage) return;
 
-    // パン中は他の処理をスキップ
     if (isPanning) {
       const p = stage.getPointerPosition();
       if (!p) return;
       
-      // ★★★ P1-FIX: overflow判定を先に行い、はみ出していない軸のdeltaは0にする ★★★
       const currentScaledWidth = bgSize.width * contentScale;
       const currentScaledHeight = bgSize.height * contentScale;
       const overflowX = currentScaledWidth > containerSize.width + 1;
       const overflowY = currentScaledHeight > containerSize.height + 1;
-      
-      // はみ出していない軸はdeltaを0にして不要な計算/ガタつきを防止
       const dx = overflowX ? (p.x - panStartRef.current.px) : 0;
       const dy = overflowY ? (p.y - panStartRef.current.py) : 0;
-      
-      // 両軸とも動かないならスキップ
       if (dx === 0 && dy === 0) return;
-      
-      const nextX = panStartRef.current.x + dx;
-      const nextY = panStartRef.current.y + dy;
-      const next = clampPan(nextX, nextY, currentScaledWidth, currentScaledHeight, pan);
-      
-      // ★★★ 同値ガード: clampPanが同じ参照を返したらsetPanしない ★★★
-      if (next !== pan) {
-        setPan(next);
-      }
+      const next = clampPan(panStartRef.current.x + dx, panStartRef.current.y + dy, currentScaledWidth, currentScaledHeight, pan);
+      if (next !== pan) setPan(next);
       return;
     }
 
-    // 描画モードのみ従来のPointerMove
     handlePointerMove(e);
   };
 
@@ -718,11 +670,7 @@ const ViewerCanvas = forwardRef(({
       setIsPanning(false);
       return;
     }
-    // ★★★ P0-FIT: 二重commit防止（window pointerup と競合回避）★★★
-    if (commitInFlightRef.current) {
-      console.log('[P0-FIT] Stage pointerUp skipped (commit in flight)');
-      return;
-    }
+    if (commitInFlightRef.current) return;
     commitInFlightRef.current = true;
     handlePointerUp(e);
     requestAnimationFrame(() => {
@@ -746,7 +694,6 @@ const ViewerCanvas = forwardRef(({
 
     if (activeCommentId == null && tool !== 'select' && !onBeginPaint) return;
 
-    // CRITICAL: tool='text' のときは最優先で処理（paintMode不問）
     if (tool === 'text' && !textEditor.visible) {
       try {
         const imgCoords = stagePointToImagePoint();
@@ -779,11 +726,9 @@ const ViewerCanvas = forwardRef(({
       return;
     }
     
-    // テキスト編集中は処理しない
     if (textEditor.visible) return;
     
     try {
-      // ★★★ P0-FIX: 1点目ズレ対策 — (A) pointer座標更新 (B) frozenView先行確保 (C) isDrawingRef先行true ★★★
       if (stageRef.current && e.evt) stageRef.current.setPointersPositions(e.evt);
       const frozenView = { viewX, viewY, contentScale };
       drawViewRef.current = frozenView;
@@ -827,7 +772,6 @@ const ViewerCanvas = forwardRef(({
         }];
       }
 
-      // CRITICAL: clientShapeId は1回だけ発行して固定（移動・編集で絶対に再生成しない）
       const newShape = {
         id: generateUUID(),
         comment_id: commentId,
@@ -839,7 +783,6 @@ const ViewerCanvas = forwardRef(({
       };
       
       if (tool === 'pen') newShape.points = [imgCoords.x, imgCoords.y];
-      // P0-FIX: ref同期セット（useEffect経由だと初回moveでnull→points追記不能→消える）
       currentShapeRef2.current = newShape;
       setCurrentShape(newShape);
 
@@ -855,7 +798,6 @@ const ViewerCanvas = forwardRef(({
   const handlePointerMove = (e) => {
     if (textEditor.visible) return;
     try {
-      // P0-FIX: 描画中は初回moveで座標が古い問題を防止
       if (isDrawingRef2.current && stageRef.current && e.evt) stageRef.current.setPointersPositions(e.evt);
       const imgCoords = stagePointToImagePoint();
       if (!imgCoords) return;
@@ -870,14 +812,13 @@ const ViewerCanvas = forwardRef(({
         coordDiagRef.current.lastPointerImage = { x: imgCoords.x, y: imgCoords.y, stageX: imgCoords.stageX, stageY: imgCoords.stageY };
       }
       
-      // CRITICAL: refベースで判定（親stateが揺れても描画継続）
       const shape = currentShapeRef2.current;
       if (!isDrawingRef2.current || !shape) return;
       
       debugRef.current.lastEvent = 'move';
       
       const newShape = { ...shape };
-      const shapeTool = shape.tool; // CRITICAL: refから取得したshape.tool
+      const shapeTool = shape.tool;
       
       if (shapeTool === 'pen') {
         newShape.points = [...(shape.points || []), imgCoords.x, imgCoords.y];
@@ -896,7 +837,7 @@ const ViewerCanvas = forwardRef(({
         newShape.points = [shape.startX, shape.startY, imgCoords.x, imgCoords.y];
       }
 
-      currentShapeRef2.current = newShape; // P0-FIX: ref同期
+      currentShapeRef2.current = newShape;
       setCurrentShape(newShape);
     } catch (err) { console.error('PointerMove Error:', err); }
   };
@@ -912,7 +853,6 @@ const ViewerCanvas = forwardRef(({
     isEditMode, contentGroupRef,
   });
 
-  // PointerUp: 描画終了（CRITICAL: refベースで判定、propsに依存しない）
   const handlePointerUp = async () => {
     const shape = currentShapeRef2.current;
     if (!shape) return;
@@ -921,9 +861,8 @@ const ViewerCanvas = forwardRef(({
       debugRef.current.lastEvent = 'up';
       setIsDrawing(false);
       
-      const shapeTool = shape.tool; // CRITICAL: refから取得したshape.tool
-      
-      // しきい値チェック（誤クリック対策）
+      const shapeTool = shape.tool;
+
       if (shapeTool === 'rect') {
         if (!shape.width || !shape.height || shape.width < 5 || shape.height < 5) {
           setCurrentShape(null);
@@ -997,7 +936,6 @@ const ViewerCanvas = forwardRef(({
           normalizedShape.normalizedPoints = normalizedPoints;
         }
 
-      // CRITICAL: 一時フィールドを完全削除（正規化データのみ保存）
       delete normalizedShape.points;
       delete normalizedShape.startX;
       delete normalizedShape.startY;
@@ -1007,8 +945,6 @@ const ViewerCanvas = forwardRef(({
       delete normalizedShape.height;
       delete normalizedShape.radius;
 
-      // ★★★ P0-FIX: 新規shape確定は canCommitNew のみで判定（draftReady不要）★★★
-      // draftReady は「既存shape編集」の権限であり、新規描画の確定には不要
       if (!canCommitNew) {
         setCurrentShape(null);
         setIsDrawing(false);
@@ -1022,10 +958,7 @@ const ViewerCanvas = forwardRef(({
       
       setCurrentShape(null);
 
-      // ★★★ C: 描画確定直後に新規作成したshapeを自動選択（ハンドル/枠が出る）★★★
       setSelectedId(normalizedShape.id);
-
-      // ★★★ C: 自動でselectツールに切り替えて選択状態を維持 ★★★
       if (onToolChange) {
         onToolChange('select');
       }
@@ -1041,7 +974,6 @@ const ViewerCanvas = forwardRef(({
         setDiagTick(t => t + 1);
       }
 
-      // 親コンポーネントに保存を依頼（createモード）
       if (onSaveShape) {
         setIsSaving(prev => ({ ...prev, [normalizedShape.id]: true }));
         debugRef.current.saveStatus = 'saving';
@@ -1084,32 +1016,16 @@ const ViewerCanvas = forwardRef(({
     debugRef,
   });
 
-  // 選択図形にスタイルを適用
   const applyStyleToSelected = async (patch) => {
     if (!selectedId) return;
-
-    // CRITICAL: shapesRefから取得（stale回避）
     const cur = shapesRef.current || [];
     const prev = cur.find(s => s.id === selectedId);
     if (!prev) return;
-
     const nextStroke = patch.stroke ?? prev.stroke;
-
-    // strokeWidth は必ず number に正規化（Selectが文字列を返すケース潰し）
     const rawSw = patch.strokeWidth ?? prev.strokeWidth;
     const nextSw = typeof rawSw === 'string' ? Number(rawSw) : rawSw;
-
-    // NaN ガード
     const safeSw = Number.isFinite(nextSw) ? nextSw : prev.strokeWidth;
-
-    // テキストは strokeWidth は保持
-    const next = {
-      ...prev,
-      stroke: nextStroke,
-      strokeWidth: (prev.tool === 'text') ? prev.strokeWidth : safeSw,
-    };
-
-    // 差分が無ければ保存しない
+    const next = { ...prev, stroke: nextStroke, strokeWidth: (prev.tool === 'text') ? prev.strokeWidth : safeSw };
     if (next.stroke === prev.stroke && next.strokeWidth === prev.strokeWidth) return;
 
     addToUndoStack({ type: 'update', shapeId: prev.id, before: prev, after: next });
@@ -1127,7 +1043,6 @@ const ViewerCanvas = forwardRef(({
     }
   };
 
-  // ツールバー変更を選択図形に適用（CRITICAL: applyStyleToSelected不足で無限ループ防止）
   const prevStrokeColorRef = useRef(strokeColor);
   const prevStrokeWidthRef = useRef(strokeWidth);
   
@@ -1161,16 +1076,12 @@ const ViewerCanvas = forwardRef(({
     };
   }, [activeCommentId, effectiveActiveId, renderedShapes, diagTick]);
 
-  // Undo/Redo
   useImperativeHandle(ref, () => ({
-    // ★★★ FIT: 外部からサイズ情報を取得可能にする ★★★
     getBgSize: () => bgSize,
     getContainerSize: () => containerSize,
     undo: performUndo,
     redo: performRedo,
     clear: () => {
-      // ★ CRITICAL: Mapはクリアしない（existingShapesは保持）
-      // draftShapesのみクリア（comment_idがdraftCommentIdRefのもの）（★★★ 不変更新 ★★★）
       const draftId = draftCommentIdRef.current;
       if (draftId) {
         const newMap = new Map(shapesMapRef.current);
@@ -1189,13 +1100,10 @@ const ViewerCanvas = forwardRef(({
       setIsDrawing(false);
       draftCommentIdRef.current = null;
     },
-    // CRITICAL: 送信完了後の強制クリア（ref経由で確実に実行）
     afterSubmitClear: () => {
-      // ★★★ CRITICAL: dirtyなshapeのみ削除（DBに保存済みのshapeは残す）（★★★ 不変更新 ★★★）
       const draftId = draftCommentIdRef.current;
       const newMap = new Map(shapesMapRef.current);
       for (const [id, shape] of shapesMapRef.current.entries()) {
-        // draftCommentIdに紐づくshapeまたはdirtyなshapeを削除
         if ((draftId && shape.comment_id === draftId) || shape._dirty) {
           newMap.delete(id);
         }
@@ -1203,10 +1111,7 @@ const ViewerCanvas = forwardRef(({
       shapesMapRef.current = newMap;
       bump();
       
-      // ★★★ CRITICAL: draftCommentIdRefをクリア ★★★
       draftCommentIdRef.current = null;
-      
-      // 選択状態・描画状態をリセット
       setSelectedId(null);
       setCurrentShape(null);
       setIsDrawing(false);
@@ -1243,7 +1148,6 @@ const ViewerCanvas = forwardRef(({
     );
   }
 
-  // ★★★ FIX-3: pending中判定（ctx切替でMap空にしない間）★★★
   const isPending = !!pendingCtxRef.current;
   
   if (DEBUG_MODE) {
