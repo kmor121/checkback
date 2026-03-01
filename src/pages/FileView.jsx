@@ -309,17 +309,22 @@ function FileViewContent() {
     }
   };
 
+  // transientフィールド除去（DB保存前）
+  const stripTransient = (shape) => {
+    if (!shape) return shape;
+    const { _dirty, _localTs, ...clean } = shape;
+    return clean;
+  };
+
   // CRITICAL: useMutationで送信処理を管理（React Queryが重複防止を担当）
   const createCommentMutation = useMutation({
     mutationFn: async ({ body, shapes }) => {
-      // CRITICAL: mutationIdを生成（一度だけ）
       const clientMutationId = crypto.randomUUID();
       console.log(`[comment] create called mid=${clientMutationId}`);
       
       const existingComments = await base44.entities.ReviewComment.filter({ file_id: fileId });
       const maxSeqNo = existingComments.reduce((max, c) => Math.max(max, c.seq_no || 0), 0);
 
-      // アンカー位置の計算
       let anchor_nx = 0.5;
       let anchor_ny = 0.5;
       
@@ -347,7 +352,7 @@ function FileViewContent() {
         }
       }
 
-      return base44.entities.ReviewComment.create({
+      const comment = await base44.entities.ReviewComment.create({
         file_id: fileId,
         page_no: 1,
         seq_no: maxSeqNo + 1,
@@ -361,6 +366,26 @@ function FileViewContent() {
         has_paint: shapes.length > 0,
         client_mutation_id: clientMutationId,
       });
+
+      // ★★★ CRITICAL: 新規コメント作成時にdraftShapesをDBに永続化（ShareView同等）★★★
+      if (shapes.length > 0) {
+        console.log(`[FileView] Saving ${shapes.length} shapes to DB for comment ${comment.id}`);
+        for (const shape of shapes) {
+          const cleanShape = stripTransient(shape);
+          await base44.entities.PaintShape.create({
+            file_id: fileId,
+            comment_id: comment.id,
+            page_no: 1,
+            client_shape_id: cleanShape.id,
+            shape_type: cleanShape.tool,
+            data_json: JSON.stringify(cleanShape),
+            author_key: user?.id,
+            author_name: user?.full_name,
+          });
+        }
+      }
+
+      return comment;
     },
     onSuccess: () => {
       showToast('コメントを送信しました', 'success');
