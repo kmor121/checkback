@@ -13,7 +13,9 @@ import {
   ZoomIn, 
   ZoomOut, 
   Send,
-  CheckCircle2
+  CheckCircle2,
+  Paintbrush,
+  X
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
