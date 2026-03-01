@@ -1012,21 +1012,22 @@ function FileViewContent() {
           })()}
         </div>
 
-        {/* 右：コメント一覧（入力欄なし、ShareView同等） */}
+        {/* 右：コメント一覧（ShareView同等） */}
         <div className="w-96 border-l bg-white flex flex-col">
-          <div className="p-4 border-b space-y-2">
-            <Select value={commentFilter} onValueChange={setCommentFilter}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全て</SelectItem>
-                <SelectItem value="unresolved">未対応</SelectItem>
-                <SelectItem value="resolved">対応済</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="p-4 border-b space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-sm">コメント</h3>
+              <Paintbrush className="w-4 h-4 text-gray-400" />
+            </div>
+            <Tabs value={commentFilter} onValueChange={setCommentFilter} className="w-full">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="all" className="text-xs">全て</TabsTrigger>
+                <TabsTrigger value="unresolved" className="text-xs">未対応</TabsTrigger>
+                <TabsTrigger value="resolved" className="text-xs">対応済</TabsTrigger>
+              </TabsList>
+            </Tabs>
             <Select value={commentSort} onValueChange={setCommentSort}>
-              <SelectTrigger>
+              <SelectTrigger className="h-8 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1047,45 +1048,110 @@ function FileViewContent() {
                 コメントはありません
               </div>
             ) : (
-              sortedComments.map((comment) => (
-                <Card 
-                  key={comment.id} 
-                  className={`hover:shadow-md transition-shadow cursor-pointer ${
-                    String(activeCommentId) === String(comment.id) ? 'ring-2 ring-blue-500' : ''
-                  } ${composerMode === 'edit' && String(composerTargetCommentId) === String(comment.id) ? 'ring-2 ring-green-500 bg-green-50' : ''}`}
-                  onClick={() => handleCommentClick(comment)}
-                  onDoubleClick={(e) => handleCommentDoubleClick(e, comment)}
-                >
-                  <CardContent className="p-3">
-                    <div className="flex items-start gap-2 mb-2">
-                      <Badge variant="secondary" className="text-xs">#{comment.seq_no}</Badge>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-sm font-medium">{comment.author_name}</span>
-                          {comment.resolved && (
-                            <Badge className="text-xs bg-green-600 text-white">対応済</Badge>
+              sortedComments.map((comment) => {
+                const shapesCount = paintShapes.filter(s => s.comment_id === comment.id).length;
+                const isSelected = String(activeCommentId) === String(comment.id) && !isNewCommentInputActive;
+                const isEditing = composerMode === 'edit' && String(composerTargetCommentId) === String(comment.id) && !isNewCommentInputActive;
+
+                return (
+                  <Card 
+                    key={comment.id} 
+                    className={`hover:shadow-md transition-shadow ${
+                      isEditing ? 'border-2 border-green-600 bg-green-50' : 
+                      isSelected ? 'border-2 border-blue-600 bg-blue-50' : 
+                      comment.resolved ? 'opacity-75 bg-gray-50' : ''
+                    }`}
+                  >
+                    <CardContent className="p-3">
+                      <div className="flex items-start gap-2">
+                        <div 
+                          className="flex-1 cursor-pointer" 
+                          onClick={() => handleCommentClick(comment)}
+                          onDoubleClick={(e) => handleCommentDoubleClick(e, comment)}
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-sm font-medium">{comment.author_name}</span>
+                            {comment.resolved && (
+                              <Badge className="text-xs bg-green-600 text-white">対応済</Badge>
+                            )}
+                            {shapesCount > 0 && (
+                              <Badge variant="outline" className="text-xs flex items-center gap-1">
+                                <Paintbrush className="w-3 h-3" />
+                                {shapesCount}
+                              </Badge>
+                            )}
+                            {isEditing && (
+                              <Badge className="text-xs bg-green-600 text-white">編集中</Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-700">{comment.body || '（本文なし）'}</p>
+                          <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
+                            <span>{comment.page_no}枚目</span>
+                            <span>•</span>
+                            <span>{format(new Date(comment.created_date), 'yyyy/MM/dd HH:mm', { locale: ja })}</span>
+                          </div>
+                        </div>
+
+                        {/* 対応済みトグル */}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className={`h-auto p-1 ${comment.resolved ? 'text-green-600' : 'text-gray-400'}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleResolveMutation.mutate({ id: comment.id, resolved: !comment.resolved });
+                          }}
+                          title={comment.resolved ? '未対応に戻す' : '対応済みにする'}
+                        >
+                          {comment.resolved ? (
+                            <div className="w-5 h-5 rounded-full bg-green-600 flex items-center justify-center">
+                              <Check className="w-3 h-3 text-white" />
+                            </div>
+                          ) : (
+                            <CircleIcon className="w-5 h-5" />
                           )}
-                        </div>
-                        <p className="text-sm text-gray-700">{comment.body}</p>
-                        <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
-                          <span>{format(new Date(comment.created_date), 'yyyy/MM/dd HH:mm', { locale: ja })}</span>
-                        </div>
+                        </Button>
+
+                        {/* メニュー */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-auto p-1">
+                              <MoreVertical className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => {
+                              if (comment.resolved) { showToast('対応済みのコメントは編集できません', 'error'); return; }
+                              handleCommentDoubleClick({ preventDefault: () => {}, stopPropagation: () => {} }, comment);
+                            }}>
+                              <Edit className="w-4 h-4 mr-2" />
+                              編集
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={async () => {
+                                if (!window.confirm('このコメントと関連する描画を削除しますか？')) return;
+                                const relatedShapes = paintShapes.filter(s => s.comment_id === comment.id);
+                                for (const shape of relatedShapes) {
+                                  await base44.entities.PaintShape.delete(shape.id);
+                                }
+                                await base44.entities.ReviewComment.delete(comment.id);
+                                queryClient.invalidateQueries(['comments']);
+                                queryClient.invalidateQueries(['paintShapes']);
+                                if (String(activeCommentId) === String(comment.id)) setActiveCommentId(null);
+                                showToast('コメントと描画を削除しました');
+                              }}
+                              className="text-red-600"
+                            >
+                              <Trash className="w-4 h-4 mr-2" />
+                              削除
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleResolveMutation.mutate({ id: comment.id, resolved: !comment.resolved });
-                        }}
-                      >
-                        <CheckCircle2 className={`w-4 h-4 ${comment.resolved ? 'text-green-600' : 'text-gray-300'}`} />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
+                    </CardContent>
+                  </Card>
+                );
+              })
             )}
           </div>
         </div>
