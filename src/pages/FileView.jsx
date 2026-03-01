@@ -109,26 +109,15 @@ function FileViewContent() {
     base44.auth.me().then(setUser).catch(() => {});
   }, []);
 
-  // ★★★ CRITICAL: effectiveActiveIdRefを常に最新に同期 ★★★
-  // 編集中(composerTargetCommentId) > 選択中(activeCommentId) > セッション(paintSessionCommentId)
+  // ★★★ P0-FV: activeCommentId変更時はdraftShapesをクリア（前コメントの下書き混入防止）★★★
+  const prevActiveCommentIdRef = useRef(activeCommentId);
   useEffect(() => {
-    const newEffectiveId = composerTargetCommentId ?? activeCommentId ?? paintSessionCommentId ?? null;
-    const newEffectiveIdStr = newEffectiveId != null ? String(newEffectiveId) : null;
-    
-    if (effectiveActiveIdRef.current !== newEffectiveIdStr) {
-      console.log('[FileView] effectiveActiveIdRef updated:', {
-        prev: effectiveActiveIdRef.current,
-        next: newEffectiveIdStr,
-        composerTargetCommentId,
-        activeCommentId,
-        paintSessionCommentId,
-      });
-      effectiveActiveIdRef.current = newEffectiveIdStr;
-      
-      // ★★★ CRITICAL: ID変更時はdraftShapesをクリア（前コメントの下書き混入防止）★★★
+    const prev = prevActiveCommentIdRef.current;
+    prevActiveCommentIdRef.current = activeCommentId;
+    if (String(prev ?? '') !== String(activeCommentId ?? '')) {
       setDraftShapes([]);
     }
-  }, [composerTargetCommentId, activeCommentId, paintSessionCommentId]);
+  }, [activeCommentId]);
 
   const { data: file, isLoading: fileLoading, error: fileError } = useQuery({
     queryKey: ['file', fileId],
