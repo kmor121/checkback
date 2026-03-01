@@ -191,17 +191,7 @@ const ViewerCanvas = forwardRef(({
     return { x: nx, y: ny };
   }, [containerSize.width, containerSize.height]);
   
-  // テキスト入力用
-  const [textEditor, setTextEditor] = useState({
-    visible: false,
-    x: 0,
-    y: 0,
-    value: '',
-    shapeId: null,
-    imgX: 0,
-    imgY: 0,
-    openedAt: 0,
-  });
+  const [textEditor, setTextEditor] = useState(TEXT_EDITOR_INITIAL);
   const [isComposing, setIsComposing] = useState(false);
   const textInputRef = useRef(null);
 
@@ -317,16 +307,8 @@ const ViewerCanvas = forwardRef(({
   // P0-DIAG: 最終表示配列
   if (DEBUG_MODE) console.log('[VC] final:', { hide: hidePaintOverlay, cnt: renderedShapesFinal.length, cur: !!currentShape });
   
-  // ★ CRITICAL: editableIds は existingShapes + activeCommentId から作る
-  const editableIds = useMemo(() => {
-    if (!existingShapes?.length || activeCommentId == null) return new Set();
-    return new Set(existingShapes.filter(s => sameId(shapeCommentId(s), activeCommentId)).map(s => s.id));
-  }, [existingShapes, activeCommentId]);
-
-  // CRITICAL: 編集可能かをcomment_id一致で判定（sameId使用）
   const isEditableShape = (shape) => {
-    if (!canEdit) return false;                  // paintMode && draftReady && tool==='select' の時だけ編集OK
-    if (effectiveActiveId == null) return false;
+    if (!canEdit || effectiveActiveId == null) return false;
     return sameId(shapeCommentId(shape), effectiveActiveId);
   };
   
