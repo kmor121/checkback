@@ -32,7 +32,8 @@ import {
   Paperclip,
   FileEdit,
   MessageSquare,
-  MapPin
+  MapPin,
+  Link as LinkIcon
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
@@ -1384,10 +1385,13 @@ function FileViewContent() {
                           onDoubleClick={(e) => handleCommentDoubleClick(e, comment)}
                         >
                           <div className="flex items-center gap-2 mb-1">
-                            <span className="text-sm font-medium">{comment.author_name}</span>
-                            {comment.resolved && (
-                              <Badge className="text-xs bg-green-600 text-white">対応済</Badge>
-                            )}
+                           <span className="text-sm font-medium">{comment.author_name}</span>
+                           {comment.author_type === 'guest' && (
+                             <Badge variant="outline" className="text-xs">ゲスト</Badge>
+                           )}
+                           {comment.resolved && (
+                             <Badge className="text-xs bg-green-600 text-white">対応済</Badge>
+                           )}
                             {shapesCount > 0 && (
                               <Badge variant="outline" className="text-xs flex items-center gap-1">
                                 <Paintbrush className="w-3 h-3" />
@@ -1473,20 +1477,9 @@ function FileViewContent() {
                               <Edit className="w-4 h-4 mr-2" />
                               編集
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => {
-                              const url = `${window.location.origin}${window.location.pathname}?fileId=${fileId}`;
-                              navigator.clipboard.writeText(url).then(() => {
-                                showToast('URLをコピーしました');
-                              }).catch(() => {
-                                showToast('コピーに失敗しました', 'error');
-                              });
-                            }}>
-                              <Copy className="w-4 h-4 mr-2" />
-                              URLをコピー
-                            </DropdownMenuItem>
                             <DropdownMenuItem 
-                            onClick={async () => {
-                            if (!window.confirm('このコメントと関連する描画を削除しますか？')) return;
+                              onClick={async () => {
+                                if (!window.confirm('このコメントと関連する描画を削除しますか？')) return;
                                 const relatedShapes = paintShapes.filter(s => s.comment_id === comment.id);
                                 for (const shape of relatedShapes) {
                                   await base44.entities.PaintShape.delete(shape.id);
@@ -1501,6 +1494,27 @@ function FileViewContent() {
                             >
                               <Trash className="w-4 h-4 mr-2" />
                               削除
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => {
+                              setOpenReplyIds(prev => {
+                                const next = new Set(prev);
+                                next.add(comment.id);
+                                return next;
+                              });
+                            }}>
+                              <MessageSquare className="w-4 h-4 mr-2" />
+                              返信
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => {
+                              const url = `${window.location.origin}${window.location.pathname}?fileId=${fileId}&comment=${comment.id}`;
+                              navigator.clipboard.writeText(url).then(() => {
+                                showToast('URLをコピーしました');
+                              }).catch(() => {
+                                showToast('コピーに失敗しました', 'error');
+                              });
+                            }}>
+                              <LinkIcon className="w-4 h-4 mr-2" />
+                              URLをコピー
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
