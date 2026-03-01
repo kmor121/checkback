@@ -235,14 +235,41 @@ function FileViewContent() {
   }, [FV_TEXT_KEY, fvShapesDraftKey]);
 
   // ★★★ P0-FV: activeCommentId変更時はdraftShapesをクリア（前コメントの下書き混入防止）★★★
+  // ただし未選択(null)に戻った時は新規下書きをlocalStorageから復元（下書きに戻る導線）
   const prevActiveCommentIdRef = useRef(activeCommentId);
   useEffect(() => {
     const prev = prevActiveCommentIdRef.current;
     prevActiveCommentIdRef.current = activeCommentId;
     if (String(prev ?? '') !== String(activeCommentId ?? '')) {
-      setDraftShapes([]);
+      if (activeCommentId === null) {
+        // ★★★ P0-FV-TEMP-DRAFT-RETURN: 未選択に戻る時はlocalStorageから新規下書き復元 ★★★
+        try {
+          const prefix = `draftPaint:${fileId}:new:`;
+          let restored = false;
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith(prefix)) {
+              const draft = loadDraft(key);
+              if (draft?.shapes?.length > 0) {
+                const savedTempId = key.substring(prefix.length);
+                if (savedTempId && savedTempId !== tempCommentId) {
+                  setTempCommentId(savedTempId);
+                }
+                setDraftShapes(draft.shapes);
+                restored = true;
+                break;
+              }
+            }
+          }
+          if (!restored) setDraftShapes([]);
+        } catch (e) {
+          setDraftShapes([]);
+        }
+      } else {
+        setDraftShapes([]);
+      }
     }
-  }, [activeCommentId]);
+  }, [activeCommentId, fileId, tempCommentId]);
 
   const { data: file, isLoading: fileLoading, error: fileError } = useQuery({
     queryKey: ['file', fileId],
@@ -1318,8 +1345,12 @@ function FileViewContent() {
                 <div
                   className="bg-blue-50 border border-blue-200 rounded-lg p-2 cursor-pointer hover:bg-blue-100 transition-colors"
                   onClick={() => {
-                    // 下書きがある状態をComposerで見せる（既にComposer表示中なのでスクロール誘導のみ）
+                    // ★★★ P0-FV-TEMP-DRAFT-RETURN: 下書きに戻る ★★★
+                    // コメント選択解除→新規モードに戻す→描画下書きはuseEffectで自動復元
                     if (activeCommentId) { setActiveCommentId(null); }
+                    setComposerMode('new');
+                    setComposerTargetCommentId(null);
+                    setPaintMode(false);
                     setIsNewCommentInputActive(true);
                   }}
                 >
