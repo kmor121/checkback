@@ -3,13 +3,44 @@ import { base44 } from '@/api/base44Client';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Send } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Send, MoreVertical, Edit, Trash, Check, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 
 export default function ReplyThread({ parentCommentId, fileId, replies, user }) {
   const [replyBody, setReplyBody] = useState('');
+  const [editingId, setEditingId] = useState(null);
+  const [editBody, setEditBody] = useState('');
   const queryClient = useQueryClient();
+
+  const canEditDelete = (reply) => {
+    if (!user) return false;
+    if (user.role === 'admin') return true;
+    if (reply.author_user_id === user.id) return true;
+    return false;
+  };
+
+  const editMutation = useMutation({
+    mutationFn: ({ id, body }) => base44.entities.ReviewComment.update(id, { body }),
+    onSuccess: () => {
+      setEditingId(null);
+      setEditBody('');
+      queryClient.invalidateQueries(['comments', fileId]);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => base44.entities.ReviewComment.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['comments', fileId]);
+    },
+  });
 
   const replyMutation = useMutation({
     mutationFn: async (body) => {
