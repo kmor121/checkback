@@ -36,6 +36,7 @@ import ErrorBoundary from '../components/ErrorBoundary';
 import ViewerCanvas from '../components/viewer/ViewerCanvas';
 import FloatingToolbarPortal from '../components/viewer/FloatingToolbarPortal';
 import ShareLinkModal from '../components/viewer/ShareLinkModal';
+import ReplyThread from '../components/viewer/ReplyThread';
 import DebugOverlay from '../components/DebugOverlay';
 
 function FileViewContent() {
@@ -775,7 +776,20 @@ function FileViewContent() {
     return Array.from(shapeMap.values());
   }, [allShapes, draftShapes, isUnselected, normalizedActiveCommentId]);
 
-  const filteredComments = comments.filter(c => {
+  // 親コメントと返信を分離
+  const parentComments = comments.filter(c => !c.parent_comment_id);
+  const repliesByParent = React.useMemo(() => {
+    const map = {};
+    comments.forEach(c => {
+      if (c.parent_comment_id) {
+        if (!map[c.parent_comment_id]) map[c.parent_comment_id] = [];
+        map[c.parent_comment_id].push(c);
+      }
+    });
+    return map;
+  }, [comments]);
+
+  const filteredComments = parentComments.filter(c => {
     if (commentFilter === 'resolved' && !c.resolved) return false;
     if (commentFilter === 'unresolved' && c.resolved) return false;
     return true;
