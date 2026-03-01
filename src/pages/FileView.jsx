@@ -30,7 +30,8 @@ import {
   Circle as CircleIcon,
   Copy,
   Paperclip,
-  FileEdit
+  FileEdit,
+  MessageSquare
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
@@ -81,6 +82,9 @@ function FileViewContent() {
   
   // ★★★ 選択抑制: 新規テキスト入力中フラグ（ShareView同等）★★★
   const [isNewCommentInputActive, setIsNewCommentInputActive] = useState(false);
+  
+  // ★★★ P0-FV-REPLY-TOGGLE: 返信スレッド開閉状態 ★★★
+  const [openReplyIds, setOpenReplyIds] = useState(new Set());
   
   // 添付ファイル state
   const [pendingFiles, setPendingFiles] = useState([]);
@@ -1494,15 +1498,40 @@ function FileViewContent() {
                         </DropdownMenu>
                       </div>
 
-                      {/* 返信スレッド（選択中のみ表示） */}
-                      {isSelected && (
-                        <ReplyThread
-                          parentCommentId={comment.id}
-                          fileId={fileId}
-                          replies={repliesByParent[comment.id] || []}
-                          user={user}
-                        />
-                      )}
+                      {/* ★★★ P0-FV-REPLY-TOGGLE: 返信ボタン＋開閉式スレッド ★★★ */}
+                      {(() => {
+                        const replies = repliesByParent[comment.id] || [];
+                        const replyCount = replies.length;
+                        const isReplyOpen = openReplyIds.has(comment.id);
+                        return (
+                          <div className="mt-2 pt-2 border-t border-gray-100">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-xs text-gray-500 hover:text-blue-600"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenReplyIds(prev => {
+                                  const next = new Set(prev);
+                                  if (next.has(comment.id)) { next.delete(comment.id); } else { next.add(comment.id); }
+                                  return next;
+                                });
+                              }}
+                            >
+                              <MessageSquare className="w-3 h-3 mr-1" />
+                              返信{replyCount > 0 ? `(${replyCount})` : ''}
+                            </Button>
+                            {isReplyOpen && (
+                              <ReplyThread
+                                parentCommentId={comment.id}
+                                fileId={fileId}
+                                replies={replies}
+                                user={user}
+                              />
+                            )}
+                          </div>
+                        );
+                      })()}
                     </CardContent>
                   </Card>
                 );
