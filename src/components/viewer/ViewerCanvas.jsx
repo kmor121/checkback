@@ -2240,21 +2240,14 @@ const ViewerCanvas = forwardRef(({
     if (next.stroke === prev.stroke && next.strokeWidth === prev.strokeWidth) return;
 
     addToUndoStack({ type: 'update', shapeId: prev.id, before: prev, after: next });
+    mapSet(shapesMapRef, prev.id, next);
+    bump();
+    onShapesChange?.(getAllShapes());
 
-    // まずはローカル更新
-    const updated = cur.map(s => s.id === prev.id ? next : s);
-    setShapes(updated);
-
-    // ★重要：親にも同期（props巻き戻り防止）
-    onShapesChange?.(updated);
-
-    // DB更新
     if (onSaveShape) {
       try {
         const res = await onSaveShape(next, 'upsert');
-        if (res?.dbId) {
-          setShapes(cur => cur.map(s => s.id === prev.id ? { ...s, dbId: res.dbId } : s));
-        }
+        if (res?.dbId) onSaveSuccess(shapesMapRef, prev.id, res.dbId, bump, onShapesChange);
       } catch (err) {
         console.error('Apply style error:', err);
       }
