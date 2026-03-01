@@ -141,16 +141,11 @@ const ViewerCanvas = forwardRef(({
   
   const debugHudLogsRef = useRef([]);
   
-  // ★★★ P0-COORD-DIAG: ペイント座標診断用ref（?diag=1で観測、ロジック変更なし）★★★
   const coordDiagRef = useRef({
-    paintEnterSeq: 0,        // paintMode ON回数
-    strokeSeqInSession: 0,   // 同一paintEnterSeq内のストローク回数
-    firstStroke: false,      // 最初のストロークか
-    lastPointerEvent: null,  // 'down'|'move'|'up'
-    lastPointerRaw: null,    // {clientX, clientY}
-    lastPointerStage: null,  // {x, y}
-    lastPointerImage: null,  // {x, y, stageX, stageY}
-    viewAtEvent: null, ptrDiagStr: null, commitDiagStr: null, downK: null, firstPtr: null, firstCmt: null, lastPtr: null, lastCmt: null,
+    paintEnterSeq: 0, strokeSeqInSession: 0, firstStroke: false, lastPointerEvent: null,
+    lastPointerRaw: null, lastPointerStage: null, lastPointerImage: null,
+    viewAtEvent: null, ptrDiagStr: null, commitDiagStr: null, downK: null,
+    firstPtr: null, firstCmt: null, lastPtr: null, lastCmt: null,
   });
   const [diagTick, setDiagTick] = useState(0); // HUD更新用tick
   
