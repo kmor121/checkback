@@ -2019,9 +2019,9 @@ function ShareViewContent() {
       
       // invalidateは少し遅らせて描画クリアを確実に先に完了させる
       setTimeout(async () => {
-        await queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id, token] });
+        await queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id] });
         await queryClient.invalidateQueries({ queryKey: ['commentAttachments', shareLink.file_id, token] });
-        await queryClient.invalidateQueries({ queryKey: ['paintShapes', token, shareLink?.file_id, currentPage] });
+        await queryClient.invalidateQueries({ queryKey: ['paintShapes', shareLink?.file_id, currentPage] });
       }, 100);
     } catch (error) {
       showToast(`送信失敗: ${error.message}`, 'error');
