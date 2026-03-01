@@ -417,11 +417,32 @@ function FileViewContent() {
   });
 
   const updateCommentMutation = useMutation({
-    mutationFn: async ({ targetId, body, hasShapes }) => {
-      return base44.entities.ReviewComment.update(targetId, {
+    mutationFn: async ({ targetId, body, hasShapes, shapes }) => {
+      await base44.entities.ReviewComment.update(targetId, {
         body,
         has_paint: hasShapes,
       });
+
+      // ★★★ CRITICAL: 編集時は既存shape削除→再作成（ShareView同等の置換方式）★★★
+      if (shapes && shapes.length > 0) {
+        const existingPaintShapes = await base44.entities.PaintShape.filter({ comment_id: targetId, file_id: fileId });
+        for (const existing of existingPaintShapes) {
+          await base44.entities.PaintShape.delete(existing.id);
+        }
+        for (const shape of shapes) {
+          const cleanShape = stripTransient(shape);
+          await base44.entities.PaintShape.create({
+            file_id: fileId,
+            comment_id: targetId,
+            page_no: 1,
+            client_shape_id: cleanShape.id,
+            shape_type: cleanShape.tool,
+            data_json: JSON.stringify(cleanShape),
+            author_key: user?.id,
+            author_name: user?.full_name,
+          });
+        }
+      }
     },
     onSuccess: () => {
       showToast('コメントを更新しました', 'success');
