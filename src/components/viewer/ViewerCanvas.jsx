@@ -237,53 +237,18 @@ const ViewerCanvas = forwardRef(({
     return null;
   };
   
-  // ★★★ P0-V5: 表示対象決定（統一ルール固定：showDraftOnly 最優先）★★★
   const renderedShapes = useMemo(() => {
-    const mapShapes = getAllShapes();
-    let sourceShapes = mapShapes;
+    let src = getAllShapes();
+    if (currentShape?.id) src = src.filter(s => s.id !== currentShape.id);
 
-    // 描画中のshapeは常に除外（後で別途描画するため）
-    if (currentShape?.id) {
-      sourceShapes = sourceShapes.filter(s => s.id !== currentShape.id);
-    }
-
-    // ★★★ P0-V5: showDraftOnly 最優先（未選択時 draft のみ表示、確定描画は出さない）★★★
     if (showDraftOnly) {
-      const draftsOnly = sourceShapes.filter(s => {
-        if (s.isDraft === true) return true;
-        const cid = resolveCommentId(s);
-        return cid && String(cid).startsWith('temp_');
-      });
-      console.log('[ViewerCanvas] renderedShapes: showDraftOnly=TRUE, returning drafts only', {
-        sourceCount: sourceShapes.length,
-        draftCount: draftsOnly.length,
-      });
-      return draftsOnly;
+      return src.filter(s => s.isDraft === true || String(resolveCommentId(s) || '').startsWith('temp_'));
     }
+    if (showAllPaint) return src;
 
-    // ★★★ P0-V5: ID正規化（入口で1回だけ）★★★
     const normalizeNullableId = (v) => (v == null || v === 'null' || v === 'undefined' || v === '' ? null : v);
     const targetId = normalizeNullableId(renderTargetCommentId);
-
-    // ★★★ P0-V5: showAllPaint 優先（選択中でも全表示ON時は全描画）★★★
-    if (showAllPaint) {
-      console.log('[ViewerCanvas] renderedShapes: showAllPaint=TRUE, returning all', { count: sourceShapes.length });
-      return sourceShapes;
-    }
-
-    // ★★★ P0-V5: targetId あり（選択中）→ 選択コメント紐づきのみ ★★★
-    if (targetId) {
-      const filtered = sourceShapes.filter(s => resolveCommentId(s) === targetId);
-      console.log('[ViewerCanvas] renderedShapes: targetId set, filtered by commentId', { 
-        targetId: targetId.substring(0, 12), 
-        filteredCount: filtered.length,
-        sourceCount: sourceShapes.length,
-      });
-      return filtered;
-    }
-
-    // ★★★ P0-V5: targetId なし + showDraftOnly=false → 空（フォールバック）★★★
-    console.log('[ViewerCanvas] renderedShapes: fallback to empty', { sourceCount: sourceShapes.length });
+    if (targetId) return src.filter(s => resolveCommentId(s) === targetId);
     return [];
   }, [shapesVersion, showAllPaint, renderTargetCommentId, currentShape, showDraftOnly]);
 
@@ -664,14 +629,13 @@ const ViewerCanvas = forwardRef(({
   const userScale = zoom / 100;
   const contentScale = baseFitScale * userScale;
   
-  // ★★★ SCALE: 実表示倍率を親に通知（同値ガード付き）★★★
   const prevEffectivePercentRef = useRef(null);
   useEffect(() => {
     if (!onScaleInfoChange) return;
-    const effectivePercent = Math.round(contentScale * 100);
-    if (prevEffectivePercentRef.current === effectivePercent) return;
-    prevEffectivePercentRef.current = effectivePercent;
-    onScaleInfoChange({ effectiveScale: contentScale, effectivePercent, fitScale: baseFitScale, zoom });
+    const ep = Math.round(contentScale * 100);
+    if (prevEffectivePercentRef.current === ep) return;
+    prevEffectivePercentRef.current = ep;
+    onScaleInfoChange({ effectiveScale: contentScale, effectivePercent: ep, fitScale: baseFitScale, zoom });
   }, [contentScale, baseFitScale, zoom, onScaleInfoChange]);
   
   const scaledWidth = bgSize.width * contentScale;
@@ -685,20 +649,13 @@ const ViewerCanvas = forwardRef(({
   const viewX = offsetX + pan.x;
   const viewY = offsetY + pan.y;
 
-  // ★★★ P0-V5: bgLoad完了時に確実にフラグをONし、親に通知（初回のみ）★★★
   const bgLoadCalledRef = useRef(false);
   const handleBgLoad = useCallback((size) => {
-    if (bgLoadCalledRef.current) {
-      console.log('[P0-V5] bgLoad already called, skipping duplicate');
-      return;
-    }
+    if (bgLoadCalledRef.current) return;
     bgLoadCalledRef.current = true;
     setBgSize(size);
     setBgReady(true);
-    console.log('[P0-V5] bgLoad SUCCESS, bgReady=true:', { width: size.width, height: size.height });
-    if (onBgLoad) {
-      onBgLoad(size, containerSize);
-    }
+    if (onBgLoad) onBgLoad(size, containerSize);
   }, [containerSize, onBgLoad]);
   
   // CRITICAL: パンは非ペイント時 or selectツール時（描画ツールとの競合回避）
