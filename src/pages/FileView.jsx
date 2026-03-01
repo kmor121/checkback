@@ -26,6 +26,7 @@ import {
   MoreVertical,
   Edit,
   Trash,
+  Trash2,
   Check,
   Circle as CircleIcon,
   Copy,
@@ -233,6 +234,26 @@ function FileViewContent() {
     if (fvShapesDraftKey) deleteDraft(fvShapesDraftKey);
     console.log('[FV-DRAFT] Cleared localStorage drafts');
   }, [FV_TEXT_KEY, fvShapesDraftKey]);
+
+  // ★★★ P0-FV-DRAFT-DISCARD: 下書き明示破棄（テキスト＋描画＋localStorage） ★★★
+  const handleDiscardDraft = React.useCallback(() => {
+    if (!window.confirm('下書きを破棄しますか？この操作は元に戻せません。')) return;
+    // テキストクリア
+    setCommentBody('');
+    // 描画クリア
+    setDraftShapes([]);
+    // localStorageクリア
+    clearDraftStorage();
+    // ペイント/キャンバスリセット
+    viewerCanvasRef.current?.afterSubmitClear();
+    viewerCanvasRef.current?.clear();
+    setPaintMode(false);
+    setTool('select');
+    setPaintSessionCommentId(null);
+    setPendingFiles([]);
+    setClearAfterSubmitNonce(n => n + 1);
+    showToast('下書きを破棄しました');
+  }, [clearDraftStorage]);
 
   // ★★★ P0-FV: activeCommentId変更時はdraftShapesをクリア（前コメントの下書き混入防止）★★★
   // ただし未選択(null)に戻った時は新規下書きをlocalStorageから復元（下書きに戻る導線）
@@ -1307,6 +1328,19 @@ function FileViewContent() {
                         <X className="w-4 h-4" />
                       </Button>
                     )}
+
+                    {/* 破棄ボタン（下書きがある時のみ） */}
+                    {!isLocked && (draftShapes.length > 0 || commentBody.trim() || pendingFiles.length > 0) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleDiscardDraft}
+                        className="mt-1 text-red-600 hover:text-red-700"
+                        title="下書きを破棄"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
                   </div>
 
                   {/* ステータス表示 */}
@@ -1363,24 +1397,30 @@ function FileViewContent() {
               const totalDraftCount = (commentBody.trim() ? 1 : 0) + draftShapes.length;
               if (totalDraftCount === 0) return null;
               return (
-                <div
-                  className="bg-blue-50 border border-blue-200 rounded-lg p-2 cursor-pointer hover:bg-blue-100 transition-colors"
-                  onClick={() => {
-                    // ★★★ P0-FV-TEMP-DRAFT-RETURN: 下書きに戻る ★★★
-                    // コメント選択解除→新規モードに戻す→描画下書きはuseEffectで自動復元
-                    if (activeCommentId) { setActiveCommentId(null); }
-                    setComposerMode('new');
-                    setComposerTargetCommentId(null);
-                    setPaintMode(false);
-                    setIsNewCommentInputActive(true);
-                  }}
-                >
-                  <div className="flex items-center gap-2 text-sm">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 flex items-center justify-between">
+                  <div
+                    className="flex items-center gap-2 text-sm flex-1 cursor-pointer hover:opacity-80 transition-opacity"
+                    onClick={() => {
+                      // ★★★ P0-FV-TEMP-DRAFT-RETURN: 下書きに戻る ★★★
+                      if (activeCommentId) { setActiveCommentId(null); }
+                      setComposerMode('new');
+                      setComposerTargetCommentId(null);
+                      setPaintMode(false);
+                      setIsNewCommentInputActive(true);
+                    }}
+                  >
                     <Badge className="bg-blue-600 text-white">📝 下書き {totalDraftCount}件</Badge>
                     <span className="text-blue-800">
                       {draftItems.join(' / ')}
                     </span>
                   </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDiscardDraft(); }}
+                    className="text-red-600 hover:text-red-700 p-1 flex-shrink-0"
+                    title="下書きを破棄"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
               );
             })()}
