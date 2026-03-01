@@ -197,23 +197,14 @@ function FileViewContent() {
     return newId;
   };
 
-  // CRITICAL: onBeginPaintではコメントを作成しない（送信時のみ作成に統一）
-  // ★★★ CRITICAL: effectiveActiveIdRef経由で最新IDを参照（stale closure対策）★★★
-  const handleBeginPaint = async (imgX, imgY, bgW, bgH) => {
-    // ★ ref経由で最新のIDを取得（stale closure回避）
-    const currentEffectiveId = effectiveActiveIdRef.current;
-    console.log('[handleBeginPaint] called, effectiveActiveIdRef:', currentEffectiveId);
-    
-    // すでに編集中/選択中コメントがあるならそれを使う
-    if (currentEffectiveId) {
-      setPaintSessionCommentId(currentEffectiveId);
-      return currentEffectiveId;
+  // ★★★ P0-FV: onBeginPaint — ペイント開始時のセッション初期化 ★★★
+  const handleBeginPaint = () => {
+    console.log('[handleBeginPaint] called, activeCommentId:', activeCommentId, 'tempCommentId:', tempCommentId);
+    // 既存コメント選択中ならそのIDを使用、未選択なら新規モード（tempCommentId使用）
+    setPaintSessionCommentId(activeCommentId ?? null);
+    if (!activeCommentId) {
+      setDraftShapes([]);
     }
-
-    // ★★★ V-06 FIX: tempCommentIdを確保してdraftモードに入る ★★★
-    const tid = ensureTempCommentId();
-    console.log('[handleBeginPaint] no effectiveActiveId, draft mode with tempCommentId:', tid);
-    return null;
   };
 
   const handleSaveShape = async (shape, mode) => {
