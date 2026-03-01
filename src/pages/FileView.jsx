@@ -1073,6 +1073,19 @@ function FileViewContent() {
                 全表示
               </Button>
             </div>
+            {(draftShapes.length > 0 || commentBody.trim()) && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <Badge className="bg-blue-600 text-white">📝 下書き</Badge>
+                  <span className="text-blue-800">
+                    {[
+                      draftShapes.length > 0 && `描画${draftShapes.length}個`,
+                      commentBody.trim() && 'テキスト入力中',
+                    ].filter(Boolean).join(' / ')}
+                  </span>
+                </div>
+              </div>
+            )}
             <Tabs value={commentFilter} onValueChange={setCommentFilter} className="w-full">
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="all" className="text-xs">全て</TabsTrigger>
