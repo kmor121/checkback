@@ -105,9 +105,7 @@ const ViewerCanvas = forwardRef(({
   // CRITICAL: activeCommentId変化検知用
   const prevActiveCommentIdRef = useRef(activeCommentId);
   const draftCommentIdRef = useRef(null); // 仮コメントID（描画開始時にactiveCommentIdが無い場合）
-  // ★★★ REMOVED: lastStableCommentIdRef - fallback禁止のため完全削除 ★★★
-  
-  // ★★★ CRITICAL: 描画コンテキスト変化検知用（Map残留根絶）★★★
+  // 描画コンテキスト変化検知用
   const prevCanvasContextKeyRef = useRef(null);
   const pendingCtxRef = useRef(null); // ★ FIX-PENDING: 新ctx待機用（Map即クリア禁止）
   const prevEmptyCountRef = useRef(0); // Hunk E: empty連続カウント（2回連続でクリア）
@@ -272,47 +270,21 @@ const ViewerCanvas = forwardRef(({
 
 
 
-  // CRITICAL: activeCommentId変化時の完全リセット
-  // ★★★ FIX: コメント切替時は全ての編集状態を完全クリア（前コメントの描画残り防止）★★★
   useEffect(() => {
     const prev = prevActiveCommentIdRef.current;
     prevActiveCommentIdRef.current = activeCommentId;
-
-    // ★ 同じIDへの変更は無視（型も統一して比較）
     if (String(prev ?? '') === String(activeCommentId ?? '')) return;
 
-    // ★★★ CRITICAL: コメント切替時は全ての編集状態を完全リセット ★★★
-    // currentShape（描画中オブジェクト）
-    setCurrentShape(null);
-    currentShapeRef2.current = null;
-    
-    // isDrawing / tool状態に紐づく一時フラグ
-    setIsDrawing(false);
-    isDrawingRef2.current = false;
-    
+    setCurrentShape(null); currentShapeRef2.current = null;
+    setIsDrawing(false); isDrawingRef2.current = false;
     hidePaintUntilSelectRef.current = false;
-    
-    // 選択中shapeId
     setSelectedId(null);
-    
-    // テキストエディタ
     setTextEditor(TEXT_EDITOR_INITIAL);
     draftCommentIdRef.current = null;
-    
-    // ★★★ CRITICAL: drawViewRefもクリア（座標系の混乱防止）★★★
     drawViewRef.current = null;
-
-    // ★★★ CRITICAL: activeCommentId変更時に必ずbump()でrenderedShapesを再計算させる ★★★
     bump();
-
     requestAnimationFrame(() => {
-      if (transformerRef.current) {
-        transformerRef.current.nodes([]);
-        const layer = transformerRef.current.getLayer();
-        if (layer?.batchDraw) {
-          layer.batchDraw();
-        }
-      }
+      if (transformerRef.current) { transformerRef.current.nodes([]); transformerRef.current.getLayer()?.batchDraw(); }
     });
   }, [activeCommentId]);
   
@@ -984,7 +956,7 @@ const ViewerCanvas = forwardRef(({
     const raw = textInputRef.current?.value ?? textEditor.value;
     const text = raw.trim();
     if (!text) {
-      setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
+      setTextEditor(TEXT_EDITOR_INITIAL);
       if (onToolChange) onToolChange('select');
       return;
     }
