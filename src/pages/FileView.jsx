@@ -919,79 +919,97 @@ function FileViewContent() {
           </div>
 
           {/* 下段：Composer（ShareView同等のカード型） */}
-          <div className="bg-gray-100 p-4 flex justify-center">
-            <div className="w-full max-w-2xl bg-white rounded-xl shadow-2xl border-2 border-gray-200 p-4">
-              <div className="flex gap-3 items-start">
-                {/* ペイントボタン */}
-                <Button
-                  variant={paintMode ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setPaintMode(!paintMode)}
-                  className="mt-1"
-                >
-                  <Paintbrush className="w-4 h-4 mr-1" />
-                  {paintMode ? 'ペイント中' : 'ペイント'}
-                </Button>
+          {(() => {
+            const activeComment = comments.find(c => c.id === activeCommentId);
+            const isLocked = activeComment?.resolved || false;
+            return (
+              <div className="bg-gray-100 p-4 flex justify-center">
+                <div className="w-full max-w-2xl bg-white rounded-xl shadow-2xl border-2 border-gray-200 p-4">
+                  <div className="flex gap-3 items-start">
+                    {/* ペイントボタン */}
+                    <Button
+                      variant={paintMode ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => handlePaintModeChange(!paintMode)}
+                      className="mt-1"
+                      disabled={isLocked}
+                    >
+                      <Paintbrush className="w-4 h-4 mr-1" />
+                      {paintMode ? 'ペイント中' : 'ペイント'}
+                    </Button>
 
-                {/* 本文入力 */}
-                <div className="flex-1">
-                  <Textarea
-                    placeholder={composerMode === 'edit' ? '編集中...' : 'コメントを入力...'}
-                    value={commentBody}
-                    onChange={(e) => setCommentBody(e.target.value)}
-                    rows={2}
-                    className="text-sm resize-none"
-                  />
-                </div>
+                    {/* 本文入力 */}
+                    <div className="flex-1">
+                      <Textarea
+                        placeholder={composerMode === 'edit' ? '編集中...' : 'コメントを入力...'}
+                        value={commentBody}
+                        onChange={(e) => setCommentBody(e.target.value)}
+                        onPointerDownCapture={(e) => enterNewTextOnlyComposer(e)}
+                        onBlur={() => {
+                          if (!commentBody.trim()) setIsNewCommentInputActive(false);
+                        }}
+                        rows={2}
+                        className="text-sm resize-none"
+                        disabled={isLocked}
+                      />
+                    </div>
 
-                {/* 送信ボタン */}
-                <Button
-                  onClick={handleSendComment}
-                  disabled={isSubmitting || createCommentMutation.isPending || updateCommentMutation.isPending || (!commentBody.trim() && draftShapes.length === 0)}
-                  className="bg-blue-600 hover:bg-blue-700 mt-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                  size="sm"
-                  title={composerMode === 'edit' ? '保存' : '送信'}
-                  style={{ pointerEvents: isSubmitting ? 'none' : 'auto' }}
-                >
-                  <Send className="w-4 h-4" />
-                </Button>
+                    {/* 送信ボタン */}
+                    <Button
+                      onClick={handleSendComment}
+                      disabled={isSubmitting || createCommentMutation.isPending || updateCommentMutation.isPending || !commentBody.trim() || isLocked}
+                      className="bg-blue-600 hover:bg-blue-700 mt-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                      size="sm"
+                      title={composerMode === 'edit' ? '保存' : '送信'}
+                      style={{ pointerEvents: isSubmitting ? 'none' : 'auto' }}
+                    >
+                      <Send className="w-4 h-4" />
+                    </Button>
 
-                {/* 閉じるボタン（編集モード時のみ） */}
-                {composerMode === 'edit' && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleCancelEdit}
-                    className="mt-1"
-                    title="キャンセル"
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
-                )}
-              </div>
-
-              {/* ステータス表示 */}
-              <div className="h-6 mt-2 flex items-center">
-                {(composerMode === 'edit' || paintMode || draftShapes.length > 0) ? (
-                  <div className="text-xs text-gray-500 flex items-center gap-2">
-                    <Badge className="bg-green-600 text-white">
-                      {composerMode === 'edit' ? 'コメント編集中' : paintMode ? 'ペイント中' : '新規作成中'}
-                    </Badge>
-                    <span>
-                      {composerMode === 'edit' ? '保存して更新' : 'コメントを入力してください'}
-                    </span>
-                    {draftShapes.length > 0 && (
-                      <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-                        📝 下書き {draftShapes.length}個
-                      </Badge>
+                    {/* 閉じるボタン（編集モード時のみ） */}
+                    {composerMode === 'edit' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleCancelEdit}
+                        className="mt-1"
+                        title="キャンセル"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
                     )}
                   </div>
-                ) : (
-                  <div className="opacity-0 pointer-events-none">placeholder</div>
-                )}
+
+                  {/* ステータス表示 */}
+                  <div className="h-6 mt-2 flex items-center">
+                    {isLocked ? (
+                      <div className="text-xs text-orange-600 flex items-center gap-2">
+                        <Badge className="bg-orange-100 text-orange-700 border border-orange-300">
+                          対応済みのため編集できません
+                        </Badge>
+                      </div>
+                    ) : (composerMode === 'edit' || paintMode || draftShapes.length > 0) ? (
+                      <div className="text-xs text-gray-500 flex items-center gap-2">
+                        <Badge className="bg-green-600 text-white">
+                          {composerMode === 'edit' ? 'コメント編集中' : paintMode ? 'ペイント中' : '新規作成中'}
+                        </Badge>
+                        <span>
+                          {composerMode === 'edit' ? '保存して更新' : 'コメントを入力してください'}
+                        </span>
+                        {draftShapes.length > 0 && (
+                          <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                            📝 下書き {draftShapes.length}個
+                          </Badge>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="opacity-0 pointer-events-none">placeholder</div>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+            );
+          })()}
         </div>
 
         {/* 右：コメント一覧（入力欄なし、ShareView同等） */}
