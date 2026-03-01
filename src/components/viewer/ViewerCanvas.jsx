@@ -1859,22 +1859,8 @@ const ViewerCanvas = forwardRef(({
       // Undo履歴に追加
       addToUndoStack({ type: 'add', shapeId: normalizedShape.id });
 
-      // CRITICAL: Map方式でupsert（追加）+ dirty/localTs付与（★★★ 不変更新 ★★★）
-      const shapeWithDirty = { ...normalizedShape, _dirty: true, _localTs: Date.now() };
-      const newMap = new Map(shapesMapRef.current);
-      newMap.set(shapeWithDirty.id, shapeWithDirty);
-      shapesMapRef.current = newMap;
-      bump();
-      console.log('[🎨 DRAW_DIAG] Map updated after commit:', {
-        shapeId: shapeWithDirty.id.substring(0, 8),
-        comment_id: shapeWithDirty.comment_id?.substring(0, 12),
-        tool: shapeWithDirty.tool,
-        mapSizeAfter: shapesMapRef.current.size,
-        allShapesCount: getAllShapes().length,
-      });
-
-      onShapesChange?.(getAllShapes()); // ★ 常に全量を渡す
-      console.log('[🎨 DRAW_DIAG] onShapesChange called with count:', getAllShapes().length);
+      const shapeWithDirty = commitShapeToMap(shapesMapRef, normalizedShape, bump, onShapesChange);
+      if (DEBUG_MODE) console.log('[🎨 DRAW_DIAG] Map updated after commit:', { shapeId: shapeWithDirty.id.substring(0, 8), mapSizeAfter: shapesMapRef.current.size });
       
       setCurrentShape(null);
 
