@@ -658,11 +658,15 @@ function FileViewContent() {
   // ★ effectiveActiveId は Canvas への props 用（描画の紐づけ先）として別途定義
   const effectiveActiveId = composerTargetCommentId ?? activeCommentId ?? paintSessionCommentId ?? null;
 
-  // ★★★ V-06 FIX: ViewerCanvas に渡す renderTargetCommentId / draftCommentId ★★★
+  // ★★★ P0-FV: ViewerCanvas に渡す props の算出 ★★★
   const normalizedActiveCommentId = activeCommentId != null ? String(activeCommentId) : null;
   const isUnselected = !normalizedActiveCommentId;
+  // renderTargetCommentId: 既存コメント選択時のみ設定（未選択時はnull→showDraftOnlyで下書き表示）
   const renderTargetCommentIdForCanvas = isUnselected ? null : normalizedActiveCommentId;
-  const draftCommentIdForCanvas = tempCommentId || null;
+  // draftCommentId: 常にtempCommentIdを渡す（ViewerCanvasが新規描画の紐付け先に使う）
+  const draftCommentIdForCanvas = tempCommentId;
+  // paintContextId: ViewerCanvasのcanvasContextKey用（描画モードの一意識別）
+  const paintContextId = activeCommentId ? String(activeCommentId) : (tempCommentId || 'none');
 
   // CRITICAL: ViewerCanvasに渡すshapes（targetIdForShapesがある時のみ）
   // ★★★ CRITICAL FIX: 編集モード中は activeCommentId のみでフィルタ ★★★
