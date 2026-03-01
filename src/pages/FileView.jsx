@@ -742,15 +742,7 @@ function FileViewContent() {
 
   return (
     <div className="max-w-full mx-auto h-screen flex flex-col">
-      <div className="bg-green-100 border-b-2 border-green-600 px-6 py-2">
-        <div className="text-xs font-mono">
-          <strong>✓ File View Page Loaded</strong> | 
-          URL: {debugInfo.currentUrl} | 
-          fileId: {debugInfo.fileIdFinal} | 
-          file.title: {file?.title}
-        </div>
-      </div>
-
+      {/* ヘッダー */}
       <div className="border-b bg-white px-6 py-3 flex items-center justify-between">
         <h1 className="text-xl font-bold">{file?.title || 'ファイル'}</h1>
         <div className="flex gap-2">
@@ -773,57 +765,133 @@ function FileViewContent() {
       </div>
 
       <div className="flex-1 flex overflow-hidden">
-        {/* 中央：プレビュー */}
-        <div className="flex-1 bg-gray-100 overflow-auto relative pb-24">
-          <ViewerCanvas
-            ref={viewerCanvasRef}
-            fileUrl={file?.file_url}
-            mimeType={file?.mime_type}
-            pageNumber={1}
-            existingShapes={shapesForCanvas}
-            activeCommentId={normalizedActiveCommentId}
-            showAllPaint={false}
-            clearAfterSubmitNonce={clearAfterSubmitNonce}
-            renderTargetCommentId={renderTargetCommentIdForCanvas}
-            draftCommentId={draftCommentIdForCanvas}
-            showDraftOnly={isUnselected && draftShapes.length > 0}
-            draftReady={true}
-            canvasContextKey={`${fileId}:1:${paintContextId}`}
-            onShapesChange={(updated) => {
-              // ★★★ P0-FV: draftShapesに同期（ShareView同等のシンプルなパターン）★★★
-              // 空配列がdraftを上書きしないようガード
-              if (updated.length === 0 && draftShapes.length > 0) {
-                console.log('[FileView] onShapesChange IGNORED (empty would overwrite draft)');
-                return;
-              }
-              setDraftShapes(updated);
-            }}
-            onSaveShape={handleSaveShape}
-            onDeleteShape={handleDeleteShape}
-            onBeginPaint={handleBeginPaint}
-            paintMode={paintMode}
-            tool={tool}
-            onToolChange={setTool}
-            strokeColor={strokeColor}
-            onStrokeColorChange={setStrokeColor}
-            strokeWidth={strokeWidth}
-            onStrokeWidthChange={setStrokeWidth}
-            zoom={zoom}
-          />
+        {/* 中央：プレビュー + 下部Composer（ShareView同等の grid構成） */}
+        <div className="flex-1 grid grid-rows-[1fr_auto] min-h-0">
+          {/* 上段：素材表示エリア */}
+          <div className="bg-gray-100 overflow-auto relative min-h-0">
+            <ViewerCanvas
+              ref={viewerCanvasRef}
+              fileUrl={file?.file_url}
+              mimeType={file?.mime_type}
+              pageNumber={1}
+              existingShapes={shapesForCanvas}
+              activeCommentId={normalizedActiveCommentId}
+              showAllPaint={false}
+              clearAfterSubmitNonce={clearAfterSubmitNonce}
+              renderTargetCommentId={renderTargetCommentIdForCanvas}
+              draftCommentId={draftCommentIdForCanvas}
+              showDraftOnly={isUnselected && draftShapes.length > 0}
+              draftReady={true}
+              canvasContextKey={`${fileId}:1:${paintContextId}`}
+              onShapesChange={(updated) => {
+                if (updated.length === 0 && draftShapes.length > 0) {
+                  console.log('[FileView] onShapesChange IGNORED (empty would overwrite draft)');
+                  return;
+                }
+                setDraftShapes(updated);
+              }}
+              onSaveShape={handleSaveShape}
+              onDeleteShape={handleDeleteShape}
+              onBeginPaint={handleBeginPaint}
+              paintMode={paintMode}
+              tool={tool}
+              onToolChange={setTool}
+              strokeColor={strokeColor}
+              onStrokeColorChange={setStrokeColor}
+              strokeWidth={strokeWidth}
+              onStrokeWidthChange={setStrokeWidth}
+              zoom={zoom}
+            />
 
-          {/* ズーム制御 */}
-          <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-2 flex items-center gap-2">
-            <Button variant="outline" size="icon" onClick={() => setZoom(Math.max(50, zoom - 25))}>
-              <ZoomOut className="w-4 h-4" />
-            </Button>
-            <span className="text-sm font-medium w-16 text-center">{zoom}%</span>
-            <Button variant="outline" size="icon" onClick={() => setZoom(Math.min(200, zoom + 25))}>
-              <ZoomIn className="w-4 h-4" />
-            </Button>
+            {/* ズーム制御 */}
+            <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-2 flex items-center gap-2">
+              <Button variant="outline" size="icon" onClick={() => setZoom(Math.max(50, zoom - 25))}>
+                <ZoomOut className="w-4 h-4" />
+              </Button>
+              <span className="text-sm font-medium w-16 text-center">{zoom}%</span>
+              <Button variant="outline" size="icon" onClick={() => setZoom(Math.min(200, zoom + 25))}>
+                <ZoomIn className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* 下段：Composer（ShareView同等のカード型） */}
+          <div className="bg-gray-100 p-4 flex justify-center">
+            <div className="w-full max-w-2xl bg-white rounded-xl shadow-2xl border-2 border-gray-200 p-4">
+              <div className="flex gap-3 items-start">
+                {/* ペイントボタン */}
+                <Button
+                  variant={paintMode ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setPaintMode(!paintMode)}
+                  className="mt-1"
+                >
+                  <Paintbrush className="w-4 h-4 mr-1" />
+                  {paintMode ? 'ペイント中' : 'ペイント'}
+                </Button>
+
+                {/* 本文入力 */}
+                <div className="flex-1">
+                  <Textarea
+                    placeholder={composerMode === 'edit' ? '編集中...' : 'コメントを入力...'}
+                    value={commentBody}
+                    onChange={(e) => setCommentBody(e.target.value)}
+                    rows={2}
+                    className="text-sm resize-none"
+                  />
+                </div>
+
+                {/* 送信ボタン */}
+                <Button
+                  onClick={handleSendComment}
+                  disabled={isSubmitting || createCommentMutation.isPending || updateCommentMutation.isPending || (!commentBody.trim() && draftShapes.length === 0)}
+                  className="bg-blue-600 hover:bg-blue-700 mt-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                  size="sm"
+                  title={composerMode === 'edit' ? '保存' : '送信'}
+                  style={{ pointerEvents: isSubmitting ? 'none' : 'auto' }}
+                >
+                  <Send className="w-4 h-4" />
+                </Button>
+
+                {/* 閉じるボタン（編集モード時のみ） */}
+                {composerMode === 'edit' && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleCancelEdit}
+                    className="mt-1"
+                    title="キャンセル"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
+
+              {/* ステータス表示 */}
+              <div className="h-6 mt-2 flex items-center">
+                {(composerMode === 'edit' || paintMode || draftShapes.length > 0) ? (
+                  <div className="text-xs text-gray-500 flex items-center gap-2">
+                    <Badge className="bg-green-600 text-white">
+                      {composerMode === 'edit' ? 'コメント編集中' : paintMode ? 'ペイント中' : '新規作成中'}
+                    </Badge>
+                    <span>
+                      {composerMode === 'edit' ? '保存して更新' : 'コメントを入力してください'}
+                    </span>
+                    {draftShapes.length > 0 && (
+                      <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                        📝 下書き {draftShapes.length}個
+                      </Badge>
+                    )}
+                  </div>
+                ) : (
+                  <div className="opacity-0 pointer-events-none">placeholder</div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* 右：コメント */}
+        {/* 右：コメント一覧（入力欄なし、ShareView同等） */}
         <div className="w-96 border-l bg-white flex flex-col">
           <div className="p-4 border-b space-y-2">
             <Select value={commentFilter} onValueChange={setCommentFilter}>
@@ -873,6 +941,9 @@ function FileViewContent() {
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-sm font-medium">{comment.author_name}</span>
+                          {comment.resolved && (
+                            <Badge className="text-xs bg-green-600 text-white">対応済</Badge>
+                          )}
                         </div>
                         <p className="text-sm text-gray-700">{comment.body}</p>
                         <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
@@ -895,36 +966,6 @@ function FileViewContent() {
                 </Card>
               ))
             )}
-          </div>
-
-          {/* 入力ドック */}
-          <div className="border-t p-4 space-y-2">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium">
-                {composerMode === 'edit' ? 'コメント編集' : 'コメント追加'}
-              </span>
-              {composerMode === 'edit' && (
-                <Button type="button" variant="ghost" size="sm" onClick={handleCancelEdit}>
-                  キャンセル
-                </Button>
-              )}
-            </div>
-            <Textarea
-              placeholder={composerMode === 'edit' ? '編集中...' : 'コメントを入力'}
-              value={commentBody}
-              onChange={(e) => setCommentBody(e.target.value)}
-              rows={3}
-            />
-            <Button
-              type="button"
-              disabled={isSubmitting || createCommentMutation.isPending || updateCommentMutation.isPending || (!commentBody.trim() && draftShapes.length === 0)}
-              className="w-full bg-blue-600 hover:bg-blue-700"
-              style={{ pointerEvents: isSubmitting ? "none" : "auto" }}
-              onClick={handleSendComment}
-            >
-              <Send className="w-4 h-4 mr-2" />
-              {composerMode === 'edit' ? '保存' : '送信'}
-            </Button>
           </div>
         </div>
       </div>
