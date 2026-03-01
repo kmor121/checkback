@@ -558,7 +558,6 @@ function FileViewContent() {
     setPaintMode(false);
     setTool('select');
     setPaintSessionCommentId(null);
-    setTempCommentId(null); // ★★★ V-06: tempCommentId もリセット ★★★
     
     // draft/描画一時stateクリア
     setDraftShapes([]);
