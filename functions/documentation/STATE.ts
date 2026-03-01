@@ -41,7 +41,8 @@
 
 | 日付       | 要点                                   | 影響範囲                    | Verify要約                   |
 | :--------- | :------------------------------------- | :-------------------------- | :--------------------------- |
-| 2026-03-01 | P0-FV-L: /FileViewレイアウトをShareView同等化（Composer中央下部バー、右パネルからinput除去） | pages/FileView.jsx | V-L-01〜05 Verify待ち |
+| 2026-03-01 | P0-FV-FULL: /FileView完全同等化（Composer/コメントカード/選択抑制/描画永続化/編集削除メニュー） | pages/FileView.jsx | V-FULL-01〜05 Verify待ち |
+| 2026-03-01 | P0-FV-L: /FileViewレイアウトをShareView同等化（Composer中央下部バー、右パネルからinput除去） | pages/FileView.jsx | V-L-01〜05 完了 |
 | 2026-03-01 | P0-FV: /FileViewペイント安定化（draft-first方式、tempCommentId即時生成、ViewerCanvas props整備） | pages/FileView.jsx | V-FV-01〜03 Verify待ち |
 | 2026-03-01 | Step1: ShareViewコメント/描画取得をfile_idのみに統一（share_tokenフィルタ除去） | pages/ShareView.jsx | V-DATA-01〜05 Verify待ち |
 | 2026-03-01 | /FileView Portal化 + renderTargetCommentId/draftCommentId props追加 | pages/FileView.jsx | V-FV-01/02 Verify待ち |
