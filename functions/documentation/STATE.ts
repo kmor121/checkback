@@ -3,10 +3,10 @@
 ## TL;DR
 
 -   **フェーズ:** ビューア/コメント/描画 の基本機能 + 複数FIX・設計確立済み。修正メイン（新規4：修正6）。
--   **直近の成果:** ViewerCanvas大規模リファクタリング完了（2468行→1245行、10ファイル分割）。
+-   **直近の成果:** ViewerCanvas大規模リファクタリング完了（2468行→1245行、10ファイル分割）。**FileView/ShareView体験同等化完了（P0-FV-EQUIVALENCE）**。
 -   **コア課題:** temp→real ハンドオフ時のちらつき（P0）と、ペイントモード切替時のズーム飛び（P1）が **Investigating**（リファクタ範囲外、未修正）。
 -   **重要:** Selection suppressed、Composer textarea操作時の`activeCommentId` null化、ViewerCanvas常時レンダリング（Layer key切替）は **絶対維持**。
--   **Next:** リファクタ後のV-01〜V-06回帰テスト通過 → P0バグ詳細検査。
+-   **Next:** V-FINAL-FV-SV-EQUIVALENCE の最終検証 → P0バグ詳細検査。
 
 ---
 
@@ -41,6 +41,9 @@
 
 | 日付       | 要点                                   | 影響範囲                    | Verify要約                   |
 | :--------- | :------------------------------------- | :-------------------------- | :--------------------------- |
+| 2026-03-01 | **P0-FV-EQUIVALENCE: FileView/ShareView体験同等化完了宣言** | ドキュメントのみ | V-FINAL-FV-SV-EQUIVALENCE Verify待ち |
+| 2026-03-01 | P0-FV-REPLY-BTN-POS: 返信ボタン位置をShareView同等化 | pages/FileView.jsx | V-FV-REPLYBTN-01〜05 Verify待ち |
+| 2026-03-01 | P0-FV-RESOLVE-OPTIMISTIC: 対応済みトグル楽観更新 | pages/FileView.jsx | V-FV-RESOLVEOPT-01〜05 Verify待ち |
 | 2026-03-01 | P0-FV-FULL: /FileView完全同等化（Composer/コメントカード/選択抑制/描画永続化/編集削除メニュー） | pages/FileView.jsx | V-FULL-01〜05 Verify待ち |
 | 2026-03-01 | P0-FV-L: /FileViewレイアウトをShareView同等化（Composer中央下部バー、右パネルからinput除去） | pages/FileView.jsx | V-L-01〜05 完了 |
 | 2026-03-01 | P0-FV: /FileViewペイント安定化（draft-first方式、tempCommentId即時生成、ViewerCanvas props整備） | pages/FileView.jsx | V-FV-01〜03 Verify待ち |
@@ -143,28 +146,40 @@
 
 ## 次にやること（優先順）
 
-1. **【P0】V-06 修正のVerify:**
+1. **【最優先】V-FINAL-FV-SV-EQUIVALENCE 最終検証:**
+   -   FileView/ShareView体験同等化の最終5項目を実施し、全OK確認。
+
+2. **【P0】V-06 修正のVerify:**
    -   renderedShapesのdraftCommentIdフォールバック追加済み。ユーザー確認待ち。
 
-2. **【必須】リファクタ後の回帰テスト V-01〜V-05:**
+3. **【必須】リファクタ後の回帰テスト V-01〜V-05:**
    -   V-06 OK確認後、残りの回帰テストを実施。
 
-3. **【P0】B-0003 詳細検査:**
+4. **【P0】B-0003 詳細検査:**
    -   `handoffRef` / `freezeRef` 生成・解除のタイムスタンプを console.log で記録。
    -   `react-query` の `isFetching` / `isLoading` 状態遷移と照合。
    -   低速回線（Slow 3G）での実行記録を BUGS.md に追加。
 
-3. **【P1】B-0002 検査:**
+5. **【P1】B-0002 検査:**
    -   `ViewerCanvas` の `useEffect` 全量をレビュー（依存配列確認）。
    -   ペイント ON/OFF の前後で `zoom` / `pan` が保持されるか測定。
 
-4. **【運用】BUGS/VERIFY 継続メンテナンス:**
+6. **【運用】BUGS/VERIFY 継続メンテナンス:**
    -   毎修正後に BUGS.md / VERIFY.md を更新。
    -   STATE.md に「直近の変更」を追記。
 
 ---
 
 ## 更新履歴
+
+### 2026-03-01 P0-FV-EQUIVALENCE: FileView/ShareView体験同等化完了
+
+-   FileViewとShareView間のコア機能（コメント、描画、添付ファイル管理、返信、対応済みトグル、下書き）の体験同等化が完了。
+-   **許容差分（対象外）:**
+    -   ShareView固有: ゲスト認証/パスワード保護/共有リンクアクセス制御
+    -   FileView固有: 共有リンクの発行・管理
+    -   URLパラメータ差: `shareToken`（ShareView） vs `fileId`（FileView）
+-   最終検証: V-FINAL-FV-SV-EQUIVALENCE（5項目）の全OK確認で完了判定。
 
 ### 2026-03-01 Round1〜3リファクタ確定
 
