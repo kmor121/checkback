@@ -2477,7 +2477,7 @@ function ShareViewContent() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id, token] });
+      queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id] });
     },
   });
 
