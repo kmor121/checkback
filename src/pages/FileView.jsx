@@ -507,11 +507,50 @@ function FileViewContent() {
     updateCommentMutation,
   ]);
 
+  // ★★★ 選択抑制: 新規テキスト入力時にコメント選択をブロック（ShareView同等）★★★
+  const enterNewTextOnlyComposer = (e) => {
+    e?.stopPropagation?.();
+    setComposerMode('new');
+    setPaintMode(false);
+    if (activeCommentId) setActiveCommentId(null);
+    if (composerTargetCommentId) setComposerTargetCommentId(null);
+    setIsNewCommentInputActive(true);
+  };
+
+  // ★★★ ペイントモード切替（ShareView同等）★★★
+  const handlePaintModeChange = (mode) => {
+    if (!mode) { setPaintMode(false); setTool('select'); return; }
+    if (mode) setIsNewCommentInputActive(false);
+    
+    if (activeCommentId) {
+      // 既存コメント選択中：そのコメントの描画を編集
+      setPaintSessionCommentId(activeCommentId);
+      setComposerMode('edit');
+      setComposerTargetCommentId(activeCommentId);
+      if (!commentBody) {
+        const comment = comments.find(c => c.id === activeCommentId);
+        if (comment) setCommentBody(comment.body || '');
+      }
+    } else {
+      // 新規：既存コメント描画は非表示
+      setActiveCommentId(null);
+      setPaintSessionCommentId(null);
+      setComposerMode('new');
+      setComposerTargetCommentId(null);
+    }
+    setPaintMode(true);
+  };
+
   const handleCommentClick = (comment) => {
+    // ★★★ 選択抑制: 新規テキスト入力中はクリック無視（ShareView同等）★★★
+    if (isNewCommentInputActive) {
+      console.log('[FileView] selection suppressed (new text-only composer active)');
+      return;
+    }
+    
     console.log('[FileView] handleCommentClick:', { commentId: comment.id, activeCommentId, paintMode });
     
     if (paintMode) {
-      // ★★★ P0-FV: paintMode中のコメント選択は自動OFF（ShareView同等）★★★
       setPaintMode(false);
       setTool('select');
     }
@@ -532,6 +571,7 @@ function FileViewContent() {
     setActiveCommentId(comment.id);
     setPaintSessionCommentId(null);
     setDraftShapes([]);
+    setIsNewCommentInputActive(false);
     
     if (composerMode === 'edit' && String(composerTargetCommentId) !== String(comment.id)) {
       setComposerMode('new');
