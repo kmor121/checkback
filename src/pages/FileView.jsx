@@ -64,6 +64,9 @@ function FileViewContent() {
   const [composerMode, setComposerMode] = useState('new');
   const [composerTargetCommentId, setComposerTargetCommentId] = useState(null);
   
+  // ★★★ 選択抑制: 新規テキスト入力中フラグ（ShareView同等）★★★
+  const [isNewCommentInputActive, setIsNewCommentInputActive] = useState(false);
+  
   // CRITICAL: 送信完了後のキャンバスクリア用nonce & 連打防止
   const [clearAfterSubmitNonce, setClearAfterSubmitNonce] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
