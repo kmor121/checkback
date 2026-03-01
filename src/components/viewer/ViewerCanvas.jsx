@@ -1898,15 +1898,7 @@ const ViewerCanvas = forwardRef(({
           debugRef.current.successId = result?.dbId || normalizedShape.id;
           debugRef.current.error = null;
 
-          // CRITICAL: DBから返ってきた_idを既存shapeに上書き + dirty解除（★★★ 不変更新 ★★★）
-          const cur = shapesMapRef.current.get(normalizedShape.id);
-          if (cur) {
-            const newMap = new Map(shapesMapRef.current);
-            newMap.set(normalizedShape.id, { ...cur, dbId: result?.dbId, _dirty: false });
-            shapesMapRef.current = newMap;
-            bump();
-            onShapesChange?.(getAllShapes());
-          }
+          onSaveSuccess(shapesMapRef, normalizedShape.id, result?.dbId, bump, onShapesChange);
         } catch (err) {
           debugRef.current.saveStatus = 'error';
           debugRef.current.error = err.message || String(err);
