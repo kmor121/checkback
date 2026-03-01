@@ -41,6 +41,7 @@
 
 | 日付       | 要点                                   | 影響範囲                    | Verify要約                   |
 | :--------- | :------------------------------------- | :-------------------------- | :--------------------------- |
+| 2026-03-01 | Step1: ShareViewコメント/描画取得をfile_idのみに統一（share_tokenフィルタ除去） | pages/ShareView.jsx | V-DATA-01〜05 Verify待ち |
 | 2026-03-01 | /FileView Portal化 + renderTargetCommentId/draftCommentId props追加 | pages/FileView.jsx | V-FV-01/02 Verify待ち |
 | 2026-03-01 | V-06 FIX: renderedShapesにdraftCommentIdフォールバック追加 | ViewerCanvas (renderedShapes) | V-06 Verify待ち |
 | 2026-03-01 | ViewerCanvas Round1〜3 リファクタ完了  | ViewerCanvas + 10関連ファイル | V-01〜V-06 確認待ち          |
@@ -74,7 +75,12 @@
    - `react-query` 再フェッチ中も描画が消えない。
    - freeze 解除タイミング: `react-query` の `isFetching=false` 確認後。
 
-5. **Map 方式での不変更新**
+5. **FileView/ShareView データ統一（Step1完了）**
+   - ShareView のコメント・描画取得は `file_id` のみでフィルタ（`share_token` フィルタ除去済み）。
+   - 同一ファイルであれば /FileView と /ShareView で同じコメント・描画が表示される。
+   - `share_token` はShareLinkのアクセス制御にのみ使用（データフィルタリングには不使用）。
+
+6. **Map 方式での不変更新**
    - `shapesMapRef.current = new Map(...)` で新しい参照を作成。
    - 既存 Map をミューテートしない（参照の入れ替わりが検知されない）。
 

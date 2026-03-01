@@ -162,6 +162,23 @@ markdown
 
 ---
 
+### V-DATA-01〜05: FileView/ShareView データ統一
+
+-   **目的:** 同一ファイルを /FileView と /ShareView で開いたとき、コメント・描画が完全一致することを確認する。
+-   **手順:**
+    1.  同じファイルを /FileView と /ShareView の両方で開く。
+    2.  /FileView でコメントを1件追加 → /ShareView をリロード → 同じコメントが見える。
+    3.  /FileView でそのコメントに描画を追加 → /ShareView をリロード → 同じ描画が見える。
+    4.  /ShareView 側で返信や解決状態を変える → /FileView をリロード → 反映される。
+    5.  （可能なら）別の共有リンクtokenで同じファイルを開く → 同じコメントが全て見える。
+-   **期待結果:**
+    -   全手順で件数・内容・返信・解決状態・描画が一致。
+-   **NG時の切り分け:**
+    -   /FileView のコメントが /ShareView に出ない → クエリの `share_token` フィルタが残っている可能性。
+    -   描画が一致しない → PaintShape のクエリ条件を確認。
+
+---
+
 ## 追加推奨テスト項目
 
 -   **V-A01: ページ・ズーム操作時の座標保持**
@@ -184,4 +201,5 @@ markdown
 | 2026-03-01   | -      | 確認待ち     | V-01〜V-06 | Round1〜3リファクタ後の回帰確認    |
 | 2026-03-01   | -      | Verify待ち   | V-06       | B-0004修正: renderedShapesにdraftCommentIdフォールバック追加 |
 | 2026-03-01   | -      | Verify待ち   | V-FV-01/02 | /FileView Portal化 + draftCommentId/renderTargetCommentId props追加 |
+| 2026-03-01   | -      | Verify待ち   | V-DATA-01〜05 | Step1: ShareViewコメント/描画取得をfile_idのみに統一 |
 |              |        |              |            |                                    |
