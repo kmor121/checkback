@@ -494,30 +494,28 @@ function FileViewContent() {
     console.log('[FileView] handleCommentClick:', { commentId: comment.id, activeCommentId, paintMode });
     
     if (paintMode) {
-      showToast('ペイントを終了してからコメントを選択してください', 'error');
-      return;
-    }
-
-    // 同じコメントを再クリック → 選択解除（統一関数を使用）
-    if (String(activeCommentId) === String(comment.id) && composerMode !== 'edit') {
-      console.log('[FileView] Deselecting comment');
-      exitEditMode();
-      return;
-    }
-    
-    // 別のコメントをクリック → 選択のみ（編集モードには入らない）
-    console.log('[FileView] Selecting comment:', comment.id);
-    viewerCanvasRef.current?.afterSubmitClear();
-    setDraftShapes([]);
-    
-    if (paintMode) {
+      // ★★★ P0-FV: paintMode中のコメント選択は自動OFF（ShareView同等）★★★
       setPaintMode(false);
       setTool('select');
     }
+
+    // 同じコメントを再クリック → 選択解除
+    if (String(activeCommentId) === String(comment.id) && composerMode !== 'edit') {
+      console.log('[FileView] Deselecting comment');
+      setActiveCommentId(null);
+      setDraftShapes([]);
+      setComposerMode('new');
+      setComposerTargetCommentId(null);
+      setCommentBody('');
+      return;
+    }
     
+    // 別のコメントをクリック → 選択
+    console.log('[FileView] Selecting comment:', comment.id);
     setActiveCommentId(comment.id);
-    setPaintSessionCommentId(comment.id);
-    // ★ 編集モードは維持しない（ダブルクリックでのみ編集）
+    setPaintSessionCommentId(null);
+    setDraftShapes([]);
+    
     if (composerMode === 'edit' && String(composerTargetCommentId) !== String(comment.id)) {
       setComposerMode('new');
       setComposerTargetCommentId(null);
