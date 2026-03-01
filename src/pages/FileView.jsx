@@ -58,6 +58,7 @@ function FileViewContent() {
   const [paintSessionCommentId, setPaintSessionCommentId] = useState(null);
   const [draftShapes, setDraftShapes] = useState([]);
   const [activeCommentId, setActiveCommentId] = useState(null);
+  const [showAllPaint, setShowAllPaint] = useState(false);
   
   // ★★★ P0-FV: 新規コメント用の temp ID（ViewerCanvas の draftCommentId に渡す）★★★
   // ★★★ 初期値を即座に生成（paintMode ON前でも有効にする）★★★
@@ -741,6 +742,8 @@ function FileViewContent() {
   // ★★★ P0-FV: ViewerCanvas に渡す props の算出 ★★★
   const normalizedActiveCommentId = activeCommentId != null ? String(activeCommentId) : null;
   const isUnselected = !normalizedActiveCommentId;
+  // ★★★ P0-FV: 未選択時は showAllPaint 強制 false（ShareView同等）★★★
+  const effectiveShowAllPaint = !isUnselected && showAllPaint;
   // renderTargetCommentId: 既存コメント選択時のみ設定（未選択時はnull→showDraftOnlyで下書き表示）
   const renderTargetCommentIdForCanvas = isUnselected ? null : normalizedActiveCommentId;
   // draftCommentId: 常にtempCommentIdを渡す（ViewerCanvasが新規描画の紐付け先に使う）
@@ -891,7 +894,7 @@ function FileViewContent() {
               pageNumber={1}
               existingShapes={shapesForCanvas}
               activeCommentId={normalizedActiveCommentId}
-              showAllPaint={false}
+              showAllPaint={effectiveShowAllPaint}
               clearAfterSubmitNonce={clearAfterSubmitNonce}
               renderTargetCommentId={renderTargetCommentIdForCanvas}
               draftCommentId={draftCommentIdForCanvas}
@@ -1059,7 +1062,15 @@ function FileViewContent() {
           <div className="p-4 border-b space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-sm">コメント</h3>
-              <Paintbrush className="w-4 h-4 text-gray-400" />
+              <Button
+                variant={showAllPaint ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setShowAllPaint(!showAllPaint)}
+                className="text-xs"
+              >
+                <Paintbrush className="w-3 h-3 mr-1" />
+                全表示
+              </Button>
             </div>
             <Tabs value={commentFilter} onValueChange={setCommentFilter} className="w-full">
               <TabsList className="grid w-full grid-cols-3">
