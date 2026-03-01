@@ -338,6 +338,25 @@ return []; // ← ここで新規描画が除外されていた
 
 ---
 
+## B-0005: /FileView ペイントツールUIが見えない + 新規1本目が消える
+
+**優先度:** P0  
+**影響範囲:** FileView (FloatingToolbar / ViewerCanvas props)  
+**発生頻度:** 常に
+
+**原因（確定）:**
+- FloatingToolbar が直接レンダリングされており、z-index/transform親の影響でUIが隠れる。
+- ViewerCanvas に renderTargetCommentId / draftCommentId が渡されておらず、V-06修正が活きない。
+
+**Fix方針:**
+1. FloatingToolbar → FloatingToolbarPortal に置換（show条件付き）。
+2. tempCommentId state を導入し、draftCommentId として ViewerCanvas に渡す。
+3. renderTargetCommentId = 未選択時null / 選択時activeCommentId を渡す。
+
+**ステータス:** Fixing (Verify待ち: V-FV-01, V-FV-02)
+
+---
+
 ## (SAMPLE) B-0003: temp→real ハンドオフ後にhandoff/freezeが破綻する
 
 **優先度:** P0  

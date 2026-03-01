@@ -41,6 +41,7 @@
 
 | 日付       | 要点                                   | 影響範囲                    | Verify要約                   |
 | :--------- | :------------------------------------- | :-------------------------- | :--------------------------- |
+| 2026-03-01 | /FileView Portal化 + renderTargetCommentId/draftCommentId props追加 | pages/FileView.jsx | V-FV-01/02 Verify待ち |
 | 2026-03-01 | V-06 FIX: renderedShapesにdraftCommentIdフォールバック追加 | ViewerCanvas (renderedShapes) | V-06 Verify待ち |
 | 2026-03-01 | ViewerCanvas Round1〜3 リファクタ完了  | ViewerCanvas + 10関連ファイル | V-01〜V-06 確認待ち          |
 | 2026-01-16 | BUGS.md / VERIFY.md / STATE.md 作成    | 運用体系                    | -（ドキュメント）            |
