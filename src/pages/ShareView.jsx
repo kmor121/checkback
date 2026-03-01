@@ -2486,7 +2486,7 @@ function ShareViewContent() {
     const newResolved = !comment.resolved;
 
     // 楽観更新
-    queryClient.setQueryData(['sharedComments', shareLink.file_id, token], (old) => {
+    queryClient.setQueryData(['sharedComments', shareLink.file_id], (old) => {
       return old.map(c => c.id === comment.id ? { ...c, resolved: newResolved } : c);
     });
 
