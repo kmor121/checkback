@@ -1557,6 +1557,24 @@ function FileViewContent() {
                           </div>
                         </div>
 
+                        {/* 返信ボタン（ShareView同等） */}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-auto p-1 text-gray-400 hover:text-blue-600"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenReplyIds(prev => {
+                              const next = new Set(prev);
+                              if (next.has(comment.id)) { next.delete(comment.id); } else { next.add(comment.id); }
+                              return next;
+                            });
+                          }}
+                          title="返信"
+                        >
+                          <MessageSquare className="w-4 h-4" />
+                        </Button>
+
                         {/* 対応済みトグル */}
                         <Button
                           variant="ghost"
