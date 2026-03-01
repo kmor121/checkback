@@ -1385,23 +1385,22 @@ function ShareViewContent() {
   }, [shareLink?.file_id]);
 
   // CRITICAL: comment_idで絞らず、全shapesをフェッチ（表示フィルタはクライアント側）
+  // ★★★ Step1 FIX: file_idのみで取得（share_tokenフィルタ除去→FileViewコメントの描画も表示）★★★
   const { data: paintShapes = [], isFetching: shapesFetching, isSuccess: shapesLoaded } = useQuery({
-    queryKey: ['paintShapes', token, shareLink?.file_id, currentPage],
+    queryKey: ['paintShapes', shareLink?.file_id, currentPage],
     queryFn: async () => {
       console.log('[ShareView] Fetching all shapes for page:', { 
-        token: token?.substring(0, 10), 
         fileId: shareLink.file_id, 
         pageNo: currentPage 
       });
       const allShapesOnPage = await base44.entities.PaintShape.filter({
-        share_token: token,
         file_id: shareLink.file_id
       });
       const shapes = allShapesOnPage.filter(s => s.page_no === currentPage);
       console.log('[ShareView] Fetched shapes count:', shapes.length);
       return shapes;
     },
-    enabled: isReady && !!shareLink?.file_id && !!token,
+    enabled: isReady && !!shareLink?.file_id,
     refetchOnWindowFocus: false,
     staleTime: 60000,
     placeholderData: (previousData) => previousData,
