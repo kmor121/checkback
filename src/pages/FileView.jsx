@@ -1180,9 +1180,20 @@ function FileViewContent() {
                               <Edit className="w-4 h-4 mr-2" />
                               編集
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => {
+                              const url = `${window.location.origin}${window.location.pathname}?fileId=${fileId}`;
+                              navigator.clipboard.writeText(url).then(() => {
+                                showToast('URLをコピーしました');
+                              }).catch(() => {
+                                showToast('コピーに失敗しました', 'error');
+                              });
+                            }}>
+                              <Copy className="w-4 h-4 mr-2" />
+                              URLをコピー
+                            </DropdownMenuItem>
                             <DropdownMenuItem 
-                              onClick={async () => {
-                                if (!window.confirm('このコメントと関連する描画を削除しますか？')) return;
+                            onClick={async () => {
+                            if (!window.confirm('このコメントと関連する描画を削除しますか？')) return;
                                 const relatedShapes = paintShapes.filter(s => s.comment_id === comment.id);
                                 for (const shape of relatedShapes) {
                                   await base44.entities.PaintShape.delete(shape.id);
