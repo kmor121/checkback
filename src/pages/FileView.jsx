@@ -868,6 +868,15 @@ function FileViewContent() {
       </div>
 
       <div className="flex-1 flex overflow-hidden">
+        {/* 左：サムネ（簡易版、ShareView同等） */}
+        <div className="w-48 border-r bg-gray-50 overflow-y-auto p-4">
+          <div className="space-y-2">
+            <div className="border-2 border-blue-600 rounded p-2 text-center text-sm bg-blue-50">
+              1
+            </div>
+          </div>
+        </div>
+
         {/* 中央：プレビュー + 下部Composer（ShareView同等の grid構成） */}
         <div className="flex-1 grid grid-rows-[1fr_auto] min-h-0">
           {/* 上段：素材表示エリア */}
