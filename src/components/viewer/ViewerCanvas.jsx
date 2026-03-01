@@ -961,18 +961,8 @@ const ViewerCanvas = forwardRef(({
       try {
         const imgCoords = stagePointToImagePoint();
         if (!imgCoords) {
-          console.error('[ViewerCanvas] Text tool: coords unavailable');
           return;
         }
-
-        console.log('[ViewerCanvas] ✓ Text tool activated:', { 
-          tool, 
-          paintMode, 
-          isDrawMode,
-          stage: { x: imgCoords.stageX, y: imgCoords.stageY },
-          img: { x: imgCoords.x, y: imgCoords.y }
-        });
-
         setTextEditor({
           visible: true,
           x: imgCoords.stageX,
@@ -1192,8 +1182,7 @@ const ViewerCanvas = forwardRef(({
       // 新規テキスト作成（activeCommentIdがなければ仮IDを使用）
       const commentIdForText = activeCommentId || getCommentIdForDrawing();
       if (!commentIdForText) {
-        console.error('[ViewerCanvas] Cannot create text: no commentId available');
-        setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
+        setTextEditor(TEXT_EDITOR_INITIAL);
         return;
       }
       
@@ -1235,21 +1224,18 @@ const ViewerCanvas = forwardRef(({
       }
     }
 
-    setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
+    setTextEditor(TEXT_EDITOR_INITIAL);
     setIsComposing(false);
     if (onToolChange) onToolChange('select');
   };
 
-  // テキストキャンセル
   const handleTextCancel = () => {
-    setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
+    setTextEditor(TEXT_EDITOR_INITIAL);
     setIsComposing(false);
     if (onToolChange) onToolChange('select');
   };
 
-  // テキストBlur確定（開いた直後の誤作動を防ぐ）
   const handleTextBlur = () => {
-    // 開いて250ms以内のblurは無視（誤作動防止）
     if (textEditor.openedAt && Date.now() - textEditor.openedAt < 250) return;
     
     const raw = textInputRef.current?.value ?? textEditor.value;
@@ -1260,20 +1246,12 @@ const ViewerCanvas = forwardRef(({
     }
   };
 
-  // テキストダブルクリックで再編集
   const handleTextDblClick = (shape) => {
     if (!isEditMode) return;
-
     const { x: imgX, y: imgY } = denormalizeCoords(shape.nx, shape.ny);
-    
-    // CRITICAL: transform API で画像座標→ステージ座標に変換
     const group = contentGroupRef.current;
     if (!group) return;
-    
-    const tr = group.getAbsoluteTransform().copy();
-    const stagePoint = tr.point({ x: imgX, y: imgY });
-
-    console.log('[ViewerCanvas] Text double-click edit:', { shapeId: shape.id, text: shape.text });
+    const stagePoint = group.getAbsoluteTransform().copy().point({ x: imgX, y: imgY });
 
     setTextEditor({
       visible: true,
@@ -1946,15 +1924,10 @@ const ViewerCanvas = forwardRef(({
       setIsDrawing(false);
       setUndoStack([]);
       setRedoStack([]);
-      setTextEditor({ visible: false, x: 0, y: 0, value: '', shapeId: null, imgX: 0, imgY: 0, openedAt: 0 });
-      
-      // Transformer解除
+      setTextEditor(TEXT_EDITOR_INITIAL);
       if (transformerRef.current) {
         transformerRef.current.nodes([]);
-        const layer = transformerRef.current.getLayer();
-        if (layer?.batchDraw) {
-          layer.batchDraw();
-        }
+        transformerRef.current.getLayer()?.batchDraw();
       }
     },
     delete: handleDelete,
