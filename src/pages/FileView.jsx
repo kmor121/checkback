@@ -358,7 +358,7 @@ function FileViewContent() {
       setComposerTargetCommentId(null);
       setPaintSessionCommentId(null);
       setActiveCommentId(null);
-      setTempCommentId(null); // ★★★ V-06: tempCommentId もリセット ★★★
+      setTempCommentId('temp_' + crypto.randomUUID()); // ★★★ P0-FV: 新しいtempIdを再生成 ★★★
       setPaintMode(false);
       setTool('select');
       setClearAfterSubmitNonce(n => n + 1);
