@@ -19,7 +19,7 @@ import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import ErrorBoundary from '../components/ErrorBoundary';
 import ViewerCanvas from '../components/viewer/ViewerCanvas';
-import FloatingToolbar from '../components/viewer/FloatingToolbar';
+import FloatingToolbarPortal from '../components/viewer/FloatingToolbarPortal';
 import ShareLinkModal from '../components/viewer/ShareLinkModal';
 import DebugOverlay from '../components/DebugOverlay';
 
@@ -41,6 +41,9 @@ function FileViewContent() {
   const [paintSessionCommentId, setPaintSessionCommentId] = useState(null);
   const [draftShapes, setDraftShapes] = useState([]);
   const [activeCommentId, setActiveCommentId] = useState(null);
+  
+  // ★★★ V-06 FIX: 新規コメント用の temp ID（ViewerCanvas の draftCommentId に渡す）★★★
+  const [tempCommentId, setTempCommentId] = useState(null);
   
   // Composer mode (new or edit)
   const [composerMode, setComposerMode] = useState('new');
@@ -184,6 +187,15 @@ function FileViewContent() {
     }
   }, [file, user, fileId]);
 
+  // ★★★ V-06 FIX: tempCommentId の生成（新規コメント開始時に1回だけ）★★★
+  const ensureTempCommentId = () => {
+    if (tempCommentId) return tempCommentId;
+    const newId = 'temp_' + crypto.randomUUID();
+    console.log('[FileView] ensureTempCommentId: generated', newId);
+    setTempCommentId(newId);
+    return newId;
+  };
+
   // CRITICAL: onBeginPaintではコメントを作成しない（送信時のみ作成に統一）
   // ★★★ CRITICAL: effectiveActiveIdRef経由で最新IDを参照（stale closure対策）★★★
   const handleBeginPaint = async (imgX, imgY, bgW, bgH) => {
@@ -197,9 +209,9 @@ function FileViewContent() {
       return currentEffectiveId;
     }
 
-    // CRITICAL: ここではコメントを作成しない
-    // 描画開始位置だけ記録して、送信時にコメントを作成する
-    console.log('[handleBeginPaint] no effectiveActiveId, draft mode');
+    // ★★★ V-06 FIX: tempCommentIdを確保してdraftモードに入る ★★★
+    const tid = ensureTempCommentId();
+    console.log('[handleBeginPaint] no effectiveActiveId, draft mode with tempCommentId:', tid);
     return null;
   };
 
@@ -413,6 +425,7 @@ function FileViewContent() {
       setComposerTargetCommentId(null);
       setPaintSessionCommentId(null);
       setActiveCommentId(null);
+      setTempCommentId(null); // ★★★ V-06: tempCommentId もリセット ★★★
       setPaintMode(false);
       setTool('select');
       setClearAfterSubmitNonce(n => n + 1);
@@ -448,6 +461,7 @@ function FileViewContent() {
       setComposerTargetCommentId(null);
       setPaintSessionCommentId(null);
       setActiveCommentId(null);
+      setTempCommentId(null); // ★★★ V-06: tempCommentId もリセット ★★★
       setPaintMode(false);
       setTool('select');
       setClearAfterSubmitNonce(n => n + 1);
@@ -613,6 +627,7 @@ function FileViewContent() {
     setPaintMode(false);
     setTool('select');
     setPaintSessionCommentId(null);
+    setTempCommentId(null); // ★★★ V-06: tempCommentId もリセット ★★★
     
     // draft/描画一時stateクリア
     setDraftShapes([]);
