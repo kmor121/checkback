@@ -1198,28 +1198,19 @@ const ViewerCanvas = forwardRef(({
     const shape = selectedShape;
     addToUndoStack({ type: 'delete', shape, index: 0 });
     
-    // Transformer解除（先に）
     if (transformerRef.current) {
       transformerRef.current.nodes([]);
-      const layer = transformerRef.current.getLayer();
-      if (layer?.batchDraw) {
-        layer.batchDraw();
-      }
+      transformerRef.current.getLayer()?.batchDraw();
     }
     
-    // Optimistic update（★★★ CRITICAL: 新しいMapを作成 ★★★）
-    const newMap = new Map(shapesMapRef.current);
-    newMap.delete(selectedId);
-    shapesMapRef.current = newMap;
+    mapDelete(shapesMapRef, selectedId);
     bump();
     onShapesChange?.(getAllShapes());
     setSelectedId(null);
     
-    // DB削除を実行
     if (onDeleteShape) {
       debugRef.current.mutation = 'delete';
       try {
-        console.log('[ViewerCanvas] Calling onDeleteShape...');
         await onDeleteShape(shape);
         debugRef.current.saveStatus = 'success';
         debugRef.current.error = null;
@@ -1227,11 +1218,7 @@ const ViewerCanvas = forwardRef(({
         console.error('[ViewerCanvas] Delete shape error:', err);
         debugRef.current.saveStatus = 'error';
         debugRef.current.error = err.message;
-        const revertMap = new Map(shapesMapRef.current);
-        revertMap.set(shape.id, shape);
-        shapesMapRef.current = revertMap;
-        bump();
-        onShapesChange?.(getAllShapes());
+        onSaveRevert(shapesMapRef, shape, bump, onShapesChange);
       }
     }
   };
