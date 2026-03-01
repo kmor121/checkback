@@ -412,10 +412,9 @@ function ShareViewContent() {
   }, [shareLink, isPasswordVerified]);
 
   const { data: comments = [] } = useQuery({
-    queryKey: ['sharedComments', shareLink?.file_id, token],
+    queryKey: ['sharedComments', shareLink?.file_id],
     queryFn: () => base44.entities.ReviewComment.filter({ 
-      file_id: shareLink.file_id,
-      share_token: token 
+      file_id: shareLink.file_id
     }),
     enabled: isReady && !!shareLink?.file_id && shareLink?.can_view_comments,
     staleTime: 30000,
