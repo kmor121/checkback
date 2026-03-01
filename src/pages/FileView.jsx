@@ -710,6 +710,12 @@ function FileViewContent() {
   // ★ effectiveActiveId は Canvas への props 用（描画の紐づけ先）として別途定義
   const effectiveActiveId = composerTargetCommentId ?? activeCommentId ?? paintSessionCommentId ?? null;
 
+  // ★★★ V-06 FIX: ViewerCanvas に渡す renderTargetCommentId / draftCommentId ★★★
+  const normalizedActiveCommentId = activeCommentId != null ? String(activeCommentId) : null;
+  const isUnselected = !normalizedActiveCommentId;
+  const renderTargetCommentIdForCanvas = isUnselected ? null : normalizedActiveCommentId;
+  const draftCommentIdForCanvas = tempCommentId || null;
+
   // CRITICAL: ViewerCanvasに渡すshapes（targetIdForShapesがある時のみ）
   // ★★★ CRITICAL FIX: 編集モード中は activeCommentId のみでフィルタ ★★★
   const shapesForCanvas = React.useMemo(() => {
@@ -883,6 +889,8 @@ function FileViewContent() {
             activeCommentId={activeCommentId}
             showAllPaint={false}
             clearAfterSubmitNonce={clearAfterSubmitNonce}
+            renderTargetCommentId={renderTargetCommentIdForCanvas}
+            draftCommentId={draftCommentIdForCanvas}
             onShapesChange={(updated) => {
               // ★★★ CRITICAL BUG FIX: 編集モードでは activeCommentId を使用（paintSessionCommentIdを更新しない）★★★
               // ref経由ではなく、現在のactiveCommentIdを直接参照
@@ -1064,8 +1072,9 @@ function FileViewContent() {
         </div>
       </div>
 
-      {/* フローティングツールバー */}
-      <FloatingToolbar
+      {/* フローティングツールバー（Portal化: z-index問題を回避） */}
+      <FloatingToolbarPortal
+        show={paintMode && !!file?.id}
         paintMode={paintMode}
         onPaintModeChange={setPaintMode}
         tool={tool}
