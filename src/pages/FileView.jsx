@@ -39,6 +39,13 @@ import FloatingToolbarPortal from '../components/viewer/FloatingToolbarPortal';
 import ShareLinkModal from '../components/viewer/ShareLinkModal';
 import ReplyThread from '../components/viewer/ReplyThread';
 import DebugOverlay from '../components/DebugOverlay';
+import {
+  getDraftKey,
+  saveDraft,
+  loadDraft,
+  deleteDraft,
+  cleanupExpiredDrafts,
+} from '../components/utils/draftPaintStorage';
 
 function FileViewContent() {
   const [user, setUser] = useState(null);
@@ -84,6 +91,8 @@ function FileViewContent() {
   // CRITICAL: useRefでロック管理（コンポーネント内で確実に保持）
   const submitLockRef = useRef(false);
   const mutationIdRef = useRef(null);
+  const saveDraftTimeoutRef = useRef(null);
+  const draftRestoredRef = useRef(false); // 復元済みフラグ（二重復元防止）
   
   const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
@@ -91,6 +100,7 @@ function FileViewContent() {
   // DEBUG: Trace ReviewComment.create calls + mount/unmount log
   useEffect(() => {
     console.log("[FileView] mounted");
+    cleanupExpiredDrafts();
     return () => console.log("[FileView] unmounted");
   }, []);
 
@@ -135,6 +145,87 @@ function FileViewContent() {
   useEffect(() => {
     base44.auth.me().then(setUser).catch(() => {});
   }, []);
+
+  // ★★★ P0-FV-DRAFT-LS: localStorage下書きキー ★★★
+  const FV_TEXT_KEY = fileId ? `fvDraftText:${fileId}` : null;
+  const fvShapesDraftKey = React.useMemo(() => {
+    if (!fileId || !tempCommentId) return null;
+    return getDraftKey(fileId, null, tempCommentId, 'new');
+  }, [fileId, tempCommentId]);
+
+  // ★★★ P0-FV-DRAFT-LS: 初回復元（fileId確定時に1回だけ） ★★★
+  useEffect(() => {
+    if (!fileId || draftRestoredRef.current) return;
+    draftRestoredRef.current = true;
+
+    // テキスト復元
+    try {
+      const savedText = localStorage.getItem(`fvDraftText:${fileId}`);
+      if (savedText) {
+        setCommentBody(savedText);
+        console.log('[FV-DRAFT] Restored text draft');
+      }
+    } catch (e) { /* ignore */ }
+
+    // 描画復元: fileId の new scope を走査
+    try {
+      const prefix = `draftPaint:${fileId}:new:`;
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(prefix)) {
+          const draft = loadDraft(key);
+          if (draft?.shapes?.length > 0) {
+            // tempCommentId を key から復元
+            const savedTempId = key.substring(prefix.length);
+            if (savedTempId && savedTempId !== tempCommentId) {
+              setTempCommentId(savedTempId);
+            }
+            setDraftShapes(draft.shapes);
+            console.log('[FV-DRAFT] Restored shapes draft:', draft.shapes.length, 'tempId:', savedTempId?.substring(0, 12));
+            break; // 最初の有効な下書きのみ復元
+          }
+        }
+      }
+    } catch (e) { console.warn('[FV-DRAFT] Restore shapes error:', e); }
+  }, [fileId]);
+
+  // ★★★ P0-FV-DRAFT-LS: テキスト自動保存（debounce 500ms） ★★★
+  useEffect(() => {
+    if (!FV_TEXT_KEY) return;
+    const timer = setTimeout(() => {
+      if (commentBody.trim()) {
+        localStorage.setItem(FV_TEXT_KEY, commentBody);
+      } else {
+        localStorage.removeItem(FV_TEXT_KEY);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [commentBody, FV_TEXT_KEY]);
+
+  // ★★★ P0-FV-DRAFT-LS: 描画自動保存（debounce 500ms） ★★★
+  useEffect(() => {
+    if (!fvShapesDraftKey) return;
+    if (saveDraftTimeoutRef.current) clearTimeout(saveDraftTimeoutRef.current);
+    saveDraftTimeoutRef.current = setTimeout(() => {
+      if (draftShapes.length > 0) {
+        saveDraft(fvShapesDraftKey, draftShapes, {
+          pageNo: 1,
+          authorKey: user?.id || 'anon',
+          commentId: tempCommentId,
+        });
+      } else {
+        deleteDraft(fvShapesDraftKey);
+      }
+    }, 500);
+    return () => { if (saveDraftTimeoutRef.current) clearTimeout(saveDraftTimeoutRef.current); };
+  }, [draftShapes, fvShapesDraftKey, tempCommentId, user?.id]);
+
+  // ★★★ P0-FV-DRAFT-LS: 下書きクリア関数（送信成功時に呼ぶ） ★★★
+  const clearDraftStorage = React.useCallback(() => {
+    if (FV_TEXT_KEY) localStorage.removeItem(FV_TEXT_KEY);
+    if (fvShapesDraftKey) deleteDraft(fvShapesDraftKey);
+    console.log('[FV-DRAFT] Cleared localStorage drafts');
+  }, [FV_TEXT_KEY, fvShapesDraftKey]);
 
   // ★★★ P0-FV: activeCommentId変更時はdraftShapesをクリア（前コメントの下書き混入防止）★★★
   const prevActiveCommentIdRef = useRef(activeCommentId);
