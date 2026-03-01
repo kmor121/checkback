@@ -957,7 +957,7 @@ function FileViewContent() {
 
       {/* フローティングツールバー（Portal化: z-index問題を回避） */}
       <FloatingToolbarPortal
-        show={paintMode && !!file?.id}
+        show={paintMode && !!file}
         paintMode={paintMode}
         onPaintModeChange={setPaintMode}
         tool={tool}
