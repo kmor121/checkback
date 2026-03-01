@@ -207,51 +207,29 @@ function FileViewContent() {
     }
   };
 
+  // ★★★ P0-FV: handleSaveShape — ShareView同等のdraft-first方式 ★★★
+  // 新規コメント中（activeCommentId=null）はメモリ/draftShapesのみ保存。
+  // 既存コメント選択中でもdraftShapesに保存（DBへの即時永続化はしない）。
   const handleSaveShape = async (shape, mode) => {
-    try {
-      // ★★★ CRITICAL: ref経由で最新IDを取得（stale closure回避）★★★
-      const targetCommentId = effectiveActiveIdRef.current || paintSessionCommentId;
-      
-      console.log('[handleSaveShape] targetCommentId:', targetCommentId, 'mode:', mode);
-      
-      // Draft（新規コメント）の場合はメモリに保存のみ
-      if (!targetCommentId) {
-        if (mode === 'create') {
-          setDraftShapes(prev => [...prev, shape]);
-        } else {
-          setDraftShapes(prev => prev.map(s => s.id === shape.id ? shape : s));
-        }
-        return { dbId: shape.id };
+    console.log('[handleSaveShape]', { mode, activeCommentId, tempCommentId: tempCommentId?.substring(0, 12) });
+    
+    const shapeWithMeta = {
+      ...shape,
+      id: shape.id || crypto.randomUUID(),
+      comment_id: activeCommentId ? String(activeCommentId) : (tempCommentId || ''),
+      _dirty: true,
+      _localTs: Date.now(),
+    };
+    
+    setDraftShapes(prev => {
+      if (mode === 'create') {
+        if (prev.some(s => s.id === shapeWithMeta.id)) return prev;
+        return [...prev, shapeWithMeta];
       }
-
-      // 既存コメントの場合はDBに保存
-      const result = await base44.functions.invoke('savePaintShape', {
-        token: null,
-        fileId: fileId,
-        commentId: targetCommentId,
-        pageNo: 1,
-        clientShapeId: shape.id,
-        shapeType: shape.tool,
-        dataJson: JSON.stringify(shape),
-        authorName: user?.full_name || 'User',
-        authorKey: user?.id,
-        mode: mode || 'upsert',
-      });
-
-      if (result.data.error) {
-        throw new Error(result.data.error);
-      }
-
-      // ★★★ CRITICAL: invalidateを完全に削除（onShapesChangeで直接キャッシュ更新済み）★★★
-      console.log('[FileView] Shape saved, cache updated via onShapesChange');
-
-      return result.data;
-    } catch (error) {
-      console.error('Save shape error:', error);
-      const errorMsg = error.response?.data?.error || error.message || String(error);
-      showToast(`保存失敗: ${errorMsg}`, 'error');
-      throw new Error(errorMsg);
-    }
+      return prev.map(s => s.id === shapeWithMeta.id ? shapeWithMeta : s);
+    });
+    
+    return { draft: true };
   };
 
   const handleDeleteShape = async (shape) => {
