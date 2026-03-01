@@ -200,10 +200,13 @@ const ViewerCanvas = forwardRef(({
     if (showAllPaint) return src;
 
     const normalizeNullableId = (v) => (v == null || v === 'null' || v === 'undefined' || v === '' ? null : v);
-    const targetId = normalizeNullableId(renderTargetCommentId);
+    const targetId0 = normalizeNullableId(renderTargetCommentId);
+    // ★★★ V-06 FIX: 新規コメント作成中（renderTargetCommentId=null）は draftCommentId にフォールバック ★★★
+    const draftId = normalizeNullableId(draftCommentId);
+    const targetId = targetId0 ?? draftId;
     if (targetId) return src.filter(s => resolveCommentId(s) === targetId);
     return [];
-  }, [shapesVersion, showAllPaint, renderTargetCommentId, currentShape, showDraftOnly]);
+  }, [shapesVersion, showAllPaint, renderTargetCommentId, currentShape, showDraftOnly, draftCommentId]);
 
   const renderedShapesFinal = hidePaintOverlay ? [] : renderedShapes;
   
