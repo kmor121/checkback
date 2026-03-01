@@ -2439,8 +2439,8 @@ function ShareViewContent() {
       // コメント削除
       await base44.entities.ReviewComment.delete(comment.id);
       
-      queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id, token] });
-      queryClient.invalidateQueries({ queryKey: ['paintShapes', token, shareLink?.file_id, currentPage] });
+      queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id] });
+      queryClient.invalidateQueries({ queryKey: ['paintShapes', shareLink?.file_id, currentPage] });
       
       // 削除したコメントが選択中だったらクリア
       if (activeCommentId === comment.id) {
