@@ -31,7 +31,8 @@ import {
   Copy,
   Paperclip,
   FileEdit,
-  MessageSquare
+  MessageSquare,
+  MapPin
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
@@ -1424,7 +1425,14 @@ function FileViewContent() {
                           )}
 
                           <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
-                            <span>{comment.page_no}枚目</span>
+                            {(comment.anchor_nx != null && comment.anchor_ny != null) ? (
+                              <span className="flex items-center gap-0.5 text-blue-600" title={`位置: (${Math.round(comment.anchor_nx * 100)}%, ${Math.round(comment.anchor_ny * 100)}%)`}>
+                                <MapPin className="w-3 h-3" />
+                                P{comment.page_no || 1}
+                              </span>
+                            ) : (
+                              <span>P{comment.page_no || 1}</span>
+                            )}
                             <span>•</span>
                             <span>{format(new Date(comment.created_date), 'yyyy/MM/dd HH:mm', { locale: ja })}</span>
                           </div>
