@@ -173,7 +173,7 @@ function FileViewContent() {
     }
   }, [file, user, fileId]);
 
-  // ★★★ V-06 FIX: tempCommentId の生成（新規コメント開始時に1回だけ）★★★
+  // ★★★ P0-FV: tempCommentId 再生成（送信後など、temp IDがnullになった場合用）★★★
   const ensureTempCommentId = () => {
     if (tempCommentId) return tempCommentId;
     const newId = 'temp_' + crypto.randomUUID();
