@@ -632,16 +632,8 @@ function FileViewContent() {
     return result;
   }, [paintShapes]);
 
-  // ★★★ CRITICAL BUG FIX: 編集モード中は activeCommentId のみを targetId として使用 ★★★
-  // paintSessionCommentId は「新規コメント作成中」のみ使用する
-  // 編集モード（activeCommentId が存在）中に paintSessionCommentId が更新されても shapesForCanvas の対象は変わらない
-  const isEditMode = !!activeCommentId;
-  const targetIdForShapes = isEditMode
-    ? String(activeCommentId)
-    : (paintSessionCommentId ? String(paintSessionCommentId) : null);
-
-  // ★ effectiveActiveId は Canvas への props 用（描画の紐づけ先）として別途定義
-  const effectiveActiveId = composerTargetCommentId ?? activeCommentId ?? paintSessionCommentId ?? null;
+  // ★★★ P0-FV: 既存の複雑な effectiveActiveId / targetIdForShapes は不要 ★★★
+  // shapesForCanvas は normalizedActiveCommentId + draftShapes で直接計算（下で定義）
 
   // ★★★ P0-FV: ViewerCanvas に渡す props の算出 ★★★
   const normalizedActiveCommentId = activeCommentId != null ? String(activeCommentId) : null;
