@@ -2189,60 +2189,26 @@ const ViewerCanvas = forwardRef(({
       delete updatedShape.height;
       delete updatedShape.radius;
 
-      // CRITICAL: Map方式でupsert + dirty/localTs付与（★★★ 不変更新 ★★★）
-      const updatedWithDirty = { ...updatedShape, _dirty: true, _localTs: Date.now() };
+      const updatedWithDirty = markDirty(updatedShape);
       addToUndoStack({ type: 'update', shapeId: shape.id, before: shape, after: updatedWithDirty });
+      commitShapeToMap(shapesMapRef, updatedWithDirty, bump, onShapesChange);
 
-      // CRITICAL: Map更新 + 親に全量同期（★★★ 不変更新 ★★★）
-      const newMap = new Map(shapesMapRef.current);
-      newMap.set(updatedWithDirty.id, updatedWithDirty);
-      shapesMapRef.current = newMap;
-      bump();
-      onShapesChange?.(getAllShapes());
-
-      // DB更新（upsertモード）
-      isInteractingRef.current = false; // ★ B) 操作終了
+      isInteractingRef.current = false;
       if (onSaveShape) {
-        // ★ B) 保留されていたshapesがあれば同期をトリガー
-        if (pendingIncomingShapesRef.current) {
-            console.log('[SYNC] handleTransformEnd: applying pending shapes');
-            bump();
-        }
-
+        if (pendingIncomingShapesRef.current) bump();
         setIsSaving(prev => ({ ...prev, [shape.id]: true }));
         debugRef.current.mutation = 'update-transform';
         debugRef.current.saveStatus = 'saving';
-        console.log('[ViewerCanvas] COMMIT existing shape -> onSaveShape:', { 
-          shapeId: shape.id?.substring(0, 8), 
-          canMutateExisting, 
-          draftReady 
-        });
-
         try {
           const result = await onSaveShape(updatedShape, 'upsert');
           debugRef.current.saveStatus = 'success';
           debugRef.current.error = null;
-
-          // CRITICAL: dirty解除（★★★ 不変更新 ★★★）
-          const cur = shapesMapRef.current.get(updatedShape.id);
-          if (cur) {
-            const dirtyMap = new Map(shapesMapRef.current);
-            dirtyMap.set(updatedShape.id, { ...cur, dbId: result?.dbId, _dirty: false });
-            shapesMapRef.current = dirtyMap;
-            bump();
-            onShapesChange?.(getAllShapes());
-          }
+          onSaveSuccess(shapesMapRef, updatedShape.id, result?.dbId, bump, onShapesChange);
         } catch (err) {
           console.error('[ViewerCanvas] onSaveShape error:', err);
           debugRef.current.saveStatus = 'error';
           debugRef.current.error = err.message;
-          // 失敗時はrevert（★★★ 不変更新 ★★★）
-          const revertMap = new Map(shapesMapRef.current);
-          revertMap.set(shape.id, shape);
-          shapesMapRef.current = revertMap;
-          bump();
-          onShapesChange?.(getAllShapes());
-          console.log('[ViewerCanvas] onSaveShape failed, reverted to original size:', { shapeId: shape.id?.substring(0, 8) });
+          onSaveRevert(shapesMapRef, shape, bump, onShapesChange);
         } finally {
           setIsSaving(prev => ({ ...prev, [shape.id]: false }));
         }
