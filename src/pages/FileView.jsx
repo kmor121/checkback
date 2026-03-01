@@ -1466,16 +1466,26 @@ function FileViewContent() {
                           {(attachmentsByComment[comment.id] || []).length > 0 && (
                             <div className="mt-2 space-y-1">
                               {(attachmentsByComment[comment.id]).map((att) => (
-                                <a
-                                  key={att.id}
-                                  href={att.file_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex items-center gap-2 text-xs text-blue-600 hover:underline"
-                                >
-                                  <Paperclip className="w-3 h-3" />
-                                  {att.original_filename}
-                                </a>
+                                <div key={att.id} className="flex items-center gap-2 text-xs">
+                                  <a
+                                    href={att.file_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-1 text-blue-600 hover:underline flex-1 min-w-0"
+                                  >
+                                    <Paperclip className="w-3 h-3 flex-shrink-0" />
+                                    <span className="truncate">{att.original_filename}</span>
+                                  </a>
+                                  {canDeleteAttachment(att) && (
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); handleDeleteAttachment(att); }}
+                                      className="text-gray-400 hover:text-red-600 flex-shrink-0 p-0.5"
+                                      title="添付を削除"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                </div>
                               ))}
                             </div>
                           )}
