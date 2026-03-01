@@ -58,10 +58,6 @@ function FileViewContent() {
   const submitLockRef = useRef(false);
   const mutationIdRef = useRef(null);
   
-  // ★★★ CRITICAL: effectiveActiveIdRef - 描画の紐づけ先を常に最新で参照 ★★★
-  // editingCommentId(composerTargetCommentId) > activeCommentId > paintSessionCommentId の優先順
-  const effectiveActiveIdRef = useRef(null);
-  
   const viewerCanvasRef = useRef(null);
   const queryClient = useQueryClient();
 
