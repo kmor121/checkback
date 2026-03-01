@@ -29,7 +29,8 @@ import {
   Check,
   Circle as CircleIcon,
   Copy,
-  Paperclip
+  Paperclip,
+  FileEdit
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
@@ -1301,19 +1302,30 @@ function FileViewContent() {
                 全表示
               </Button>
             </div>
-            {(draftShapes.length > 0 || commentBody.trim()) && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-2">
-                <div className="flex items-center gap-2 text-sm">
-                  <Badge className="bg-blue-600 text-white">📝 下書き</Badge>
-                  <span className="text-blue-800">
-                    {[
-                      draftShapes.length > 0 && `描画${draftShapes.length}個`,
-                      commentBody.trim() && 'テキスト入力中',
-                    ].filter(Boolean).join(' / ')}
-                  </span>
+            {(() => {
+              const draftItems = [];
+              if (commentBody.trim()) draftItems.push('テキスト');
+              if (draftShapes.length > 0) draftItems.push(`描画${draftShapes.length}個`);
+              const totalDraftCount = (commentBody.trim() ? 1 : 0) + draftShapes.length;
+              if (totalDraftCount === 0) return null;
+              return (
+                <div
+                  className="bg-blue-50 border border-blue-200 rounded-lg p-2 cursor-pointer hover:bg-blue-100 transition-colors"
+                  onClick={() => {
+                    // 下書きがある状態をComposerで見せる（既にComposer表示中なのでスクロール誘導のみ）
+                    if (activeCommentId) { setActiveCommentId(null); }
+                    setIsNewCommentInputActive(true);
+                  }}
+                >
+                  <div className="flex items-center gap-2 text-sm">
+                    <Badge className="bg-blue-600 text-white">📝 下書き {totalDraftCount}件</Badge>
+                    <span className="text-blue-800">
+                      {draftItems.join(' / ')}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
             <Tabs value={commentFilter} onValueChange={setCommentFilter} className="w-full">
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="all" className="text-xs">全て</TabsTrigger>
@@ -1347,6 +1359,8 @@ function FileViewContent() {
                 const shapesCount = paintShapes.filter(s => s.comment_id === comment.id).length;
                 const isSelected = String(activeCommentId) === String(comment.id) && !isNewCommentInputActive;
                 const isEditing = composerMode === 'edit' && String(composerTargetCommentId) === String(comment.id) && !isNewCommentInputActive;
+                // ★★★ P0-FV-DRAFT-BADGE: コメントカード別の下書きバッジ ★★★
+                const hasDraftForThis = isEditing && draftShapes.length > 0;
 
                 return (
                   <Card 
@@ -1377,6 +1391,12 @@ function FileViewContent() {
                             )}
                             {isEditing && (
                               <Badge className="text-xs bg-green-600 text-white">編集中</Badge>
+                            )}
+                            {hasDraftForThis && (
+                              <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-800 flex items-center gap-0.5">
+                                <FileEdit className="w-3 h-3" />
+                                下書き{draftShapes.length}
+                              </Badge>
                             )}
                           </div>
                           <p className="text-sm text-gray-700">{comment.body || '（本文なし）'}</p>
