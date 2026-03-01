@@ -668,59 +668,28 @@ function FileViewContent() {
   // paintContextId: ViewerCanvasのcanvasContextKey用（描画モードの一意識別）
   const paintContextId = activeCommentId ? String(activeCommentId) : (tempCommentId || 'none');
 
-  // CRITICAL: ViewerCanvasに渡すshapes（targetIdForShapesがある時のみ）
-  // ★★★ CRITICAL FIX: 編集モード中は activeCommentId のみでフィルタ ★★★
+  // ★★★ P0-FV: ViewerCanvasに渡すshapes ★★★
+  // 未選択時（新規コメント中）→ draftShapesのみ
+  // 選択時 → allShapes から activeCommentId でフィルタ + draftShapes をマージ
   const shapesForCanvas = React.useMemo(() => {
-    console.log('[FileView] shapesForCanvas calculation:', {
-      isEditMode,
-      targetIdForShapes,
-      effectiveActiveId,
-      composerTargetCommentId,
-      activeCommentId,
-      paintSessionCommentId,
-      draftShapesCount: draftShapes.length,
-      allShapesCount: allShapes.length,
-    });
-
-    // targetIdForShapesが無い場合は空配列（描画を表示しない）
-    if (!targetIdForShapes && draftShapes.length === 0) {
-      console.log('[FileView] shapesForCanvas: returning empty (no target)');
-      return [];
-    }
-
-    if (!targetIdForShapes) {
-      console.log('[FileView] shapesForCanvas: returning draftShapes only');
+    if (isUnselected) {
+      // 新規コメント中: draftShapesのみ（tempCommentIdに紐付いた下書き）
       return draftShapes;
     }
 
-    console.log('[FileView] filtering shapes for targetId:', targetIdForShapes);
-
+    // 既存コメント選択中: DB shapesからフィルタ
     const filtered = allShapes.filter(s => {
-      const shapeCommentId = s.comment_id;
-      // ★★★ CRITICAL: null/undefinedチェックと文字列比較 ★★★
-      if (shapeCommentId == null || shapeCommentId === '') {
-        return false;
-      }
-      return String(shapeCommentId) === targetIdForShapes;
+      const cid = s.comment_id;
+      if (cid == null || cid === '') return false;
+      return String(cid) === normalizedActiveCommentId;
     });
 
-    // ★★★ 安全策: 複数のcomment_idが混ざっていたら警告 ★★★
-    const uniqueCommentIds = [...new Set(filtered.map(s => s.comment_id))];
-    if (uniqueCommentIds.length > 1) {
-      console.warn('[FileView] WARNING: Multiple comment_ids in filtered shapes!', uniqueCommentIds);
-    }
-
-    console.log('[FileView] shapesForCanvas result:', {
-      targetId: targetIdForShapes,
-      filteredCount: filtered.length,
-      draftShapesCount: draftShapes.length,
-      total: filtered.length + draftShapes.length,
-      uniqueCommentIdsInFiltered: uniqueCommentIds,
-    });
-
-    // ★★★ CRITICAL: draftShapesはそのまま追加（comment_id上書きしない）★★★
-    return [...filtered, ...draftShapes];
-  }, [allShapes, targetIdForShapes, draftShapes, isEditMode]);
+    // draftShapesとマージ（IDベースで重複排除、draftが優先）
+    const shapeMap = new Map();
+    filtered.forEach(s => shapeMap.set(s.id, s));
+    draftShapes.forEach(s => shapeMap.set(s.id, s));
+    return Array.from(shapeMap.values());
+  }, [allShapes, draftShapes, isUnselected, normalizedActiveCommentId]);
 
   const filteredComments = comments.filter(c => {
     if (commentFilter === 'resolved' && !c.resolved) return false;
