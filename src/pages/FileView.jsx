@@ -1161,7 +1161,7 @@ function FileViewContent() {
       <FloatingToolbarPortal
         show={paintMode && !!file}
         paintMode={paintMode}
-        onPaintModeChange={setPaintMode}
+        onPaintModeChange={handlePaintModeChange}
         tool={tool}
         onToolChange={setTool}
         strokeColor={strokeColor}
