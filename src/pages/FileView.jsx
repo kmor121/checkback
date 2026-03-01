@@ -540,6 +540,9 @@ function FileViewContent() {
       viewerCanvasRef.current?.afterSubmitClear();
       viewerCanvasRef.current?.clear();
       
+      // ★★★ P0-FV-DRAFT-LS: localStorage下書きクリア ★★★
+      clearDraftStorage();
+      
       // リセット処理
       setCommentBody('');
       setDraftShapes([]);
@@ -616,6 +619,9 @@ function FileViewContent() {
       // ★★★ CRITICAL: 描画クリアを最優先で実行 ★★★
       viewerCanvasRef.current?.afterSubmitClear();
       viewerCanvasRef.current?.clear();
+      
+      // ★★★ P0-FV-DRAFT-LS: localStorage下書きクリア ★★★
+      clearDraftStorage();
       
       // リセット処理
       setCommentBody('');
