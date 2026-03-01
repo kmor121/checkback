@@ -307,6 +307,27 @@ function FileViewContent() {
     staleTime: 30000,
   });
 
+  // 添付削除権限チェック（admin/manager or 本人）
+  const canDeleteAttachment = (att) => {
+    if (!user) return false;
+    if (user.role === 'admin') return true;
+    // UserRole の manager チェック（将来拡張用、現状は user entity の role で判定）
+    if (att.uploader_key === user.id) return true;
+    return false;
+  };
+
+  // 添付削除ハンドラ
+  const handleDeleteAttachment = async (att) => {
+    if (!window.confirm(`添付ファイル「${att.original_filename}」を削除しますか？`)) return;
+    try {
+      await base44.entities.ReviewCommentAttachment.delete(att.id);
+      queryClient.invalidateQueries(['commentAttachments', fileId]);
+      showToast('添付ファイルを削除しました');
+    } catch (err) {
+      showToast(`削除失敗: ${err.message}`, 'error');
+    }
+  };
+
   const attachmentsByComment = React.useMemo(() => {
     const map = {};
     attachments.forEach(att => {
