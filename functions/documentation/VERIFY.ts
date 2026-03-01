@@ -201,5 +201,6 @@ markdown
 | 2026-03-01   | -      | 確認待ち     | V-01〜V-06 | Round1〜3リファクタ後の回帰確認    |
 | 2026-03-01   | -      | Verify待ち   | V-06       | B-0004修正: renderedShapesにdraftCommentIdフォールバック追加 |
 | 2026-03-01   | -      | Verify待ち   | V-FV-01/02 | /FileView Portal化 + draftCommentId/renderTargetCommentId props追加 |
+| 2026-03-01   | -      | Verify待ち   | V-FV-01〜03 | P0-FV: /FileViewペイント安定化（draft-first方式） |
 | 2026-03-01   | -      | Verify待ち   | V-DATA-01〜05 | Step1: ShareViewコメント/描画取得をfile_idのみに統一 |
 |              |        |              |            |                                    |
