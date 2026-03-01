@@ -232,31 +232,9 @@ function FileViewContent() {
     return { draft: true };
   };
 
+  // ★★★ P0-FV: handleDeleteShape — draftShapesから削除のみ ★★★
   const handleDeleteShape = async (shape) => {
-    try {
-      // Draft中の場合はメモリから削除
-      if (!paintSessionCommentId) {
-        setDraftShapes(prev => prev.filter(s => s.id !== shape.id));
-        return;
-      }
-
-      await base44.functions.invoke('savePaintShape', {
-        token: null,
-        fileId: fileId,
-        pageNo: 1,
-        clientShapeId: shape.id,
-        authorKey: user?.id,
-        mode: 'delete',
-      });
-
-      await queryClient.invalidateQueries(['paintShapes', fileId, 1]);
-      showToast('削除完了', 'success');
-    } catch (error) {
-      console.error('Delete shape error:', error);
-      const errorMsg = error.response?.data?.error || error.message || String(error);
-      showToast(`削除失敗: ${errorMsg}`, 'error');
-      throw new Error(errorMsg);
-    }
+    setDraftShapes(prev => prev.filter(s => s.id !== shape.id));
   };
 
   // ★★★ CRITICAL: 全削除処理を統一（編集モード・新規モード両対応）★★★
