@@ -7,6 +7,13 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Download, 
   Share2, 
@@ -15,7 +22,12 @@ import {
   Send,
   CheckCircle2,
   Paintbrush,
-  X
+  X,
+  MoreVertical,
+  Edit,
+  Trash,
+  Check,
+  Circle as CircleIcon
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
