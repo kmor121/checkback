@@ -1185,49 +1185,8 @@ const ViewerCanvas = forwardRef(({
     setRedoStack([]); // 新しい操作でredoスタックはクリア
   };
 
-  // Undo実行（★★★ CRITICAL: 不変更新で新しいMapを作成 ★★★）
-  const performUndo = () => {
-    if (undoStack.length === 0) return;
-    
-    const action = undoStack[undoStack.length - 1];
-    setUndoStack(prev => prev.slice(0, -1));
-    setRedoStack(prev => [...prev, action]);
-    
-    // ★★★ CRITICAL: 新しいMapを作成（不変更新）★★★
-    const newMap = new Map(shapesMapRef.current);
-    if (action.type === 'add') {
-      newMap.delete(action.shapeId);
-    } else if (action.type === 'update') {
-      newMap.set(action.shapeId, action.before);
-    } else if (action.type === 'delete') {
-      newMap.set(action.shape.id, action.shape);
-    }
-    shapesMapRef.current = newMap;
-    bump();
-    onShapesChange?.(getAllShapes());
-  };
-
-  // Redo実行（★★★ CRITICAL: 不変更新で新しいMapを作成 ★★★）
-  const performRedo = () => {
-    if (redoStack.length === 0) return;
-    
-    const action = redoStack[redoStack.length - 1];
-    setRedoStack(prev => prev.slice(0, -1));
-    setUndoStack(prev => [...prev, action]);
-    
-    // ★★★ CRITICAL: 新しいMapを作成（不変更新）★★★
-    const newMap = new Map(shapesMapRef.current);
-    if (action.type === 'add') {
-      // 再追加は困難なので省略
-    } else if (action.type === 'update') {
-      newMap.set(action.shapeId, action.after);
-    } else if (action.type === 'delete') {
-      newMap.delete(action.shape.id);
-    }
-    shapesMapRef.current = newMap;
-    bump();
-    onShapesChange?.(getAllShapes());
-  };
+  const performUndo = () => performUndoAction(undoStack, setUndoStack, setRedoStack, shapesMapRef, bump, onShapesChange);
+  const performRedo = () => performRedoAction(redoStack, setRedoStack, setUndoStack, shapesMapRef, bump, onShapesChange);
 
   // CRITICAL: 単体削除（★★★ canMutateExisting で判定、paintMode && draftReady 必須 ★★★）
   const handleDelete = async () => {
