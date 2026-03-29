@@ -2425,7 +2425,7 @@ function ShareViewContent() {
     try {
       optimisticRemoveComment(queryClient, { commentId: comment.id, fileId: shareLink.file_id, commentsQueryKey: ['sharedComments', shareLink.file_id], shapesQueryKey: ['paintShapes', shareLink?.file_id, currentPage] });
       if (String(activeCommentId) === String(comment.id)) setActiveCommentId(null);
-      setDraftShapes([]); draftShapesRef.current = []; viewerCanvasRef.current?.afterSubmitClear(); viewerCanvasRef.current?.clear(); setForceClearToken(prev => prev + 1);
+      lastMergedShapesRef.current=[]; lastStableShapesRef.current=[]; lastStableShapesCtxRef.current=null; prevPaintContextIdForMergedRef.current=null; setDraftShapes([]); draftShapesRef.current=[]; viewerCanvasRef.current?.forceFullClear(); setForceClearToken(prev=>prev+1);
       await deleteCommentWithShapes({ commentId: comment.id, fileId: shareLink.file_id, paintShapes, comments, attachmentsByComment });
       queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id] }); queryClient.invalidateQueries({ queryKey: ['paintShapes', shareLink?.file_id, currentPage] }); queryClient.invalidateQueries({ queryKey: ['commentAttachments', shareLink?.file_id, token] });
       showToast('コメントと描画を削除しました', 'success');
