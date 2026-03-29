@@ -73,6 +73,22 @@ export function syncExistingShapes({
   const allowIntentionalEmpty = isTempCtx && !paintMode && !showAllPaint;
   const isNewTempCtx = isTempCtx;
 
+  // ★★★ P0-FIX: コンテキスト切替検知 ★★★
+  // lastNonEmptyShapesRef.key と現在の ctx が異なる場合、
+  // flickerガードを無効化して空クリアを確実に通す
+  const lastNE_key = lastNonEmptyShapesRef.current?.key;
+  const isContextSwitch = lastNE_key != null && lastNE_key !== ctx;
+  if (isContextSwitch && incomingEmpty) {
+    dbg('[SYNC] context switch detected, clearing immediately', { from: lastNE_key?.substring(0, 20), to: ctx?.substring(0, 20) });
+    shapesMapRef.current = new Map();
+    lastNonEmptyShapesRef.current = { key: ctx, shapes: null };
+    emptyStreakCountRef.current = 0;
+    prevEmptyCountRef.current = 0;
+    lastEmptyAppliedCtxRef.current = ctx;
+    bump();
+    return;
+  }
+
   // --- 非空記録 ---
   if (!incomingEmpty) {
     lastNonEmptyShapesRef.current = { key: ctx, shapes: shapesToSync };
