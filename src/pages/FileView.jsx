@@ -1621,16 +1621,26 @@ function FileViewContent() {
                               onClick={async () => {
                                 if (!window.confirm('このコメントと関連する描画を削除しますか？')) return;
                                 try {
-                                  // 楽観更新: キャッシュから即座に除去（描画残留防止）
+                                  // 1. 楽観更新: キャッシュから即座に除去
                                   optimisticRemoveComment(queryClient, { commentId: comment.id, fileId, commentsQueryKey: ['comments', fileId], shapesQueryKey: ['paintShapes', fileId, 1] });
+                                  // 2. 選択解除 + 全state完全リセット
                                   if (String(activeCommentId) === String(comment.id)) setActiveCommentId(null);
                                   setDraftShapes([]);
+                                  setPaintMode(false);
+                                  setComposerMode('new');
+                                  setComposerTargetCommentId(null);
+                                  setPaintSessionCommentId(null);
+                                  setCommentBody('');
+                                  // 3. 新しいtempCommentIdで canvasContextKey を強制変更（Map全クリア発動）
+                                  setTempCommentId('temp_' + crypto.randomUUID());
                                   viewerCanvasRef.current?.afterSubmitClear();
                                   viewerCanvasRef.current?.clear();
                                   setClearAfterSubmitNonce(n => n + 1);
+                                  // 4. DB削除（awaitで完了を待つ）
                                   await deleteCommentWithShapes({ commentId: comment.id, fileId, paintShapes, comments, attachmentsByComment });
-                                  queryClient.invalidateQueries(['comments', fileId]);
-                                  queryClient.invalidateQueries(['paintShapes', fileId, 1]);
+                                  // 5. 削除完了後に再フェッチ
+                                  await queryClient.invalidateQueries(['paintShapes', fileId, 1]);
+                                  await queryClient.invalidateQueries(['comments', fileId]);
                                   queryClient.invalidateQueries(['commentAttachments', fileId]);
                                   showToast('コメントと描画を削除しました');
                                 } catch (err) { showToast(`削除失敗: ${err.message}`, 'error'); }
