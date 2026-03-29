@@ -51,6 +51,7 @@ import {
   deleteDraft,
   cleanupExpiredDrafts,
 } from '../components/utils/draftPaintStorage';
+import { deleteCommentWithShapes } from '../components/utils/deleteCommentWithShapes';
 
 function FileViewContent() {
   const [user, setUser] = useState(null);
@@ -1613,15 +1614,18 @@ function FileViewContent() {
                             <DropdownMenuItem 
                               onClick={async () => {
                                 if (!window.confirm('このコメントと関連する描画を削除しますか？')) return;
-                                const relatedShapes = paintShapes.filter(s => s.comment_id === comment.id);
-                                for (const shape of relatedShapes) {
-                                  await base44.entities.PaintShape.delete(shape.id);
-                                }
-                                await base44.entities.ReviewComment.delete(comment.id);
-                                queryClient.invalidateQueries(['comments']);
-                                queryClient.invalidateQueries(['paintShapes']);
-                                if (String(activeCommentId) === String(comment.id)) setActiveCommentId(null);
-                                showToast('コメントと描画を削除しました');
+                                try {
+                                  await deleteCommentWithShapes({ commentId: comment.id, fileId: fileId, paintShapes, comments, attachmentsByComment });
+                                  viewerCanvasRef.current?.afterSubmitClear();
+                                  viewerCanvasRef.current?.clear();
+                                  setDraftShapes([]);
+                                  setClearAfterSubmitNonce(n => n + 1);
+                                  if (String(activeCommentId) === String(comment.id)) setActiveCommentId(null);
+                                  queryClient.invalidateQueries(['comments', fileId]);
+                                  queryClient.invalidateQueries(['paintShapes', fileId, 1]);
+                                  queryClient.invalidateQueries(['commentAttachments', fileId]);
+                                  showToast('コメントと描画を削除しました');
+                                } catch (err) { showToast(`削除失敗: ${err.message}`, 'error'); }
                               }}
                               className="text-red-600"
                             >
