@@ -194,6 +194,16 @@ const ViewerCanvas = forwardRef(({
     let src = getAllShapes();
     if (currentShape?.id) src = src.filter(s => s.id !== currentShape.id);
 
+    console.log('[ViewerCanvas] renderedShapes calc:', {
+      mapSize: shapesMapRef.current.size,
+      srcLen: src.length,
+      showDraftOnly,
+      showAllPaint,
+      renderTargetCommentId: renderTargetCommentId?.substring?.(0, 16),
+      draftCommentId: draftCommentId?.substring?.(0, 16),
+      canvasContextKey: canvasContextKey?.substring?.(0, 30),
+    });
+
     if (showDraftOnly) {
       return src.filter(s => s.isDraft === true || String(resolveCommentId(s) || '').startsWith('temp_'));
     }
@@ -201,12 +211,12 @@ const ViewerCanvas = forwardRef(({
 
     const normalizeNullableId = (v) => (v == null || v === 'null' || v === 'undefined' || v === '' ? null : v);
     const targetId0 = normalizeNullableId(renderTargetCommentId);
-    // ★★★ V-06 FIX: 新規コメント作成中（renderTargetCommentId=null）は draftCommentId にフォールバック ★★★
     const draftId = normalizeNullableId(draftCommentId);
     const targetId = targetId0 ?? draftId;
-    if (targetId) return src.filter(s => resolveCommentId(s) === targetId);
-    return [];
-  }, [shapesVersion, showAllPaint, renderTargetCommentId, currentShape, showDraftOnly, draftCommentId]);
+    const result = targetId ? src.filter(s => resolveCommentId(s) === targetId) : [];
+    console.log('[ViewerCanvas] renderedShapes result:', { targetId: targetId?.substring?.(0, 16), resultLen: result.length });
+    return result;
+  }, [shapesVersion, showAllPaint, renderTargetCommentId, currentShape, showDraftOnly, draftCommentId, canvasContextKey]);
 
   const renderedShapesFinal = hidePaintOverlay ? [] : renderedShapes;
   

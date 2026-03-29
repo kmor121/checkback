@@ -1018,24 +1018,30 @@ function FileViewContent() {
   // 未選択時（新規コメント中）→ draftShapesのみ
   // 選択時 → allShapes から activeCommentId でフィルタ + draftShapes をマージ
   const shapesForCanvas = React.useMemo(() => {
+    console.log('[FileView] shapesForCanvas calc:', {
+      isUnselected,
+      activeCommentId: normalizedActiveCommentId,
+      draftShapesLen: draftShapes.length,
+      allShapesLen: allShapes.length,
+      paintContextId: paintContextId?.substring(0, 20),
+    });
     if (isUnselected) {
-      // 新規コメント中: draftShapesのみ（tempCommentIdに紐付いた下書き）
+      console.log('[FileView] shapesForCanvas → draftShapes only:', draftShapes.length);
       return draftShapes;
     }
 
-    // 既存コメント選択中: DB shapesからフィルタ
     const filtered = allShapes.filter(s => {
       const cid = s.comment_id;
       if (cid == null || cid === '') return false;
       return String(cid) === normalizedActiveCommentId;
     });
 
-    // draftShapesとマージ（IDベースで重複排除、draftが優先）
     const shapeMap = new Map();
     filtered.forEach(s => shapeMap.set(s.id, s));
     draftShapes.forEach(s => shapeMap.set(s.id, s));
+    console.log('[FileView] shapesForCanvas → merged:', shapeMap.size);
     return Array.from(shapeMap.values());
-  }, [allShapes, draftShapes, isUnselected, normalizedActiveCommentId]);
+  }, [allShapes, draftShapes, isUnselected, normalizedActiveCommentId, paintContextId]);
 
   // 親コメントと返信を分離
   const parentComments = comments.filter(c => !c.parent_comment_id);
