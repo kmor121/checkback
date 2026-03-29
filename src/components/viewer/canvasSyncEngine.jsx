@@ -53,43 +53,16 @@ export function syncExistingShapes({
   const incoming = Array.isArray(incomingRaw) ? incomingRaw : [];
   const ctx = canvasContextKey || 'no-ctx';
 
-  // ★★★ SIMPLIFIED SYNC: flickerガード全廃。incoming をそのままMapに反映 ★★★
-  dbg('[SYNC] SIMPLE SYNC', { incomingCount: incoming.length, ctx: ctx?.substring(0, 30) });
+  // ★★★ SIMPLIFIED SYNC: incoming をそのままMapに反映 ★★★
+  dbg('[SYNC] SIMPLE SYNC', { incomingCount: incoming.length, ctx: ctx?.substring(0, 30), currentMapSize: shapesMapRef.current.size });
 
   if (incoming.length === 0) {
-    // 空→Mapクリア（dirtyは保持）
-    const dirtyShapes = new Map();
-    for (const [id, shape] of shapesMapRef.current.entries()) {
-      if (shape._dirty) dirtyShapes.set(id, shape);
-    }
-    if (dirtyShapes.size > 0) {
-      shapesMapRef.current = dirtyShapes;
-    } else if (shapesMapRef.current.size > 0) {
+    // 空→Map全クリア（_dirty含む。操作中は上でdefer済み）
+    if (shapesMapRef.current.size > 0) {
       shapesMapRef.current = new Map();
-    } else {
-      return; // 既に空→変更なし
+      bump();
     }
-    bump();
     return;
-  }
-
-  // 非空→全置換（dirty保持）
-  const newMap = buildSyncMap(shapesMapRef, incoming);
-  shapesMapRef.current = newMap;
-  bump();
-
-  // refs リセット
-  lastNonEmptyShapesRef.current = { key: ctx, shapes: incoming };
-  emptyStreakCountRef.current = 0;
-  prevEmptyCountRef.current = 0;
-  lastEmptyAppliedCtxRef.current = null;
-  pendingCtxRef.current = null;
-}
-
-function buildSyncMap(shapesMapRef, shapesToSync) {
-  const dirtyShapes = new Map();
-  for (const [id, shape] of shapesMapRef.current.entries()) {
-    if (shape._dirty) dirtyShapes.set(id, shape);
   }
 
   const newMap = new Map();
