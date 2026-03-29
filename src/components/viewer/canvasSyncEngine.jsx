@@ -65,8 +65,14 @@ export function syncExistingShapes({
     return;
   }
 
+  // 非空→dirty保持しつつ全置換
+  const dirtyShapes = new Map();
+  for (const [id, shape] of shapesMapRef.current.entries()) {
+    if (shape._dirty) dirtyShapes.set(id, shape);
+  }
+
   const newMap = new Map();
-  for (const s of shapesToSync) {
+  for (const s of incoming) {
     const normalized = normalizeShape(s, null);
     const cid = resolveCommentId(normalized);
     if (!normalized || !cid) continue;
@@ -82,5 +88,13 @@ export function syncExistingShapes({
     if (!newMap.has(id)) newMap.set(id, shape);
   }
 
-  return newMap;
+  shapesMapRef.current = newMap;
+  bump();
+
+  // refs リセット
+  lastNonEmptyShapesRef.current = { key: ctx, shapes: incoming };
+  emptyStreakCountRef.current = 0;
+  prevEmptyCountRef.current = 0;
+  lastEmptyAppliedCtxRef.current = null;
+  pendingCtxRef.current = null;
 }
