@@ -49,7 +49,7 @@ import {
   deleteDraft,
   cleanupExpiredDrafts,
 } from '../components/utils/draftPaintStorage';
-import { deleteCommentWithShapes } from '../components/utils/deleteCommentWithShapes';
+import { deleteCommentWithShapes, optimisticRemoveComment } from '../components/utils/deleteCommentWithShapes';
 
 // CRITICAL: ShareViewは認証不要の公開ページ
 // Base44の仕様上、アプリ全体をPublicにするか、このページを完全に独立させる必要がある
@@ -2423,15 +2423,11 @@ function ShareViewContent() {
     if (!canEditDeleteComment(comment)) { showToast('他のユーザーのコメントは削除できません', 'error'); return; }
     if (typeof window !== 'undefined' && !window.confirm('このコメントと関連する描画を削除しますか？')) return;
     try {
-      await deleteCommentWithShapes({ commentId: comment.id, fileId: shareLink.file_id, paintShapes, comments, attachmentsByComment });
-      viewerCanvasRef.current?.afterSubmitClear();
-      viewerCanvasRef.current?.clear();
-      setDraftShapes([]); draftShapesRef.current = [];
-      setForceClearToken(prev => prev + 1);
+      optimisticRemoveComment(queryClient, { commentId: comment.id, fileId: shareLink.file_id, commentsQueryKey: ['sharedComments', shareLink.file_id], shapesQueryKey: ['paintShapes', shareLink?.file_id, currentPage] });
       if (String(activeCommentId) === String(comment.id)) setActiveCommentId(null);
-      queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id] });
-      queryClient.invalidateQueries({ queryKey: ['paintShapes', shareLink?.file_id, currentPage] });
-      queryClient.invalidateQueries({ queryKey: ['commentAttachments', shareLink?.file_id, token] });
+      setDraftShapes([]); draftShapesRef.current = []; viewerCanvasRef.current?.afterSubmitClear(); viewerCanvasRef.current?.clear(); setForceClearToken(prev => prev + 1);
+      await deleteCommentWithShapes({ commentId: comment.id, fileId: shareLink.file_id, paintShapes, comments, attachmentsByComment });
+      queryClient.invalidateQueries({ queryKey: ['sharedComments', shareLink.file_id] }); queryClient.invalidateQueries({ queryKey: ['paintShapes', shareLink?.file_id, currentPage] }); queryClient.invalidateQueries({ queryKey: ['commentAttachments', shareLink?.file_id, token] });
       showToast('コメントと描画を削除しました', 'success');
     } catch (error) { showToast(`削除失敗: ${error.message}`, 'error'); }
   };

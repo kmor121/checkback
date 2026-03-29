@@ -51,7 +51,7 @@ import {
   deleteDraft,
   cleanupExpiredDrafts,
 } from '../components/utils/draftPaintStorage';
-import { deleteCommentWithShapes } from '../components/utils/deleteCommentWithShapes';
+import { deleteCommentWithShapes, optimisticRemoveComment } from '../components/utils/deleteCommentWithShapes';
 
 function FileViewContent() {
   const [user, setUser] = useState(null);
@@ -1615,12 +1615,14 @@ function FileViewContent() {
                               onClick={async () => {
                                 if (!window.confirm('このコメントと関連する描画を削除しますか？')) return;
                                 try {
-                                  await deleteCommentWithShapes({ commentId: comment.id, fileId: fileId, paintShapes, comments, attachmentsByComment });
+                                  // 楽観更新: キャッシュから即座に除去（描画残留防止）
+                                  optimisticRemoveComment(queryClient, { commentId: comment.id, fileId, commentsQueryKey: ['comments', fileId], shapesQueryKey: ['paintShapes', fileId, 1] });
+                                  if (String(activeCommentId) === String(comment.id)) setActiveCommentId(null);
+                                  setDraftShapes([]);
                                   viewerCanvasRef.current?.afterSubmitClear();
                                   viewerCanvasRef.current?.clear();
-                                  setDraftShapes([]);
                                   setClearAfterSubmitNonce(n => n + 1);
-                                  if (String(activeCommentId) === String(comment.id)) setActiveCommentId(null);
+                                  await deleteCommentWithShapes({ commentId: comment.id, fileId, paintShapes, comments, attachmentsByComment });
                                   queryClient.invalidateQueries(['comments', fileId]);
                                   queryClient.invalidateQueries(['paintShapes', fileId, 1]);
                                   queryClient.invalidateQueries(['commentAttachments', fileId]);
