@@ -1621,27 +1621,41 @@ function FileViewContent() {
                               onClick={async () => {
                                 if (!window.confirm('このコメントと関連する描画を削除しますか？')) return;
                                 try {
+                                  const deletingCommentId = comment.id;
+                                  console.log('[DELETE] START commentId:', deletingCommentId, 'activeCommentId:', activeCommentId);
+                                  
                                   // 1. 楽観更新: キャッシュから即座に除去
-                                  optimisticRemoveComment(queryClient, { commentId: comment.id, fileId, commentsQueryKey: ['comments', fileId], shapesQueryKey: ['paintShapes', fileId, 1] });
-                                  // 2. 選択解除 + 全state完全リセット
-                                  if (String(activeCommentId) === String(comment.id)) setActiveCommentId(null);
+                                  optimisticRemoveComment(queryClient, { commentId: deletingCommentId, fileId, commentsQueryKey: ['comments', fileId], shapesQueryKey: ['paintShapes', fileId, 1] });
+                                  
+                                  // 2. 全stateリセット（バッチ更新）
+                                  setActiveCommentId(null);
                                   setDraftShapes([]);
                                   setPaintMode(false);
                                   setComposerMode('new');
                                   setComposerTargetCommentId(null);
                                   setPaintSessionCommentId(null);
                                   setCommentBody('');
-                                  // 3. 新しいtempCommentIdで canvasContextKey を強制変更（Map全クリア発動）
-                                  setTempCommentId('temp_' + crypto.randomUUID());
-                                  // Canvas Map全クリア（DB shape含む全shape除去）
-                                  viewerCanvasRef.current?.forceFullClear();
+                                  const newTempId = 'temp_' + crypto.randomUUID();
+                                  setTempCommentId(newTempId);
                                   setClearAfterSubmitNonce(n => n + 1);
+                                  
+                                  // 3. Canvas Map全クリア（imperative）
+                                  viewerCanvasRef.current?.forceFullClear();
+                                  console.log('[DELETE] forceFullClear called');
+                                  
                                   // 4. DB削除（awaitで完了を待つ）
-                                  await deleteCommentWithShapes({ commentId: comment.id, fileId, paintShapes, comments, attachmentsByComment });
-                                  // 5. 削除完了後に再フェッチ
+                                  await deleteCommentWithShapes({ commentId: deletingCommentId, fileId, paintShapes, comments, attachmentsByComment });
+                                  console.log('[DELETE] DB delete complete');
+                                  
+                                  // 5. 削除完了後に再フェッチ（DBから最新を取得）
                                   await queryClient.invalidateQueries(['paintShapes', fileId, 1]);
                                   await queryClient.invalidateQueries(['comments', fileId]);
                                   queryClient.invalidateQueries(['commentAttachments', fileId]);
+                                  
+                                  // 6. 再フェッチ後に再度forceFullClear（再フェッチで復活した場合の安全弁）
+                                  viewerCanvasRef.current?.forceFullClear();
+                                  console.log('[DELETE] COMPLETE');
+                                  
                                   showToast('コメントと描画を削除しました');
                                 } catch (err) { showToast(`削除失敗: ${err.message}`, 'error'); }
                               }}
