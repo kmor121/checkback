@@ -1633,8 +1633,8 @@ function FileViewContent() {
                                   setCommentBody('');
                                   // 3. 新しいtempCommentIdで canvasContextKey を強制変更（Map全クリア発動）
                                   setTempCommentId('temp_' + crypto.randomUUID());
-                                  viewerCanvasRef.current?.afterSubmitClear();
-                                  viewerCanvasRef.current?.clear();
+                                  // Canvas Map全クリア（DB shape含む全shape除去）
+                                  viewerCanvasRef.current?.forceFullClear();
                                   setClearAfterSubmitNonce(n => n + 1);
                                   // 4. DB削除（awaitで完了を待つ）
                                   await deleteCommentWithShapes({ commentId: comment.id, fileId, paintShapes, comments, attachmentsByComment });

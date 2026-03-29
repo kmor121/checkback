@@ -1136,6 +1136,21 @@ const ViewerCanvas = forwardRef(({
         transformerRef.current.getLayer()?.batchDraw();
       }
     },
+    forceFullClear: () => {
+      shapesMapRef.current = new Map();
+      bump();
+      draftCommentIdRef.current = null;
+      setSelectedId(null);
+      setCurrentShape(null);
+      setIsDrawing(false);
+      setUndoStack([]);
+      setRedoStack([]);
+      setTextEditor(TEXT_EDITOR_INITIAL);
+      if (transformerRef.current) {
+        transformerRef.current.nodes([]);
+        transformerRef.current.getLayer()?.batchDraw();
+      }
+    },
     delete: handleDelete,
     canUndo: undoStack.length > 0,
     canRedo: redoStack.length > 0,
