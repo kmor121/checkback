@@ -171,9 +171,82 @@ export default function Layout({ children, currentPageName }) {
   // CRITICAL: 公開ページ判定（認証チェック完全スキップ）
   const currentPath = window.location.pathname;
   const isPublic = isPublicRoute(currentPath) || isPublicPage(currentPageName);
-  
+
+  // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
+  const [user, setUser] = useState(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const [notificationTab, setNotificationTab] = useState('unread');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [globalError, setGlobalError] = useState(null);
+
+  // グローバルエラーハンドラ
+  useEffect(() => {
+    if (isPublic) return;
+    const handleError = (event) => {
+      setGlobalError({
+        message: event.message || event.reason?.message || String(event.reason),
+        stack: event.error?.stack || event.reason?.stack || ''
+      });
+    };
+    window.addEventListener('error', handleError);
+    window.addEventListener('unhandledrejection', handleError);
+    return () => {
+      window.removeEventListener('error', handleError);
+      window.removeEventListener('unhandledrejection', handleError);
+    };
+  }, [isPublic]);
+
+  const { data: notifications = [] } = useQuery({
+    queryKey: ['notifications', user?.id],
+    queryFn: () => base44.entities.UserNotification.filter({ user_id: user?.id }),
+    enabled: !isPublic && !!user,
+  });
+
+  const { data: projects = [] } = useQuery({
+    queryKey: ['projects', user?.id],
+    queryFn: () => base44.entities.Project.filter({ owner_user_id: user?.id }),
+    enabled: !isPublic && !!user,
+  });
+
+  const { data: workspace } = useQuery({
+    queryKey: ['workspace'],
+    queryFn: async () => {
+      const workspaces = await base44.entities.Workspace.list();
+      return workspaces[0] || { plan_tier: 'free', project_limit: 5 };
+    },
+    enabled: !isPublic,
+  });
+
+  useEffect(() => {
+    if (isPublic) return;
+    bootLog('Layout: useEffect running (auth check for PRIVATE page)');
+    base44.auth.me()
+      .then(u => {
+        bootLog('Layout: auth.me() SUCCESS, user=' + (u?.email || u?.id || 'unknown'));
+        setUser(u);
+        setIsCheckingAuth(false);
+        sessionStorage.removeItem('redir_cnt');
+        sessionStorage.removeItem('last_redirect_to');
+        sessionStorage.removeItem('__nav_cnt');
+        sessionStorage.removeItem('__redirecting');
+      })
+      .catch((err) => {
+        bootLog('Layout: auth.me() FAILED, redirecting to login: ' + (err?.message || String(err)));
+        setUser(null);
+        setIsCheckingAuth(false);
+        base44.auth.redirectToLogin(window.location.href);
+      });
+  }, [isPublic]);
+
+  // React mount完了を通知
+  useEffect(() => {
+    bootLog('Layout: REACT MOUNTED');
+  }, []);
+
   bootLog('Layout: path=' + currentPath + ', page=' + currentPageName + ', isPublic=' + isPublic);
-  
+
   // 公開ページは即座にchildrenを返す（認証チェック不要）
   if (isPublic) {
     bootLog('Layout: PUBLIC PAGE - skipping all checks, rendering children directly');
@@ -221,83 +294,8 @@ export default function Layout({ children, currentPageName }) {
       </div>
     );
   }
-  
-  const [user, setUser] = useState(null);
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [notificationOpen, setNotificationOpen] = useState(false);
-  const [notificationTab, setNotificationTab] = useState('unread');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('all');
-  const [globalError, setGlobalError] = useState(null);
-  
+
   bootLog('Layout: PRIVATE PAGE - starting auth check');
-
-  // グローバルエラーハンドラ
-  useEffect(() => {
-    const handleError = (event) => {
-      setGlobalError({
-        message: event.message || event.reason?.message || String(event.reason),
-        stack: event.error?.stack || event.reason?.stack || ''
-      });
-    };
-
-    window.addEventListener('error', handleError);
-    window.addEventListener('unhandledrejection', handleError);
-
-    return () => {
-      window.removeEventListener('error', handleError);
-      window.removeEventListener('unhandledrejection', handleError);
-    };
-  }, []);
-
-  // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
-  const { data: notifications = [] } = useQuery({
-    queryKey: ['notifications', user?.id],
-    queryFn: () => base44.entities.UserNotification.filter({ user_id: user?.id }),
-    enabled: !!user,
-  });
-
-  const { data: projects = [] } = useQuery({
-    queryKey: ['projects', user?.id],
-    queryFn: () => base44.entities.Project.filter({ owner_user_id: user?.id }),
-    enabled: !!user,
-  });
-
-  const { data: workspace } = useQuery({
-    queryKey: ['workspace'],
-    queryFn: async () => {
-      const workspaces = await base44.entities.Workspace.list();
-      return workspaces[0] || { plan_tier: 'free', project_limit: 5 };
-    },
-    enabled: true,
-  });
-
-  useEffect(() => {
-    bootLog('Layout: useEffect running (auth check for PRIVATE page)');
-    
-    base44.auth.me()
-      .then(u => {
-        bootLog('Layout: auth.me() SUCCESS, user=' + (u?.email || u?.id || 'unknown'));
-        setUser(u);
-        setIsCheckingAuth(false);
-        sessionStorage.removeItem('redir_cnt');
-        sessionStorage.removeItem('last_redirect_to');
-        sessionStorage.removeItem('__nav_cnt');
-        sessionStorage.removeItem('__redirecting');
-      })
-      .catch((err) => {
-        bootLog('Layout: auth.me() FAILED, redirecting to login: ' + (err?.message || String(err)));
-        setUser(null);
-        setIsCheckingAuth(false);
-        // 未認証なら即座にログインへリダイレクト
-        base44.auth.redirectToLogin(window.location.href);
-      });
-  }, []);
-
-  // React mount完了を通知
-  useEffect(() => {
-    bootLog('Layout: REACT MOUNTED');
-  }, []);
 
   // デバッグバー（開発時のみ）
   const DebugBar = () => {
