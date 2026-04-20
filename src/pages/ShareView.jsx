@@ -42,12 +42,9 @@ import FloatingToolbarPortal from '../components/viewer/FloatingToolbarPortal';
 import ErrorBoundary from '../components/ErrorBoundary';
 import DebugOverlay from '../components/DebugOverlay';
 import DiagnosticHUD from '../components/share/DiagnosticHUD';
+import ToastNotification from '../components/share/ToastNotification';
 import { getDraftKey, generateTempCommentId, saveDraft, loadDraft, deleteDraft, cleanupExpiredDrafts } from '../components/utils/draftPaintStorage';
 import { deleteCommentWithShapes, optimisticRemoveComment } from '../components/utils/deleteCommentWithShapes';
-
-// CRITICAL: ShareViewは認証不要の公開ページ
-// Base44の仕様上、アプリ全体をPublicにするか、このページを完全に独立させる必要がある
-// このコンポーネントは認証API(base44.auth.me等)を一切呼ばない
 
 const DEBUG_MODE = import.meta.env.VITE_DEBUG === 'true' || false;
 
@@ -968,14 +965,6 @@ function ShareViewContent() {
     if (normalizedShapes.length > 0 && shouldShowRestoreToast) {
       showToast(`${normalizedShapes.length}個の下書きを復元しました`, 'info');
     }
-
-    // ★★★ P0 FIX: loadDraft完了後にhydratedStateをセット ★★★
-    hydratedKeyRef.current = targetKey;
-    setHydratedKeyState(targetKey);
-
-    // ★★★ P0 FIX: loadDraft完了後にhydratedStateをセット ★★★
-    hydratedKeyRef.current = targetKey;
-    setHydratedKeyState(targetKey);
 
     // ★★★ P0 FIX: loadDraft完了後にhydratedStateをセット ★★★
     hydratedKeyRef.current = targetKey;
@@ -2692,12 +2681,6 @@ function ShareViewContent() {
       }
     }
     
-    // P1 FIX: 描画混入の直接原因であるため、このブロックを削除。
-    // これにより、描画がないコメントを選択した際に、古い描画が返されることがなくなります。
-    
-    // P1 FIX: 描画混入の直接原因であるため、このブロックを削除。
-    // これにより、描画がないコメントを選択した際に、古い描画が返されることがなくなります。
-
     // ★★★ Hunk S (P0): sticky guard — 同一ctxで空配列になるのを防ぐ ★★★
     if (merged.length === 0 && (shouldShowDraft || composerMode === 'edit') && lastMergedShapesRef.current?.length > 0 && prevPaintContextIdForMergedRef.current === paintContextId) {
       addDebugLog(`[Hunk S] sticky guard triggered: returning last merged shapes (${lastMergedShapesRef.current.length}) to prevent clear`);
@@ -4089,18 +4072,7 @@ function ShareViewContent() {
         </DialogContent>
       </Dialog>
 
-      {/* トースト通知 */}
-      {toast.show && (
-        <div className="fixed bottom-4 right-4 z-50">
-          <div className={`px-6 py-3 rounded-lg shadow-lg ${
-            toast.type === 'error' ? 'bg-red-600 text-white' : 
-            toast.type === 'info' ? 'bg-blue-600 text-white' : 
-            'bg-green-600 text-white'
-          }`}>
-            {toast.message}
-          </div>
-        </div>
-      )}
+      <ToastNotification toast={toast} />
       </div>
       );
       }
